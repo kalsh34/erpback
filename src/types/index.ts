@@ -1,0 +1,417 @@
+// ============================================================
+// Vital Security PLC — Payroll System — Shared Types
+// ============================================================
+
+export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  SYSTEM_ADMIN = 'SYSTEM_ADMIN',
+  HR_ADMIN = 'HR_ADMIN',
+  FINANCE_OFFICER = 'FINANCE_OFFICER',
+  OPERATIONS = 'OPERATIONS',
+  GUARD = 'GUARD',
+  HEAD = 'HEAD',
+  CEO = 'CEO',
+}
+
+export enum EmployeeCategory {
+  GUARD = 'GUARD',
+  OFFICE_STAFF = 'OFFICE_STAFF',
+}
+
+export enum EmployeeStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  TERMINATED = 'TERMINATED',
+  ON_LEAVE = 'ON_LEAVE',
+  CONTRACTED = 'CONTRACTED',
+}
+
+export enum Gender {
+  MALE = 'MALE',
+  FEMALE = 'FEMALE',
+}
+
+export enum GuardPosition {
+  GUARD = 'GUARD',
+  SITE_LEADER = 'SITE_LEADER',
+}
+
+export enum EmploymentType {
+  PERMANENT = 'PERMANENT',
+  CONTRACT = 'CONTRACT',
+  TEMPORARY = 'TEMPORARY',
+}
+
+export enum SiteType {
+  COMMERCIAL = 'COMMERCIAL',
+  RESIDENTIAL = 'RESIDENTIAL',
+  INDUSTRIAL = 'INDUSTRIAL',
+  GOVERNMENT = 'GOVERNMENT',
+}
+
+export enum SiteStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED',
+}
+
+export enum PayrollPeriodStatus {
+  DRAFT = 'DRAFT',
+  OPEN = 'OPEN',
+  CLOSED = 'CLOSED',
+  LOCKED = 'LOCKED',
+}
+
+export enum PayrollRecordStatus {
+  DRAFT = 'DRAFT',
+  CALCULATED = 'CALCULATED',
+  SUBMITTED = 'SUBMITTED',
+  CHECKED = 'CHECKED',
+  APPROVED = 'APPROVED',
+  PAYMENT_PROCESSING = 'PAYMENT_PROCESSING',
+  PAID = 'PAID',
+  RETURNED = 'RETURNED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum AttendanceStatus {
+  CLOCKED_IN = 'CLOCKED_IN',
+  CLOCKED_OUT = 'CLOCKED_OUT',
+}
+
+export enum AttendanceSource {
+  SYSTEM = 'SYSTEM',
+  SELF_CLOCK = 'SELF_CLOCK',
+  OPERATIONS_EDIT = 'OPERATIONS_EDIT',
+  HR_MANUAL = 'HR_MANUAL',
+  MANUAL_ENTRY = 'MANUAL_ENTRY',
+  ROTATION = 'ROTATION',
+}
+
+export enum ShiftAssignmentSource {
+  MANUAL = 'MANUAL',
+  ROTATION = 'ROTATION',
+}
+
+export enum RotationStatus {
+  DRAFT = 'DRAFT',
+  ACTIVE = 'ACTIVE',
+  PAUSED = 'PAUSED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum RotationGuardStatus {
+  ACTIVE = 'ACTIVE',
+  PAUSED = 'PAUSED',
+  REMOVED = 'REMOVED',
+}
+
+export enum StaffAttendanceStatus {
+  PRESENT = 'PRESENT',
+  ABSENT = 'ABSENT',
+  PAID_LEAVE = 'PAID_LEAVE',
+  UNPAID_LEAVE = 'UNPAID_LEAVE',
+  SICK_LEAVE = 'SICK_LEAVE',
+  HALF_DAY = 'HALF_DAY',
+  HOLIDAY = 'HOLIDAY',
+  WEEKEND = 'WEEKEND',
+}
+
+export enum PaymentMethod {
+  BANK_TRANSFER = 'BANK_TRANSFER',
+  CASH = 'CASH',
+}
+
+export enum LoanStatus {
+  ACTIVE = 'ACTIVE',
+  PAID_OFF = 'PAID_OFF',
+  WRITTEN_OFF = 'WRITTEN_OFF',
+}
+
+export enum PensionTaxBase {
+  NORMAL_SALARY_ONLY = 'NORMAL_SALARY_ONLY',
+  GROSS_PAY = 'GROSS_PAY',
+}
+
+// --- Permission Map (for RBAC) ---
+
+export const PERMISSIONS = {
+  USER_CREATE: 'user.create',
+  USER_READ: 'user.read',
+  USER_UPDATE: 'user.update',
+  USER_DELETE: 'user.delete',
+  EMPLOYEE_CREATE: 'employee.create',
+  EMPLOYEE_READ: 'employee.read',
+  EMPLOYEE_UPDATE: 'employee.update',
+  EMPLOYEE_DELETE: 'employee.delete',
+  SITE_CREATE: 'site.create',
+  SITE_READ: 'site.read',
+  SITE_UPDATE: 'site.update',
+  GUARD_REGISTER: 'guard.register',
+  GUARD_ASSIGN_SITE: 'guard.assign-site',
+  GUARD_MODIFY_HOURS: 'guard.modify-hours',
+  ATTENDANCE_READ: 'attendance.read',
+  ATTENDANCE_CLOCK: 'attendance.clock',
+  ATTENDANCE_MANAGE: 'attendance.manage',
+  ATTENDANCE_FILE: 'attendance.file',
+  STAFF_ATTENDANCE_MANAGE: 'staff-attendance.manage',
+  GUARD_PAYROLL_READ: 'guard-payroll.read',
+  GUARD_PAYROLL_RATES: 'guard-payroll.rates',
+  GUARD_PAYROLL_CALCULATE: 'guard-payroll.calculate',
+  GUARD_PAYROLL_CHECK: 'guard-payroll.check',
+  GUARD_PAYROLL_APPROVE: 'guard-payroll.approve',
+  GUARD_PAYROLL_PAY: 'guard-payroll.pay',
+  GUARD_PAYROLL_RETURN: 'guard-payroll.return',
+  OFFICE_PAYROLL_CREATE: 'office-payroll.create',
+  OFFICE_PAYROLL_CALCULATE: 'office-payroll.calculate',
+  OFFICE_PAYROLL_SUBMIT: 'office-payroll.submit',
+  OFFICE_PAYROLL_CHECK: 'office-payroll.check',
+  OFFICE_PAYROLL_ENTER_OT: 'office-payroll.enter-ot',
+  OFFICE_PAYROLL_RETURN: 'office-payroll.return',
+  OFFICE_PAYROLL_RATES: 'office-payroll.rates',
+  OFFICE_PAYROLL_APPROVE: 'office-payroll.approve',
+  OFFICE_PAYROLL_PAY: 'office-payroll.pay',
+  REPORT_READ: 'report.read',
+  AUDIT_READ: 'audit.read',
+  SETTINGS_READ: 'settings.read',
+  SETTINGS_UPDATE: 'settings.update',
+  PAYROLL_PERIOD_READ: 'payroll-period.read',
+  PAYROLL_CONFIG_MANAGE: 'payroll-config.manage',
+  CANDIDATE_READ: 'candidate.read',
+  CANDIDATE_MANAGE: 'candidate.manage',
+  PERFORMANCE_READ: 'performance.read',
+  PERFORMANCE_MANAGE: 'performance.manage',
+  ROTATION_READ: 'rotation.read',
+  ROTATION_MANAGE: 'rotation.manage',
+  ROTATION_GENERATE: 'rotation.generate',
+} as const;
+
+export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+
+// --- Role -> Permission Mapping ---
+// SUPER_ADMIN: can view everything, cannot modify
+// HR_ADMIN: register employees (staff + guards), manage attendance, view everything
+// FINANCE_OFFICER: full access, payroll inputs + calculations
+// OPERATIONS: assign sites to guards, modify guard hours (fraud correction)
+// GUARD: clock in/out, view own hours
+
+export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  [UserRole.SUPER_ADMIN]: [
+    PERMISSIONS.USER_READ,
+    PERMISSIONS.USER_CREATE,
+    PERMISSIONS.USER_UPDATE,
+    PERMISSIONS.EMPLOYEE_CREATE,
+    PERMISSIONS.EMPLOYEE_READ,
+    PERMISSIONS.EMPLOYEE_UPDATE,
+    PERMISSIONS.EMPLOYEE_DELETE,
+    PERMISSIONS.SITE_CREATE,
+    PERMISSIONS.SITE_READ,
+    PERMISSIONS.SITE_UPDATE,
+    PERMISSIONS.GUARD_REGISTER,
+    PERMISSIONS.GUARD_ASSIGN_SITE,
+    PERMISSIONS.GUARD_MODIFY_HOURS,
+    PERMISSIONS.ATTENDANCE_READ,
+    PERMISSIONS.ATTENDANCE_CLOCK,
+    PERMISSIONS.ATTENDANCE_MANAGE,
+    PERMISSIONS.ATTENDANCE_FILE,
+    PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
+    PERMISSIONS.GUARD_PAYROLL_READ,
+    PERMISSIONS.GUARD_PAYROLL_RATES,
+    PERMISSIONS.GUARD_PAYROLL_CALCULATE,
+    PERMISSIONS.GUARD_PAYROLL_CHECK,
+    PERMISSIONS.GUARD_PAYROLL_APPROVE,
+    PERMISSIONS.GUARD_PAYROLL_PAY,
+    PERMISSIONS.GUARD_PAYROLL_RETURN,
+    PERMISSIONS.OFFICE_PAYROLL_CREATE,
+    PERMISSIONS.OFFICE_PAYROLL_CALCULATE,
+    PERMISSIONS.OFFICE_PAYROLL_SUBMIT,
+    PERMISSIONS.OFFICE_PAYROLL_CHECK,
+    PERMISSIONS.OFFICE_PAYROLL_ENTER_OT,
+    PERMISSIONS.OFFICE_PAYROLL_RETURN,
+    PERMISSIONS.OFFICE_PAYROLL_RATES,
+    PERMISSIONS.OFFICE_PAYROLL_APPROVE,
+    PERMISSIONS.OFFICE_PAYROLL_PAY,
+    PERMISSIONS.REPORT_READ,
+    PERMISSIONS.AUDIT_READ,
+    PERMISSIONS.SETTINGS_READ,
+    PERMISSIONS.SETTINGS_UPDATE,
+    PERMISSIONS.PAYROLL_PERIOD_READ,
+    PERMISSIONS.PAYROLL_CONFIG_MANAGE,
+    PERMISSIONS.CANDIDATE_READ,
+    PERMISSIONS.CANDIDATE_MANAGE,
+    PERMISSIONS.PERFORMANCE_READ,
+    PERMISSIONS.PERFORMANCE_MANAGE,
+    PERMISSIONS.ROTATION_READ,
+    PERMISSIONS.ROTATION_MANAGE,
+    PERMISSIONS.ROTATION_GENERATE,
+  ],
+  [UserRole.SYSTEM_ADMIN]: [
+    PERMISSIONS.USER_CREATE,
+    PERMISSIONS.USER_UPDATE,
+    PERMISSIONS.USER_READ,
+    PERMISSIONS.EMPLOYEE_CREATE,
+    PERMISSIONS.EMPLOYEE_READ,
+    PERMISSIONS.EMPLOYEE_UPDATE,
+    PERMISSIONS.EMPLOYEE_DELETE,
+    PERMISSIONS.SETTINGS_READ,
+    PERMISSIONS.SETTINGS_UPDATE,
+    PERMISSIONS.AUDIT_READ,
+  ],
+  [UserRole.HR_ADMIN]: [
+    PERMISSIONS.USER_READ,
+    PERMISSIONS.EMPLOYEE_CREATE,
+    PERMISSIONS.EMPLOYEE_READ,
+    PERMISSIONS.EMPLOYEE_UPDATE,
+    PERMISSIONS.EMPLOYEE_DELETE,
+    PERMISSIONS.SITE_CREATE,
+    PERMISSIONS.SITE_READ,
+    PERMISSIONS.SITE_UPDATE,
+    PERMISSIONS.GUARD_REGISTER,
+    PERMISSIONS.GUARD_ASSIGN_SITE,
+    PERMISSIONS.ATTENDANCE_CLOCK,
+    PERMISSIONS.ATTENDANCE_READ,
+    PERMISSIONS.ATTENDANCE_MANAGE,
+    PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
+    PERMISSIONS.GUARD_PAYROLL_READ,
+    PERMISSIONS.OFFICE_PAYROLL_CREATE,
+    PERMISSIONS.REPORT_READ,
+    PERMISSIONS.SETTINGS_READ,
+    PERMISSIONS.CANDIDATE_READ,
+    PERMISSIONS.CANDIDATE_MANAGE,
+    PERMISSIONS.PERFORMANCE_READ,
+    PERMISSIONS.PERFORMANCE_MANAGE,
+  ],
+  [UserRole.FINANCE_OFFICER]: [
+    PERMISSIONS.USER_READ,
+    PERMISSIONS.EMPLOYEE_READ,
+    PERMISSIONS.SITE_READ,
+    PERMISSIONS.ATTENDANCE_READ,
+    PERMISSIONS.GUARD_PAYROLL_READ,
+    PERMISSIONS.GUARD_PAYROLL_RATES,
+    PERMISSIONS.GUARD_PAYROLL_CALCULATE,
+    PERMISSIONS.GUARD_PAYROLL_CHECK,
+    PERMISSIONS.GUARD_PAYROLL_PAY,
+    PERMISSIONS.GUARD_PAYROLL_RETURN,
+    PERMISSIONS.OFFICE_PAYROLL_CREATE,
+    PERMISSIONS.OFFICE_PAYROLL_CALCULATE,
+    PERMISSIONS.OFFICE_PAYROLL_SUBMIT,
+    PERMISSIONS.OFFICE_PAYROLL_CHECK,
+    PERMISSIONS.OFFICE_PAYROLL_ENTER_OT,
+    PERMISSIONS.OFFICE_PAYROLL_RETURN,
+    PERMISSIONS.OFFICE_PAYROLL_RATES,
+    PERMISSIONS.OFFICE_PAYROLL_PAY,
+    PERMISSIONS.REPORT_READ,
+    PERMISSIONS.AUDIT_READ,
+    PERMISSIONS.SETTINGS_READ,
+    PERMISSIONS.SETTINGS_UPDATE,
+    PERMISSIONS.PAYROLL_PERIOD_READ,
+  ],
+  [UserRole.OPERATIONS]: [
+    PERMISSIONS.EMPLOYEE_READ,
+    PERMISSIONS.SITE_CREATE,
+    PERMISSIONS.SITE_READ,
+    PERMISSIONS.SITE_UPDATE,
+    PERMISSIONS.GUARD_ASSIGN_SITE,
+    PERMISSIONS.GUARD_MODIFY_HOURS,
+    PERMISSIONS.ATTENDANCE_READ,
+    PERMISSIONS.ATTENDANCE_FILE,
+    PERMISSIONS.GUARD_PAYROLL_READ,
+    PERMISSIONS.PAYROLL_PERIOD_READ,
+    PERMISSIONS.REPORT_READ,
+    PERMISSIONS.CANDIDATE_READ,
+    PERMISSIONS.ROTATION_READ,
+    PERMISSIONS.ROTATION_MANAGE,
+    PERMISSIONS.ROTATION_GENERATE,
+  ],
+  [UserRole.GUARD]: [
+    PERMISSIONS.ATTENDANCE_CLOCK,
+    PERMISSIONS.EMPLOYEE_READ,
+    PERMISSIONS.SITE_READ,
+    PERMISSIONS.GUARD_PAYROLL_READ,
+  ],
+  [UserRole.HEAD]: [
+    PERMISSIONS.USER_READ,
+    PERMISSIONS.EMPLOYEE_READ,
+    PERMISSIONS.SITE_READ,
+    PERMISSIONS.ATTENDANCE_READ,
+    PERMISSIONS.GUARD_PAYROLL_READ,
+    PERMISSIONS.GUARD_PAYROLL_APPROVE,
+    PERMISSIONS.GUARD_PAYROLL_RETURN,
+    PERMISSIONS.OFFICE_PAYROLL_APPROVE,
+    PERMISSIONS.OFFICE_PAYROLL_RETURN,
+    PERMISSIONS.REPORT_READ,
+    PERMISSIONS.AUDIT_READ,
+    PERMISSIONS.SETTINGS_READ,
+  ],
+  [UserRole.CEO]: [
+    PERMISSIONS.USER_READ,
+    PERMISSIONS.EMPLOYEE_READ,
+    PERMISSIONS.SITE_READ,
+    PERMISSIONS.ATTENDANCE_READ,
+    PERMISSIONS.ATTENDANCE_MANAGE,
+    PERMISSIONS.ATTENDANCE_FILE,
+    PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
+    PERMISSIONS.GUARD_PAYROLL_READ,
+    PERMISSIONS.REPORT_READ,
+    PERMISSIONS.AUDIT_READ,
+    PERMISSIONS.SETTINGS_READ,
+    PERMISSIONS.PAYROLL_PERIOD_READ,
+    PERMISSIONS.CANDIDATE_READ,
+    PERMISSIONS.PERFORMANCE_READ,
+    PERMISSIONS.ROTATION_READ,
+  ],
+};
+
+// --- Payroll Calculation Types ---
+
+export interface TaxBracketEntry {
+  min: number;
+  max: number | null;
+  rate: number;
+  deduction: number;
+}
+
+export interface GuardPayrollCalculation {
+  normalSalary: number;
+  workedSalary: number;
+  otPay: number;
+  holidayPay: number;
+  secondaryShiftPay: number;
+  grossPay: number;
+  baseComponent: number;
+  employeePension: number;
+  employerPension: number;
+  incomeTax: number;
+  totalDeductions: number;
+  netPay: number;
+}
+
+export interface StaffPayrollCalculation {
+  grossSalary: number;
+  taxableSalary: number;
+  employeePension: number;
+  employerPension: number;
+  incomeTax: number;
+  totalDeductions: number;
+  netPay: number;
+}
+
+// --- API Response Types ---
+
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  message: string;
+  data?: T;
+  error?: string;
+}
+
+export interface PaginatedResponse<T> {
+  success: boolean;
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}

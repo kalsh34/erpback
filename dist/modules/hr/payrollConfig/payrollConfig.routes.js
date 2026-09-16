@@ -1,0 +1,28 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const payrollConfig_controller_1 = require("./payrollConfig.controller");
+const auth_1 = require("../../../middleware/auth");
+const rbac_1 = require("../../../middleware/rbac");
+const types_1 = require("../../../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.use((0, rbac_1.authorize)(types_1.PERMISSIONS.PAYROLL_CONFIG_MANAGE));
+router.get('/dashboard', payrollConfig_controller_1.PayrollConfigController.getConfigDashboard);
+router.get('/components', payrollConfig_controller_1.PayrollConfigController.getComponents);
+router.get('/components/:id', payrollConfig_controller_1.PayrollConfigController.getComponentById);
+router.post('/components', payrollConfig_controller_1.PayrollConfigController.createComponent);
+router.put('/components/:id', payrollConfig_controller_1.PayrollConfigController.updateComponent);
+router.put('/components/:id/retire', payrollConfig_controller_1.PayrollConfigController.retireComponent);
+router.get('/formulas', payrollConfig_controller_1.PayrollConfigController.getAllFormulas);
+router.get('/formulas/current', payrollConfig_controller_1.PayrollConfigController.getCurrentFormula);
+router.get('/formulas/:version', payrollConfig_controller_1.PayrollConfigController.getFormulaVersion);
+router.post('/formulas', payrollConfig_controller_1.PayrollConfigController.createFormula);
+router.get('/tax-brackets', payrollConfig_controller_1.PayrollConfigController.getTaxBrackets);
+router.get('/tax-brackets/current', payrollConfig_controller_1.PayrollConfigController.getCurrentTaxBracket);
+router.post('/tax-brackets', payrollConfig_controller_1.PayrollConfigController.createTaxBracket);
+router.get('/pension-rules', payrollConfig_controller_1.PayrollConfigController.getPensionRules);
+router.get('/pension-rules/current', payrollConfig_controller_1.PayrollConfigController.getCurrentPensionRule);
+router.post('/pension-rules', payrollConfig_controller_1.PayrollConfigController.createPensionRule);
+exports.default = router;
+//# sourceMappingURL=payrollConfig.routes.js.map

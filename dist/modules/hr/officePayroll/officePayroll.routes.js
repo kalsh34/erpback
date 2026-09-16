@@ -1,0 +1,23 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const officePayroll_controller_1 = require("./officePayroll.controller");
+const auth_1 = require("../../../middleware/auth");
+const rbac_1 = require("../../../middleware/rbac");
+const types_1 = require("../../../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_READ), officePayroll_controller_1.OfficePayrollController.getAll);
+router.get('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_READ), officePayroll_controller_1.OfficePayrollController.getById);
+router.post('/generate/:periodId', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_CREATE), officePayroll_controller_1.OfficePayrollController.generate);
+router.put('/:id/salary', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_CALCULATE), officePayroll_controller_1.OfficePayrollController.updateSalaryInputs);
+router.post('/:id/enter-ot', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_ENTER_OT), officePayroll_controller_1.OfficePayrollController.enterOt);
+router.post('/:id/calculate', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_CALCULATE), officePayroll_controller_1.OfficePayrollController.calculate);
+router.post('/:id/submit', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_SUBMIT), officePayroll_controller_1.OfficePayrollController.submit);
+router.post('/:id/check', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_CHECK), officePayroll_controller_1.OfficePayrollController.check);
+router.post('/:id/approve', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_APPROVE), officePayroll_controller_1.OfficePayrollController.approve);
+router.post('/:id/initiate-payment', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_PAY), officePayroll_controller_1.OfficePayrollController.initiatePayment);
+router.post('/:id/confirm-paid', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_PAY), officePayroll_controller_1.OfficePayrollController.confirmPaid);
+router.post('/:id/return', (0, rbac_1.authorize)(types_1.PERMISSIONS.OFFICE_PAYROLL_RETURN), officePayroll_controller_1.OfficePayrollController.returnForCorrection);
+exports.default = router;
+//# sourceMappingURL=officePayroll.routes.js.map

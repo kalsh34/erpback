@@ -1,0 +1,219 @@
+(node:5448) [MONGOOSE] Warning: Duplicate schema index on {"email":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:5448) [MONGOOSE] Warning: Duplicate schema index on {"employeeCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:5448) [MONGOOSE] Warning: Duplicate schema index on {"siteCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:5448) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+[DB] MongoDB connected: 127.0.0.1
+[PERMISSIONS] All module permissions registered
+[SERVER] Running on port 5000 in development mode
+[2026-08-20T05:48:42.329Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 1231.358 ms - 566[0m
+[2026-08-20T05:48:43.591Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 1019.352 ms - 592[0m
+[2026-08-20T05:48:44.627Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 934.716 ms - 579[0m
+[2026-08-20T05:48:45.572Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 969.715 ms - 571[0m
+[2026-08-20T05:48:46.552Z] POST /api/employees
+[0mPOST /api/employees [32m201[0m 94.131 ms - 503[0m
+[2026-08-20T05:48:46.660Z] GET /api/employees/6a86953e54cf3df5af4abe20
+[0mGET /api/employees/6a86953e54cf3df5af4abe20 [32m200[0m 23.698 ms - 503[0m
+[2026-08-20T05:48:46.693Z] PUT /api/employees/6a86953e54cf3df5af4abe20
+[0mPUT /api/employees/6a86953e54cf3df5af4abe20 [32m200[0m 63.326 ms - 512[0m
+[2026-08-20T05:48:46.763Z] POST /api/sites
+[0mPOST /api/sites [32m201[0m 294.053 ms - 376[0m
+[2026-08-20T05:48:47.069Z] GET /api/sites/6a86953e54cf3df5af4abe2a
+[0mGET /api/sites/6a86953e54cf3df5af4abe2a [32m200[0m 192.783 ms - 376[0m
+[2026-08-20T05:48:47.275Z] PUT /api/sites/6a86953e54cf3df5af4abe2a
+[0mPUT /api/sites/6a86953e54cf3df5af4abe2a [32m200[0m 65.334 ms - 379[0m
+[2026-08-20T05:48:47.353Z] POST /api/guards/register
+[GUARD SERVICE] ⚠ MongoDB replica set NOT detected. registerGuard() running WITHOUT transactions (standalone fallback). Manual cleanup will be used on failure. This is expected for local dev only — production MUST use a replica set.
+[0mPOST /api/guards/register [32m201[0m 1039.696 ms - 608[0m
+[2026-08-20T05:48:48.402Z] GET /api/guards/6a86953f54cf3df5af4abe35
+[0mGET /api/guards/6a86953f54cf3df5af4abe35 [32m200[0m 70.574 ms - 893[0m
+[2026-08-20T05:48:48.476Z] POST /api/guards/register
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[0mPOST /api/guards/register [31m500[0m 35.529 ms - 778[0m
+[2026-08-20T05:48:48.519Z] GET /api/employees
+[0mGET /api/employees [32m200[0m 98.862 ms - 9210[0m
+[2026-08-20T05:48:48.625Z] POST /api/guards/assign-site
+[0mPOST /api/guards/assign-site [32m201[0m 66.467 ms - 319[0m
+[2026-08-20T05:48:48.700Z] POST /api/attendance/clock-in
+[0mPOST /api/attendance/clock-in [32m201[0m 69.243 ms - 339[0m
+[2026-08-20T05:48:48.776Z] POST /api/attendance/clock-out/6a86953f54cf3df5af4abe35
+[0mPOST /api/attendance/clock-out/6a86953f54cf3df5af4abe35 [32m200[0m 33.647 ms - 398[0m
+[2026-08-20T05:48:48.823Z] PUT /api/attendance/6a86954054cf3df5af4abe4e/edit
+[0mPUT /api/attendance/6a86954054cf3df5af4abe4e/edit [32m200[0m 62.317 ms - 455[0m
+[2026-08-20T05:48:48.897Z] GET /api/audit-logs?entity=AttendanceRecord&limit=5
+[0mGET /api/audit-logs?entity=AttendanceRecord&limit=5 [32m200[0m 77.073 ms - 3535[0m
+[2026-08-20T05:48:48.979Z] POST /api/staff-attendance/day
+[0mPOST /api/staff-attendance/day [32m201[0m 90.435 ms - 345[0m
+[2026-08-20T05:48:49.078Z] GET /api/staff-attendance/grid?year=2025&month=8
+[0mGET /api/staff-attendance/grid?year=2025&month=8 [32m200[0m 101.023 ms - 42727[0m
+[2026-08-20T05:48:49.193Z] GET /api/staff-attendance/summary?year=2025&month=8
+[0mGET /api/staff-attendance/summary?year=2025&month=8 [32m200[0m 83.612 ms - 14674[0m
+[2026-08-20T05:48:49.296Z] POST /api/finance/periods
+[ERROR] 409 - Period already exists
+[0mPOST /api/finance/periods [33m409[0m 64.784 ms - 584[0m
+[2026-08-20T05:48:49.377Z] GET /api/finance/periods
+[0mGET /api/finance/periods [32m200[0m 42.222 ms - 7460[0m
+[2026-08-20T05:48:49.428Z] PUT /api/finance/rates/6a83038f91e65df0d84d3963
+[0mPUT /api/finance/rates/6a83038f91e65df0d84d3963 [32m200[0m 61.357 ms - 272[0m
+[2026-08-20T05:48:49.495Z] GET /api/finance/rates/6a83038f91e65df0d84d3963
+[0mGET /api/finance/rates/6a83038f91e65df0d84d3963 [32m200[0m 16.823 ms - 272[0m
+[2026-08-20T05:48:49.521Z] POST /api/guard-payroll/generate/6a83038f91e65df0d84d3963
+[0mPOST /api/guard-payroll/generate/6a83038f91e65df0d84d3963 [32m201[0m 219.853 ms - 623[0m
+[2026-08-20T05:48:49.746Z] POST /api/guard-payroll/6a86954154cf3df5af4abe84/submit
+[0mPOST /api/guard-payroll/6a86954154cf3df5af4abe84/submit [32m200[0m 64.290 ms - 707[0m
+[2026-08-20T05:48:49.823Z] PUT /api/guard-payroll/6a86954154cf3df5af4abe84/rates
+[0mPUT /api/guard-payroll/6a86954154cf3df5af4abe84/rates [32m200[0m 38.741 ms - 796[0m
+[2026-08-20T05:48:49.895Z] POST /api/guard-payroll/6a86954154cf3df5af4abe84/calculate
+[0mPOST /api/guard-payroll/6a86954154cf3df5af4abe84/calculate [32m200[0m 132.101 ms - 1664[0m
+[2026-08-20T05:48:50.039Z] POST /api/guard-payroll/6a86954154cf3df5af4abe84/check
+[0mPOST /api/guard-payroll/6a86954154cf3df5af4abe84/check [32m200[0m 47.539 ms - 932[0m
+[2026-08-20T05:48:50.094Z] POST /api/guard-payroll/6a86954154cf3df5af4abe84/approve
+[0mPOST /api/guard-payroll/6a86954154cf3df5af4abe84/approve [32m200[0m 42.106 ms - 1013[0m
+[2026-08-20T05:48:50.146Z] POST /api/guard-payroll/6a86954154cf3df5af4abe84/pay
+[0mPOST /api/guard-payroll/6a86954154cf3df5af4abe84/pay [32m200[0m 47.867 ms - 1185[0m
+[2026-08-20T05:48:50.205Z] GET /api/guard-payroll/6a86954154cf3df5af4abe84
+[0mGET /api/guard-payroll/6a86954154cf3df5af4abe84 [32m200[0m 54.812 ms - 2220[0m
+[2026-08-20T05:48:50.269Z] POST /api/office-payroll/generate/6a83038f91e65df0d84d3963
+[0mPOST /api/office-payroll/generate/6a83038f91e65df0d84d3963 [32m201[0m 453.741 ms - 1045[0m
+[2026-08-20T05:48:50.729Z] GET /api/office-payroll?payrollPeriodId=6a83038f91e65df0d84d3963
+[0mGET /api/office-payroll?payrollPeriodId=6a83038f91e65df0d84d3963 [32m200[0m 198.694 ms - 25840[0m
+[2026-08-20T05:48:50.938Z] PUT /api/office-payroll/6a86954254cf3df5af4abed4/salary
+[0mPUT /api/office-payroll/6a86954254cf3df5af4abed4/salary [32m200[0m 31.333 ms - 555[0m
+[2026-08-20T05:48:50.976Z] POST /api/office-payroll/6a86954254cf3df5af4abed4/calculate
+[0mPOST /api/office-payroll/6a86954254cf3df5af4abed4/calculate [32m200[0m 84.656 ms - 1089[0m
+[2026-08-20T05:48:51.074Z] POST /api/office-payroll/6a86954254cf3df5af4abed4/submit
+[0mPOST /api/office-payroll/6a86954254cf3df5af4abed4/submit [32m200[0m 55.715 ms - 708[0m
+[2026-08-20T05:48:51.142Z] POST /api/office-payroll/6a86954254cf3df5af4abed4/check
+[0mPOST /api/office-payroll/6a86954254cf3df5af4abed4/check [32m200[0m 32.255 ms - 784[0m
+[2026-08-20T05:48:51.187Z] POST /api/office-payroll/6a86954254cf3df5af4abed4/approve
+[0mPOST /api/office-payroll/6a86954254cf3df5af4abed4/approve [32m200[0m 33.036 ms - 865[0m
+[2026-08-20T05:48:51.228Z] POST /api/office-payroll/6a86954254cf3df5af4abed4/pay
+[0mPOST /api/office-payroll/6a86954254cf3df5af4abed4/pay [32m200[0m 45.306 ms - 1006[0m
+[2026-08-20T05:48:51.285Z] GET /api/office-payroll/6a86954254cf3df5af4abed4
+[0mGET /api/office-payroll/6a86954254cf3df5af4abed4 [32m200[0m 38.536 ms - 1696[0m
+[2026-08-20T05:48:51.323Z] POST /api/employees
+[0mPOST /api/employees [32m201[0m 30.324 ms - 386[0m
+[2026-08-20T05:48:51.362Z] POST /api/finance/periods
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/finance/periods [33m403[0m 9.236 ms - 1353[0m
+[2026-08-20T05:48:51.375Z] POST /api/employees
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/employees [33m403[0m 8.492 ms - 1353[0m
+[2026-08-20T05:48:51.388Z] GET /api/guard-payroll
+[0mGET /api/guard-payroll [32m200[0m 82.824 ms - 19109[0m
+[2026-08-20T05:48:51.478Z] GET /api/audit-logs
+[0mGET /api/audit-logs [32m200[0m 163.641 ms - 12471[0m
+[2026-08-20T05:48:51.652Z] POST /api/finance/periods
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/finance/periods [33m403[0m 6.336 ms - 1353[0m
+[2026-08-20T05:48:51.661Z] GET /api/finance/periods
+[0mGET /api/finance/periods [32m200[0m 26.819 ms - 7460[0m
+[2026-08-20T05:48:51.694Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 958.573 ms - 618[0m
+[2026-08-20T05:48:52.657Z] POST /api/attendance/clock-in
+[0mPOST /api/attendance/clock-in [32m201[0m 30.364 ms - 339[0m
+[2026-08-20T05:48:52.693Z] POST /api/employees
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/employees [33m403[0m 8.381 ms - 1353[0m
+[2026-08-20T05:48:52.706Z] GET /api/finance/periods
+[ERROR] 403 - Insufficient permissions
+[0mGET /api/finance/periods [33m403[0m 4.507 ms - 1353[0m
+[2026-08-20T05:48:52.717Z] DELETE /api/employees/6a86953e54cf3df5af4abe20
+[ERROR] 403 - Insufficient permissions
+[0mDELETE /api/employees/6a86953e54cf3df5af4abe20 [33m403[0m 9.510 ms - 1367[0m
+[2026-08-20T05:48:52.726Z] DELETE /api/employees/6a86954354cf3df5af4abf0a
+[ERROR] 403 - Insufficient permissions
+[0mDELETE /api/employees/6a86954354cf3df5af4abf0a [33m403[0m 8.816 ms - 1367[0m
+[2026-08-20T05:48:52.741Z] POST /api/guards/register
+[0mPOST /api/guards/register [32m201[0m 1343.219 ms - 603[0m
+[2026-08-20T05:48:54.092Z] POST /api/guards/register
+[0mPOST /api/guards/register [32m201[0m 3634.254 ms - 603[0m
+[2026-08-20T05:48:57.759Z] POST /api/guards/assign-site
+[0mPOST /api/guards/assign-site [32m201[0m 657.356 ms - 319[0m
+[2026-08-20T05:48:58.424Z] POST /api/guards/assign-site
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/guards/assign-site [33m403[0m 4.672 ms - 1353[0m
+[2026-08-20T05:48:58.437Z] POST /api/guards/assign-site
+[0mPOST /api/guards/assign-site [32m201[0m 324.560 ms - 319[0m
+[2026-08-20T05:48:58.771Z] POST /api/guards/register
+[0mPOST /api/guards/register [32m201[0m 1857.161 ms - 601[0m
+[2026-08-20T05:49:00.644Z] POST /api/guards/register
+[0mPOST /api/guards/register [32m201[0m 1315.663 ms - 601[0m
+[2026-08-20T05:49:01.968Z] POST /api/guards/register
+[0mPOST /api/guards/register [32m201[0m 1310.266 ms - 601[0m
+[2026-08-20T05:49:03.289Z] POST /api/sites
+[0mPOST /api/sites [32m201[0m 31.267 ms - 384[0m
+[2026-08-20T05:49:03.327Z] POST /api/guards/assign-site
+[0mPOST /api/guards/assign-site [32m201[0m 99.600 ms - 319[0m
+[2026-08-20T05:49:03.436Z] POST /api/guards/assign-site
+[0mPOST /api/guards/assign-site [32m201[0m 49.355 ms - 319[0m
+[2026-08-20T05:49:03.490Z] POST /api/guards/assign-site
+[0mPOST /api/guards/assign-site [32m201[0m 53.144 ms - 319[0m
+[2026-08-20T05:49:03.554Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 1306.052 ms - 613[0m
+[2026-08-20T05:49:04.868Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 1273.207 ms - 613[0m
+[2026-08-20T05:49:06.145Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 1298.510 ms - 613[0m
+[2026-08-20T05:49:07.451Z] GET /api/attendance/on-duty/6a86954f54cf3df5af4abf60
+[0mGET /api/attendance/on-duty/6a86954f54cf3df5af4abf60 [33m404[0m 8.989 ms - 45[0m
+[2026-08-20T05:49:07.469Z] POST /api/attendance/clock-in
+[0mPOST /api/attendance/clock-in [32m201[0m 31.745 ms - 339[0m
+[2026-08-20T05:49:07.507Z] GET /api/attendance/on-duty/6a86954f54cf3df5af4abf60
+[0mGET /api/attendance/on-duty/6a86954f54cf3df5af4abf60 [33m404[0m 3.660 ms - 45[0m
+[2026-08-20T05:49:07.519Z] POST /api/attendance/clock-in
+[0mPOST /api/attendance/clock-in [32m201[0m 42.329 ms - 339[0m
+[2026-08-20T05:49:07.568Z] GET /api/attendance/on-duty/6a86954f54cf3df5af4abf60
+[0mGET /api/attendance/on-duty/6a86954f54cf3df5af4abf60 [33m404[0m 3.722 ms - 45[0m
+[2026-08-20T05:49:07.577Z] POST /api/attendance/clock-in
+[0mPOST /api/attendance/clock-in [32m201[0m 27.010 ms - 339[0m
+[2026-08-20T05:49:07.610Z] GET /api/attendance/active/6a86954a54cf3df5af4abf43
+[0mGET /api/attendance/active/6a86954a54cf3df5af4abf43 [32m200[0m 33.498 ms - 673[0m
+[2026-08-20T05:49:07.651Z] POST /api/attendance/clock-in
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[0mPOST /api/attendance/clock-in [33m409[0m 10.494 ms - 654[0m
+[2026-08-20T05:49:07.669Z] POST /api/attendance/clock-out/6a86954a54cf3df5af4abf43
+[0mPOST /api/attendance/clock-out/6a86954a54cf3df5af4abf43 [32m200[0m 166.532 ms - 398[0m
+[2026-08-20T05:49:07.843Z] GET /api/attendance/recent/6a86954a54cf3df5af4abf43?days=1
+[0mGET /api/attendance/recent/6a86954a54cf3df5af4abf43?days=1 [32m200[0m 40.473 ms - 734[0m
+[2026-08-20T05:49:07.889Z] POST /api/attendance/clock-in
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[0mPOST /api/attendance/clock-in [33m409[0m 28.126 ms - 654[0m
+[2026-08-20T05:49:07.921Z] GET /api/attendance/coverage-alerts/6a86954f54cf3df5af4abf60
+[0mGET /api/attendance/coverage-alerts/6a86954f54cf3df5af4abf60 [33m404[0m 3.992 ms - 45[0m
+[2026-08-20T05:49:07.928Z] GET /api/attendance/active/6a86954c54cf3df5af4abf4d
+[0mGET /api/attendance/active/6a86954c54cf3df5af4abf4d [32m200[0m 39.504 ms - 673[0m
+[2026-08-20T05:49:07.972Z] POST /api/attendance/override-clockout/6a86955354cf3df5af4abf85
+[0mPOST /api/attendance/override-clockout/6a86955354cf3df5af4abf85 [33m404[0m 4.586 ms - 45[0m
+[2026-08-20T05:49:07.984Z] POST /api/sites
+[0mPOST /api/sites [32m201[0m 60.619 ms - 368[0m
+[2026-08-20T05:49:08.057Z] POST /api/guards/register
+[0mPOST /api/guards/register [32m201[0m 2320.304 ms - 597[0m
+[2026-08-20T05:49:10.395Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 1843.629 ms - 612[0m
+[2026-08-20T05:49:12.244Z] POST /api/attendance/clock-in
+[0mPOST /api/attendance/clock-in [32m201[0m 181.457 ms - 339[0m
+[2026-08-20T05:49:12.436Z] GET /api/attendance/active/6a86955454cf3df5af4abfa1
+[0mGET /api/attendance/active/6a86955454cf3df5af4abfa1 [32m200[0m 33.325 ms - 657[0m
+[2026-08-20T05:49:12.474Z] POST /api/attendance/override-clockout/6a86955854cf3df5af4abfac
+[0mPOST /api/attendance/override-clockout/6a86955854cf3df5af4abfac [33m404[0m 3.519 ms - 45[0m
+[2026-08-20T05:49:12.485Z] POST /api/attendance/override-clockout/6a86955854cf3df5af4abfac
+[0mPOST /api/attendance/override-clockout/6a86955854cf3df5af4abfac [33m404[0m 4.092 ms - 45[0m
+[2026-08-20T05:49:12.492Z] GET /api/attendance/on-duty/6a86954f54cf3df5af4abf60
+[0mGET /api/attendance/on-duty/6a86954f54cf3df5af4abf60 [33m404[0m 7.510 ms - 45[0m
+[2026-08-20T05:49:12.504Z] POST /api/attendance/clock-in
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[0mPOST /api/attendance/clock-in [33m409[0m 79.586 ms - 654[0m
+[2026-08-20T05:49:12.589Z] GET /api/employees?limit=1
+[0mGET /api/employees?limit=1 [32m200[0m 31.766 ms - 580[0m
+[2026-08-20T05:49:12.625Z] GET /api/sites?limit=1
+[0mGET /api/sites?limit=1 [32m200[0m 42.671 ms - 431[0m

@@ -1,0 +1,427 @@
+[INFO] 12:42:11 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+(node:17184) [MONGOOSE] Warning: Duplicate schema index on {"email":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17184) [MONGOOSE] Warning: Duplicate schema index on {"employeeCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:17184) [MONGOOSE] Warning: Duplicate schema index on {"siteCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:17184) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:17184) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:17184) [MONGOOSE] Warning: Duplicate schema index on {"name":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:17184) [MONGOOSE] Warning: Duplicate schema index on {"name":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+[DB] MongoDB connected: 127.0.0.1
+[PERMISSIONS] All module permissions registered
+[SERVER] Running on port 5000 in development mode
+[2026-09-16T09:43:21.791Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 735.290 ms - 592[0m
+[2026-09-16T09:43:22.541Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 632.978 ms - 560[0m
+[2026-09-16T09:43:23.179Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 631.019 ms - 566[0m
+[2026-09-16T09:43:23.814Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 619.561 ms - 559[0m
+[2026-09-16T09:43:24.439Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 614.146 ms - 579[0m
+[2026-09-16T09:43:25.063Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 132.012 ms - 9269[0m
+[2026-09-16T09:43:25.202Z] POST /api/office-payroll/generate/000000000000000000000000
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/generate/000000000000000000000000 [33m403[0m 12.182 ms - 1365[0m
+[2026-09-16T09:43:25.223Z] PUT /api/office-payroll/6aa8e976751bf3cd6f79371b/salary
+[ERROR] 403 - Insufficient permissions
+[0mPUT /api/office-payroll/6aa8e976751bf3cd6f79371b/salary [33m403[0m 7.038 ms - 1365[0m
+[2026-09-16T09:43:25.238Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/enter-ot
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/enter-ot [33m403[0m 6.585 ms - 1365[0m
+[2026-09-16T09:43:25.255Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate [33m403[0m 5.712 ms - 1365[0m
+[2026-09-16T09:43:25.266Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/submit
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/submit [33m403[0m 5.331 ms - 1365[0m
+[2026-09-16T09:43:25.275Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/check
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/check [33m403[0m 5.164 ms - 1365[0m
+[2026-09-16T09:43:25.284Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/approve
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/approve [33m403[0m 5.449 ms - 1365[0m
+[2026-09-16T09:43:25.293Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/return
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/return [33m403[0m 6.217 ms - 1365[0m
+[2026-09-16T09:43:25.303Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/initiate-payment
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/initiate-payment [33m403[0m 4.780 ms - 1365[0m
+[2026-09-16T09:43:25.315Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/confirm-paid
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/confirm-paid [33m403[0m 5.509 ms - 1365[0m
+[2026-09-16T09:43:25.325Z] GET /api/office-payroll?limit=5
+[0mGET /api/office-payroll?limit=5 [32m200[0m 50.651 ms - 9268[0m
+[2026-09-16T09:43:25.382Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 48.028 ms - 9269[0m
+[2026-09-16T09:43:25.436Z] POST /api/office-payroll/6aa8e976751bf3cd6f79370f/submit
+[ERROR] 400 - Record must be CALCULATED or RETURNED
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79370f/submit [33m400[0m 18.948 ms - 602[0m
+[2026-09-16T09:43:25.458Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/calculate
+[ERROR] 400 - Record must be DRAFT or RETURNED
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/calculate [33m400[0m 13.447 ms - 597[0m
+[2026-09-16T09:43:25.474Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 32.229 ms - 9269[0m
+[2026-09-16T09:43:25.510Z] PUT /api/office-payroll/6aa8e976751bf3cd6f79370f/salary
+[0mPUT /api/office-payroll/6aa8e976751bf3cd6f79370f/salary [32m200[0m 21.185 ms - 661[0m
+[2026-09-16T09:43:25.543Z] POST /api/office-payroll/6aa8e976751bf3cd6f79370f/calculate
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79370f/calculate [32m200[0m 165.930 ms - 1583[0m
+[2026-09-16T09:43:25.716Z] GET /api/office-payroll/6aa8e976751bf3cd6f79370f
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f79370f [32m200[0m 22.887 ms - 1815[0m
+[2026-09-16T09:43:25.743Z] POST /api/office-payroll/6aa8e976751bf3cd6f79370f/submit
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79370f/submit [32m200[0m 41.940 ms - 822[0m
+[2026-09-16T09:43:25.791Z] POST /api/office-payroll/6aa8e976751bf3cd6f79370f/check
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79370f/check [32m200[0m 23.288 ms - 898[0m
+[2026-09-16T09:43:25.820Z] POST /api/office-payroll/6aa8e976751bf3cd6f79370f/return
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79370f/return [32m200[0m 20.900 ms - 1018[0m
+[2026-09-16T09:43:25.846Z] PUT /api/office-payroll/6aa8e976751bf3cd6f79370f/salary
+[0mPUT /api/office-payroll/6aa8e976751bf3cd6f79370f/salary [32m200[0m 18.835 ms - 1015[0m
+[2026-09-16T09:43:25.871Z] POST /api/office-payroll/6aa8e976751bf3cd6f79370f/calculate
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79370f/calculate [32m200[0m 83.085 ms - 1859[0m
+[2026-09-16T09:43:25.959Z] GET /api/office-payroll/6aa8e976751bf3cd6f79370f
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f79370f [32m200[0m 23.866 ms - 2091[0m
+[2026-09-16T09:43:25.987Z] GET /api/guard-payroll?limit=50
+[0mGET /api/guard-payroll?limit=50 [32m200[0m 59.986 ms - 6562[0m
+[2026-09-16T09:43:26.050Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 36.204 ms - 2054[0m
+[2026-09-16T09:43:26.092Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/submit
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/submit [32m200[0m 41.408 ms - 891[0m
+[2026-09-16T09:43:26.138Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/check
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/check [32m200[0m 23.432 ms - 967[0m
+[2026-09-16T09:43:26.166Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 20.610 ms - 2211[0m
+[2026-09-16T09:43:26.190Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return [32m200[0m 19.536 ms - 1081[0m
+[2026-09-16T09:43:26.214Z] GET /api/guard-payroll?limit=50
+[0mGET /api/guard-payroll?limit=50 [32m200[0m 36.542 ms - 6833[0m
+[2026-09-16T09:43:26.253Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 18.929 ms - 2325[0m
+[2026-09-16T09:43:26.275Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/calculate
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/calculate [32m200[0m 50.508 ms - 2059[0m
+[2026-09-16T09:43:26.330Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 30.809 ms - 2291[0m
+[2026-09-16T09:43:26.364Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/submit
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/submit [32m200[0m 26.486 ms - 1046[0m
+[2026-09-16T09:43:26.394Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 28.796 ms - 2290[0m
+[2026-09-16T09:43:26.426Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/check
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/check [32m200[0m 36.205 ms - 1044[0m
+[2026-09-16T09:43:26.466Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 37.164 ms - 2288[0m
+[2026-09-16T09:43:26.506Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/approve
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/approve [32m200[0m 21.028 ms - 1125[0m
+[2026-09-16T09:43:26.532Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 21.654 ms - 2369[0m
+[2026-09-16T09:43:26.556Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return
+[ERROR] 403 - Only HEAD may return an APPROVED record for correction
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return [33m403[0m 9.193 ms - 658[0m
+[2026-09-16T09:43:26.570Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return [32m200[0m 21.701 ms - 1127[0m
+[2026-09-16T09:43:26.596Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 37.699 ms - 9628[0m
+[2026-09-16T09:43:26.638Z] GET /api/office-payroll/6aa8e976751bf3cd6f79371b
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f79371b [32m200[0m 23.542 ms - 2304[0m
+[2026-09-16T09:43:26.664Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate [32m200[0m 64.465 ms - 2074[0m
+[2026-09-16T09:43:26.733Z] GET /api/office-payroll/6aa8e976751bf3cd6f79371b
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f79371b [32m200[0m 17.040 ms - 2306[0m
+[2026-09-16T09:43:26.753Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/submit
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/submit [32m200[0m 18.000 ms - 1245[0m
+[2026-09-16T09:43:26.775Z] GET /api/office-payroll/6aa8e976751bf3cd6f79371b
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f79371b [32m200[0m 17.828 ms - 2305[0m
+[2026-09-16T09:43:26.796Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/check
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/check [32m200[0m 18.234 ms - 1243[0m
+[2026-09-16T09:43:26.819Z] GET /api/office-payroll/6aa8e976751bf3cd6f79371b
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f79371b [32m200[0m 19.165 ms - 2303[0m
+[2026-09-16T09:43:26.841Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/return
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/return [32m200[0m 20.440 ms - 1261[0m
+[2026-09-16T09:43:26.866Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 42.847 ms - 9645[0m
+[2026-09-16T09:43:26.912Z] POST /api/office-payroll/6aa7be9ecd28b7e5c2381813/return
+[ERROR] 403 - Only HEAD may return an APPROVED record for correction
+[0mPOST /api/office-payroll/6aa7be9ecd28b7e5c2381813/return [33m403[0m 8.478 ms - 662[0m
+[2026-09-16T09:43:26.924Z] POST /api/office-payroll/6aa7be9ecd28b7e5c2381813/return
+[0mPOST /api/office-payroll/6aa7be9ecd28b7e5c2381813/return [32m200[0m 22.149 ms - 1121[0m
+[2026-09-16T09:43:26.952Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 37.006 ms - 9766[0m
+[2026-09-16T09:43:26.993Z] GET /api/office-payroll/6aa8e976751bf3cd6f79371b
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f79371b [32m200[0m 25.139 ms - 2321[0m
+[2026-09-16T09:43:27.021Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate [32m200[0m 89.349 ms - 2091[0m
+[2026-09-16T09:43:27.116Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/submit
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/submit [32m200[0m 21.124 ms - 1262[0m
+[2026-09-16T09:43:27.141Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/check
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/check [32m200[0m 23.351 ms - 1260[0m
+[2026-09-16T09:43:27.169Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/approve
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/approve [32m200[0m 46.339 ms - 1261[0m
+[2026-09-16T09:43:27.225Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/initiate-payment
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/initiate-payment [32m200[0m 89.479 ms - 1271[0m
+[2026-09-16T09:43:27.320Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/confirm-paid
+[ERROR] 500 - E11000 duplicate key error collection: vitalpayroll.journalentries index: entryNumber_1 dup key: { entryNumber: "JE-202609-0001" }
+MongoServerError: E11000 duplicate key error collection: vitalpayroll.journalentries index: entryNumber_1 dup key: { entryNumber: "JE-202609-0001" }
+    at InsertOneOperation.handleOk (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongodb\src\operations\insert.ts:79:13)
+    at tryOperation (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongodb\src\operations\execute_operation.ts:290:26)
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at executeOperation (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongodb\src\operations\execute_operation.ts:119:12)
+    at Collection.insertOne (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongodb\src\collection.ts:294:12)
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/confirm-paid [31m500[0m 72.891 ms - 983[0m
+[2026-09-16T09:43:27.396Z] GET /api/office-payroll/6aa8e976751bf3cd6f79371b
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f79371b [32m200[0m 23.895 ms - 2331[0m
+[2026-09-16T09:43:27.422Z] GET /api/journal?limit=5
+[0mGET /api/journal?limit=5 [32m200[0m 19.696 ms - 2709[0m
+[INFO] 12:44:29 Restarting: C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\src\modules\finance-accounting\journal.service.ts has been modified
+(node:13568) [MONGOOSE] Warning: Duplicate schema index on {"email":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13568) [MONGOOSE] Warning: Duplicate schema index on {"employeeCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:13568) [MONGOOSE] Warning: Duplicate schema index on {"siteCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:13568) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:13568) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:13568) [MONGOOSE] Warning: Duplicate schema index on {"name":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:13568) [MONGOOSE] Warning: Duplicate schema index on {"name":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+[DB] MongoDB connected: 127.0.0.1
+[PERMISSIONS] All module permissions registered
+[SERVER] Running on port 5000 in development mode
+[INFO] 12:44:46 Restarting: C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\src\modules\finance-accounting\journal.service.ts has been modified
+(node:12892) [MONGOOSE] Warning: Duplicate schema index on {"email":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12892) [MONGOOSE] Warning: Duplicate schema index on {"employeeCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:12892) [MONGOOSE] Warning: Duplicate schema index on {"siteCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:12892) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:12892) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:12892) [MONGOOSE] Warning: Duplicate schema index on {"name":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:12892) [MONGOOSE] Warning: Duplicate schema index on {"name":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+[DB] MongoDB connected: 127.0.0.1
+[PERMISSIONS] All module permissions registered
+[SERVER] Running on port 5000 in development mode
+[2026-09-16T09:46:40.475Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 733.279 ms - 592[0m
+[2026-09-16T09:46:41.222Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 667.471 ms - 560[0m
+[2026-09-16T09:46:41.895Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 617.019 ms - 566[0m
+[2026-09-16T09:46:42.516Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 607.331 ms - 559[0m
+[2026-09-16T09:46:43.128Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 623.651 ms - 579[0m
+[2026-09-16T09:46:43.762Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 125.334 ms - 9776[0m
+[2026-09-16T09:46:43.896Z] POST /api/office-payroll/generate/000000000000000000000000
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/generate/000000000000000000000000 [33m403[0m 10.363 ms - 1365[0m
+[2026-09-16T09:46:43.912Z] PUT /api/office-payroll/6aa8e976751bf3cd6f79371b/salary
+[ERROR] 403 - Insufficient permissions
+[0mPUT /api/office-payroll/6aa8e976751bf3cd6f79371b/salary [33m403[0m 7.154 ms - 1365[0m
+[2026-09-16T09:46:43.927Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/enter-ot
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/enter-ot [33m403[0m 6.090 ms - 1365[0m
+[2026-09-16T09:46:43.942Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate [33m403[0m 5.988 ms - 1365[0m
+[2026-09-16T09:46:43.955Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/submit
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/submit [33m403[0m 5.935 ms - 1365[0m
+[2026-09-16T09:46:43.965Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/check
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/check [33m403[0m 5.277 ms - 1365[0m
+[2026-09-16T09:46:43.974Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/approve
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/approve [33m403[0m 5.534 ms - 1365[0m
+[2026-09-16T09:46:43.986Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/return
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/return [33m403[0m 6.686 ms - 1365[0m
+[2026-09-16T09:46:43.997Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/initiate-payment
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/initiate-payment [33m403[0m 5.143 ms - 1365[0m
+[2026-09-16T09:46:44.006Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/confirm-paid
+[ERROR] 403 - Insufficient permissions
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/confirm-paid [33m403[0m 5.733 ms - 1365[0m
+[2026-09-16T09:46:44.015Z] GET /api/office-payroll?limit=5
+[0mGET /api/office-payroll?limit=5 [32m200[0m 55.356 ms - 9775[0m
+[2026-09-16T09:46:44.074Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 40.313 ms - 9776[0m
+[2026-09-16T09:46:44.117Z] POST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate
+[ERROR] 400 - Record must be DRAFT or RETURNED
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f79371b/calculate [33m400[0m 11.891 ms - 597[0m
+[2026-09-16T09:46:44.133Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 32.206 ms - 9776[0m
+[2026-09-16T09:46:44.169Z] GET /api/guard-payroll?limit=50
+[0mGET /api/guard-payroll?limit=50 [32m200[0m 43.499 ms - 6879[0m
+[2026-09-16T09:46:44.266Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/calculate
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/calculate [32m200[0m 67.800 ms - 2141[0m
+[2026-09-16T09:46:44.341Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 23.803 ms - 2373[0m
+[2026-09-16T09:46:44.368Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/submit
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/submit [32m200[0m 23.245 ms - 1128[0m
+[2026-09-16T09:46:44.397Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/check
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/check [32m200[0m 21.191 ms - 1126[0m
+[2026-09-16T09:46:44.422Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 20.590 ms - 2370[0m
+[2026-09-16T09:46:44.446Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return [32m200[0m 24.143 ms - 1125[0m
+[2026-09-16T09:46:44.476Z] GET /api/guard-payroll?limit=50
+[0mGET /api/guard-payroll?limit=50 [32m200[0m 39.900 ms - 6877[0m
+[2026-09-16T09:46:44.520Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 24.092 ms - 2369[0m
+[2026-09-16T09:46:44.547Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/calculate
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/calculate [32m200[0m 103.925 ms - 2139[0m
+[2026-09-16T09:46:44.656Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 32.744 ms - 2371[0m
+[2026-09-16T09:46:44.692Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/submit
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/submit [32m200[0m 19.902 ms - 1126[0m
+[2026-09-16T09:46:44.716Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 19.074 ms - 2370[0m
+[2026-09-16T09:46:44.738Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/check
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/check [32m200[0m 16.380 ms - 1124[0m
+[2026-09-16T09:46:44.759Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 20.316 ms - 2368[0m
+[2026-09-16T09:46:44.785Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/approve
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/approve [32m200[0m 17.514 ms - 1125[0m
+[2026-09-16T09:46:44.807Z] GET /api/guard-payroll/6aa7be9ecd28b7e5c2381844
+[0mGET /api/guard-payroll/6aa7be9ecd28b7e5c2381844 [32m200[0m 20.594 ms - 2369[0m
+[2026-09-16T09:46:44.831Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return
+[ERROR] 403 - Only HEAD may return an APPROVED record for correction
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return [33m403[0m 9.123 ms - 658[0m
+[2026-09-16T09:46:44.844Z] POST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return
+[0mPOST /api/guard-payroll/6aa7be9ecd28b7e5c2381844/return [32m200[0m 19.610 ms - 1127[0m
+[2026-09-16T09:46:44.868Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 33.091 ms - 9776[0m
+[2026-09-16T09:46:44.904Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 30.562 ms - 1562[0m
+[2026-09-16T09:46:44.939Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/submit
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/submit [32m200[0m 24.557 ms - 844[0m
+[2026-09-16T09:46:44.969Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 19.013 ms - 1643[0m
+[2026-09-16T09:46:44.991Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/check
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/check [32m200[0m 36.230 ms - 920[0m
+[2026-09-16T09:46:45.031Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 17.178 ms - 1719[0m
+[2026-09-16T09:46:45.052Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/return
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/return [32m200[0m 21.532 ms - 1040[0m
+[2026-09-16T09:46:45.078Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 32.246 ms - 10053[0m
+[2026-09-16T09:46:45.114Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 15.626 ms - 1839[0m
+[2026-09-16T09:46:45.133Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/calculate
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/calculate [32m200[0m 60.534 ms - 1609[0m
+[2026-09-16T09:46:45.198Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 19.810 ms - 1841[0m
+[2026-09-16T09:46:45.220Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/submit
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/submit [32m200[0m 17.626 ms - 1041[0m
+[2026-09-16T09:46:45.242Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 22.815 ms - 1840[0m
+[2026-09-16T09:46:45.267Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/check
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/check [32m200[0m 18.131 ms - 1039[0m
+[2026-09-16T09:46:45.289Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 22.423 ms - 1838[0m
+[2026-09-16T09:46:45.315Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/approve
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/approve [32m200[0m 18.758 ms - 1120[0m
+[2026-09-16T09:46:45.337Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 16.023 ms - 1919[0m
+[2026-09-16T09:46:45.356Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/return
+[ERROR] 403 - Only HEAD may return an APPROVED record for correction
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/return [33m403[0m 8.356 ms - 662[0m
+[2026-09-16T09:46:45.368Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/return
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/return [32m200[0m 19.053 ms - 1122[0m
+[2026-09-16T09:46:45.392Z] GET /api/office-payroll?limit=50
+[0mGET /api/office-payroll?limit=50 [32m200[0m 33.601 ms - 10135[0m
+[2026-09-16T09:46:45.428Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 15.152 ms - 1921[0m
+[2026-09-16T09:46:45.447Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/calculate
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/calculate [32m200[0m 96.986 ms - 1691[0m
+[2026-09-16T09:46:45.549Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/submit
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/submit [32m200[0m 36.188 ms - 1123[0m
+[2026-09-16T09:46:45.589Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/check
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/check [32m200[0m 42.783 ms - 1121[0m
+[2026-09-16T09:46:45.636Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/approve
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/approve [32m200[0m 23.365 ms - 1122[0m
+[2026-09-16T09:46:45.664Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/initiate-payment
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/initiate-payment [32m200[0m 32.532 ms - 1132[0m
+[2026-09-16T09:46:45.701Z] POST /api/office-payroll/6aa8e976751bf3cd6f793715/confirm-paid
+[0mPOST /api/office-payroll/6aa8e976751bf3cd6f793715/confirm-paid [32m200[0m 115.809 ms - 1292[0m
+[2026-09-16T09:46:45.821Z] GET /api/office-payroll/6aa8e976751bf3cd6f793715
+[0mGET /api/office-payroll/6aa8e976751bf3cd6f793715 [32m200[0m 21.047 ms - 2091[0m
+[2026-09-16T09:46:45.846Z] GET /api/journal?limit=5
+[0mGET /api/journal?limit=5 [32m200[0m 20.005 ms - 4256[0m
+[2026-09-16T09:48:23.473Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 633.857 ms - 592[0m
+[2026-09-16T09:48:24.118Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 672.772 ms - 560[0m
+[2026-09-16T09:48:24.795Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 604.297 ms - 566[0m
+[2026-09-16T09:48:25.551Z] POST /api/finance/periods
+[ERROR] 409 - Period already exists
+[0mPOST /api/finance/periods [33m409[0m 13.370 ms - 555[0m
+[2026-09-16T09:48:25.568Z] GET /api/finance/periods
+[ERROR] 403 - Insufficient permissions
+[0mGET /api/finance/periods [33m403[0m 5.598 ms - 1350[0m
+[2026-09-16T09:49:26.585Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 620.670 ms - 592[0m
+[2026-09-16T09:49:27.219Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 605.517 ms - 560[0m
+[2026-09-16T09:49:27.828Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 620.522 ms - 566[0m
+[2026-09-16T09:50:24.101Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 609.528 ms - 592[0m
+[2026-09-16T09:50:24.723Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 621.180 ms - 560[0m
+[2026-09-16T09:50:25.348Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 613.178 ms - 566[0m
+[2026-09-16T09:50:26.096Z] POST /api/office-payroll/generate/6aa10102f185017c6fe5603d
+[0mPOST /api/office-payroll/generate/6aa10102f185017c6fe5603d [32m201[0m 71.524 ms - 455[0m
+[2026-09-16T09:50:26.174Z] GET /api/office-payroll?payrollPeriodId=6aa10102f185017c6fe5603d&limit=50
+[0mGET /api/office-payroll?payrollPeriodId=6aa10102f185017c6fe5603d&limit=50 [32m200[0m 30.648 ms - 3861[0m
+[2026-09-16T09:52:07.831Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 817.532 ms - 592[0m
+[2026-09-16T09:52:08.665Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 664.188 ms - 560[0m
+[2026-09-16T09:52:09.336Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 645.221 ms - 566[0m
+[2026-09-16T09:52:10.153Z] POST /api/finance/periods
+[0mPOST /api/finance/periods [32m201[0m 20.694 ms - 283[0m
+[2026-09-16T09:52:10.179Z] GET /api/finance/periods
+[ERROR] 403 - Insufficient permissions
+[0mGET /api/finance/periods [33m403[0m 4.482 ms - 1350[0m
+[2026-09-16T09:54:14.665Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 778.035 ms - 592[0m
+[2026-09-16T09:54:15.475Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 989.959 ms - 560[0m
+[2026-09-16T09:54:16.470Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 1119.783 ms - 566[0m
+[2026-09-16T09:54:17.761Z] POST /api/finance/periods
+[ERROR] 409 - Period already exists
+[0mPOST /api/finance/periods [33m409[0m 9.700 ms - 555[0m
+[2026-09-16T09:54:17.775Z] GET /api/finance/periods/6aaa66cacc650a9e055302b2
+[ERROR] 403 - Insufficient permissions
+[0mGET /api/finance/periods/6aaa66cacc650a9e055302b2 [33m403[0m 4.784 ms - 1365[0m
+[2026-09-16T09:54:17.785Z] PUT /api/finance/periods/6aaa66cacc650a9e055302b2/lock
+[ERROR] 400 - Cannot transition from DRAFT to LOCKED
+[0mPUT /api/finance/periods/6aaa66cacc650a9e055302b2/lock [33m400[0m 10.132 ms - 595[0m
+[2026-09-16T09:54:17.800Z] POST /api/office-payroll/generate/6aaa66cacc650a9e055302b2
+[ERROR] 400 - Staff attendance for this period has not been locked yet. Please ask HR to lock attendance before generating payroll.
+[0mPOST /api/office-payroll/generate/6aaa66cacc650a9e055302b2 [33m400[0m 23.635 ms - 784[0m
+[2026-09-16T09:54:17.829Z] GET /api/office-payroll?payrollPeriodId=6aaa66cacc650a9e055302b2&limit=50
+[0mGET /api/office-payroll?payrollPeriodId=6aaa66cacc650a9e055302b2&limit=50 [32m200[0m 13.398 ms - 86[0m
+[2026-09-16T09:57:36.220Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 685.105 ms - 592[0m
+[2026-09-16T09:57:36.923Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 761.810 ms - 560[0m
+[2026-09-16T09:57:37.690Z] POST /api/auth/login
+[0mPOST /api/auth/login [32m200[0m 807.514 ms - 566[0m
+[2026-09-16T09:57:38.702Z] POST /api/finance/periods
+[ERROR] 409 - Period already exists
+[0mPOST /api/finance/periods [33m409[0m 10.154 ms - 555[0m
+[2026-09-16T09:57:38.716Z] GET /api/finance/periods/6aaa66cacc650a9e055302b2
+[ERROR] 403 - Insufficient permissions
+[0mGET /api/finance/periods/6aaa66cacc650a9e055302b2 [33m403[0m 5.557 ms - 1365[0m
+[2026-09-16T09:57:38.726Z] PUT /api/finance/periods/6aaa66cacc650a9e055302b2/status
+[0mPUT /api/finance/periods/6aaa66cacc650a9e055302b2/status [32m200[0m 27.641 ms - 282[0m
+[2026-09-16T09:57:38.761Z] PUT /api/finance/periods/6aaa66cacc650a9e055302b2/lock
+[ERROR] 400 - Cannot transition from OPEN to LOCKED
+[0mPUT /api/finance/periods/6aaa66cacc650a9e055302b2/lock [33m400[0m 9.852 ms - 593[0m
+[2026-09-16T09:57:38.776Z] POST /api/office-payroll/generate/6aaa66cacc650a9e055302b2
+[ERROR] 400 - Staff attendance for this period has not been locked yet. Please ask HR to lock attendance before generating payroll.
+[0mPOST /api/office-payroll/generate/6aaa66cacc650a9e055302b2 [33m400[0m 27.172 ms - 784[0m
+[2026-09-16T09:57:38.809Z] GET /api/office-payroll?payrollPeriodId=6aaa66cacc650a9e055302b2&limit=50
+[0mGET /api/office-payroll?payrollPeriodId=6aaa66cacc650a9e055302b2&limit=50 [32m200[0m 22.671 ms - 86[0m

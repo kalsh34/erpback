@@ -1,0 +1,370 @@
+(node:12248) [MONGOOSE] Warning: Duplicate schema index on {"email":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12248) [MONGOOSE] Warning: Duplicate schema index on {"employeeCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:12248) [MONGOOSE] Warning: Duplicate schema index on {"siteCode":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:12248) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(node:12248) [MONGOOSE] Warning: Duplicate schema index on {"code":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+[GUARD SERVICE] ⚠ MongoDB replica set NOT detected. registerGuard() running WITHOUT transactions (standalone fallback). Manual cleanup will be used on failure. This is expected for local dev only — production MUST use a replica set.
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 400 - Predecessor clocked out less than 48 hours ago. Cannot clock in as relief. 48.0 hours remaining.
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 400 - Predecessor clocked out less than 48 hours ago. Cannot clock in as relief. 48.0 hours remaining.
+[ERROR] 500 - Employee validation failed: employeeCode: Path `employeeCode` is required., firstName: Path `firstName` is required., lastName: Path `lastName` is required., gender: `` is not a valid enum value for path `gender`., hireDate: Path `hireDate` is required.
+ValidationError: Employee validation failed: employeeCode: Path `employeeCode` is required., firstName: Path `firstName` is required., lastName: Path `lastName` is required., gender: `` is not a valid enum value for path `gender`., hireDate: Path `hireDate` is required.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 400 - Predecessor clocked out less than 48 hours ago. Cannot clock in as relief. 48.0 hours remaining.
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 400 - Predecessor clocked out less than 48 hours ago. Cannot clock in as relief. 48.0 hours remaining.
+[DB] MongoDB disconnected
+[DB] MongoDB disconnected
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 400 - Predecessor clocked out less than 48 hours ago. Cannot clock in as relief. 48.0 hours remaining.
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 400 - Predecessor clocked out less than 48 hours ago. Cannot clock in as relief. 48.0 hours remaining.
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 400 - Predecessor clocked out less than 48 hours ago. Cannot clock in as relief. 48.0 hours remaining.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 500 - Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+ValidationError: Employee validation failed: guardInfo.employmentType: `INVALID_ENUM_VALUE` is not a valid enum value for path `guardInfo.employmentType`.
+    at Document.invalidate (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3387:32)
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\document.js:3148:17
+    at C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\node_modules\mongoose\lib\schemaType.js:1443:9
+    at process.processTicksAndRejections (node:internal/process/task_queues:85:11)
+[ERROR] 409 - Period already exists
+[GuardPayroll] Failed to post journal entry: ApiError: Debit total (3432) must equal credit total (0)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postGuardPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:86:62)
+    at GuardPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.service.js:231:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\guardPayroll\guardPayroll.controller.js:101:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[StaffPayroll] Failed to post journal entry: ApiError: Debit total (35750) must equal credit total (33000)
+    at ApiError.badRequest (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\common\ApiError.js:12:16)
+    at JournalService.createEntry (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\journal.service.js:54:39)
+    at PayrollJournalService.postStaffPayroll (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\finance-accounting\payrollJournal.service.js:157:62)
+    at StaffPayrollService.pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.service.js:167:66)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async pay (C:\Users\Kal\Desktop\junkie\Vitalpayroll\backend\dist\modules\hr\officePayroll\officePayroll.controller.js:114:28) {
+  statusCode: 400,
+  isOperational: true
+}
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 409 - You already have an active shift. Please clock out first.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 400 - Predecessor clocked out less than 48 hours ago. Cannot clock in as relief. 48.0 hours remaining.
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions
+[ERROR] 403 - Insufficient permissions

@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const guard_controller_1 = require("./guard.controller");
+const auth_1 = require("../../../middleware/auth");
+const rbac_1 = require("../../../middleware/rbac");
+const types_1 = require("../../../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), guard_controller_1.GuardController.getAllGuards);
+router.post('/register', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_REGISTER), guard_controller_1.GuardController.registerGuard);
+router.get('/:employeeId', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), guard_controller_1.GuardController.getGuardDetail);
+router.put('/:employeeId', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_UPDATE), guard_controller_1.GuardController.updateGuard);
+router.post('/assign-site', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSIGN_SITE), guard_controller_1.GuardController.assignSite);
+router.get('/:guardId/sites', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), guard_controller_1.GuardController.getGuardSites);
+router.delete('/site-assignment/:assignmentId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSIGN_SITE), guard_controller_1.GuardController.removeSiteAssignment);
+router.put('/pay-rate/:assignmentId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_RATES), guard_controller_1.GuardController.updatePayRate);
+router.put('/:employeeId/home-site', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_UPDATE), guard_controller_1.GuardController.setHomeSite);
+exports.default = router;
+//# sourceMappingURL=guard.routes.js.map

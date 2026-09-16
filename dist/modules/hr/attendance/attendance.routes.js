@@ -1,0 +1,26 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const attendance_controller_1 = require("./attendance.controller");
+const auth_1 = require("../../../middleware/auth");
+const rbac_1 = require("../../../middleware/rbac");
+const types_1 = require("../../../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.get('/on-duty/:siteId', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), attendance_controller_1.AttendanceController.getOnDuty);
+router.get('/coverage-alerts/:siteId', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), attendance_controller_1.AttendanceController.getCoverageAlerts);
+router.post('/override-clockout/:recordId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_MODIFY_HOURS), attendance_controller_1.AttendanceController.overrideClockOut);
+router.post('/clock-in', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_CLOCK), attendance_controller_1.AttendanceController.clockIn);
+router.post('/clock-out/:guardId', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_CLOCK), attendance_controller_1.AttendanceController.clockOut);
+router.get('/active/:guardId', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_CLOCK), attendance_controller_1.AttendanceController.getActiveShift);
+router.get('/today/:guardId', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_CLOCK), attendance_controller_1.AttendanceController.getTodayRecord);
+router.get('/recent/:guardId', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_CLOCK), attendance_controller_1.AttendanceController.getRecentRecords);
+router.get('/guard/:guardId', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), attendance_controller_1.AttendanceController.getGuardHours);
+router.put('/:id/edit', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_MODIFY_HOURS), attendance_controller_1.AttendanceController.editHours);
+router.get('/guard/:guardId/period', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), attendance_controller_1.AttendanceController.getByGuardAndPeriod);
+router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), attendance_controller_1.AttendanceController.getAllAttendance);
+router.post('/manual-entry', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_FILE), attendance_controller_1.AttendanceController.manualEntry);
+router.post('/manual-entry/bulk', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_FILE), attendance_controller_1.AttendanceController.manualEntryBulk);
+router.put('/manual-entry/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_FILE), attendance_controller_1.AttendanceController.correctManualEntry);
+exports.default = router;
+//# sourceMappingURL=attendance.routes.js.map

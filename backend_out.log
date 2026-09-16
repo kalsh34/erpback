@@ -1,0 +1,7 @@
+Starting Vital Security Backend...
+Config loaded: { port: 5000, mongoUri: 'mongodb://127.0.0.1:27017/vitalpayroll' }
+Connecting to MongoDB...
+[DB] MongoDB connected: 127.0.0.1
+MongoDB connected successfully
+[SERVER] Running on port 5000 in development mode
+READY

@@ -1,0 +1,21 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const employee_controller_1 = require("./employee.controller");
+const auth_1 = require("../../../middleware/auth");
+const rbac_1 = require("../../../middleware/rbac");
+const types_1 = require("../../../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.get('/guards', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.getGuards);
+router.get('/office-staff', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.getOfficeStaff);
+router.get('/export', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.exportCsv);
+router.get('/analytics/summary', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.analytics);
+router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.getAll);
+router.get('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.getById);
+router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_CREATE), employee_controller_1.EmployeeController.create);
+router.put('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_UPDATE), employee_controller_1.EmployeeController.update);
+router.put('/:id/status', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_UPDATE), employee_controller_1.EmployeeController.changeStatus);
+router.delete('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_DELETE), employee_controller_1.EmployeeController.delete);
+exports.default = router;
+//# sourceMappingURL=employee.routes.js.map
