@@ -30,6 +30,7 @@ const candidate_routes_1 = __importDefault(require("./modules/hr/onboarding/cand
 const performance_routes_1 = __importDefault(require("./modules/hr/performance/performance.routes"));
 const guarantor_routes_1 = __importDefault(require("./modules/hr/guarantor/guarantor.routes"));
 const rotation_routes_1 = __importDefault(require("./modules/hr/rotation/rotation.routes"));
+const shiftSchedule_routes_1 = __importDefault(require("./modules/hr/shiftSchedule/shiftSchedule.routes"));
 const salaryStructure_routes_1 = __importDefault(require("./modules/hr/salaryStructure/salaryStructure.routes"));
 const department_routes_1 = __importDefault(require("./modules/hr/organization/department.routes"));
 const position_routes_1 = __importDefault(require("./modules/hr/organization/position.routes"));
@@ -72,6 +73,7 @@ app.use('/api/candidates', candidate_routes_1.default);
 app.use('/api/performance', performance_routes_1.default);
 app.use('/api/guarantors', guarantor_routes_1.default);
 app.use('/api/rotations', rotation_routes_1.default);
+app.use('/api/shift-schedules', shiftSchedule_routes_1.default);
 app.use('/api/salary-structures', salaryStructure_routes_1.default);
 app.use('/api/departments', department_routes_1.default);
 app.use('/api/positions', position_routes_1.default);

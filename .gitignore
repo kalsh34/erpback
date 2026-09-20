@@ -1,0 +1,17 @@
+# environment / secrets
+.env
+.env.local
+.env.*.local
+
+# dependencies
+node_modules/
+
+# logs
+*.log
+
+# build info
+*.tsbuildinfo
+
+# os junk
+Thumbs.db
+.DS_Store

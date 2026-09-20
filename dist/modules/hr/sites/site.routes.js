@@ -41,8 +41,8 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
                 .limit(20),
             RotationAssignment_1.RotationAssignment.find({ siteId: req.params.id })
                 .populate('guardId', 'firstName lastName employeeCode')
-                .sort({ date: -1 })
-                .limit(30),
+                .sort({ date: 1 })
+                .limit(60),
         ]);
         const today = new Date();
         today.setHours(0, 0, 0, 0);

@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const app_1 = __importDefault(require("./app"));
 const env_1 = require("./config/env");
 const database_1 = require("./config/database");
+const ensureDefaultAdmin_1 = require("./bootstrap/ensureDefaultAdmin");
 const hr_permissions_1 = require("./modules/hr/permissions/hr.permissions");
 const payroll_permissions_1 = require("./modules/hr/permissions/payroll.permissions");
 const core_permissions_1 = require("./core/permissions/core.permissions");
@@ -18,6 +19,7 @@ const registerAllPermissions = () => {
 const start = async () => {
     try {
         await (0, database_1.connectDatabase)();
+        await (0, ensureDefaultAdmin_1.ensureDefaultAdmin)();
         registerAllPermissions();
         app_1.default.listen(env_1.config.port, () => {
             console.log(`[SERVER] Running on port ${env_1.config.port} in ${env_1.config.nodeEnv} mode`);
