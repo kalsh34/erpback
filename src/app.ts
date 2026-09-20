@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import path from 'path';
+import { config } from './config/env';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 
@@ -44,7 +45,16 @@ import fleetStub from './modules/fleet/index';
 
 const app = express();
 
-app.use(cors());
+// CORS_ORIGIN accepts a comma separated list of the frontend origins allowed to
+// call this API, e.g. CORS_ORIGIN=https://my-frontend.onrender.com,http://localhost:3000
+// Defaults to "*" (any origin) so the deployed API keeps working out of the box.
+const corsOrigins = config.corsOrigin
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowAnyOrigin = corsOrigins.length === 0 || corsOrigins.includes('*');
+
+app.use(cors(allowAnyOrigin ? {} : { origin: corsOrigins }));
 app.use(express.json());
 app.use(morgan('dev'));
 app.use(requestLogger);

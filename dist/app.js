@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const morgan_1 = __importDefault(require("morgan"));
 const path_1 = __importDefault(require("path"));
+const env_1 = require("./config/env");
 const errorHandler_1 = require("./middleware/errorHandler");
 const requestLogger_1 = require("./middleware/requestLogger");
 const auth_routes_1 = __importDefault(require("./modules/auth/auth.routes"));
@@ -44,7 +45,15 @@ const index_5 = __importDefault(require("./modules/manufacturing/index"));
 const index_6 = __importDefault(require("./modules/projects/index"));
 const index_7 = __importDefault(require("./modules/fleet/index"));
 const app = (0, express_1.default)();
-app.use((0, cors_1.default)());
+// CORS_ORIGIN accepts a comma separated list of the frontend origins allowed to
+// call this API, e.g. CORS_ORIGIN=https://my-frontend.onrender.com,http://localhost:3000
+// Defaults to "*" (any origin) so the deployed API keeps working out of the box.
+const corsOrigins = env_1.config.corsOrigin
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+const allowAnyOrigin = corsOrigins.length === 0 || corsOrigins.includes('*');
+app.use((0, cors_1.default)(allowAnyOrigin ? {} : { origin: corsOrigins }));
 app.use(express_1.default.json());
 app.use((0, morgan_1.default)('dev'));
 app.use(requestLogger_1.requestLogger);

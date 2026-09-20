@@ -4,5 +4,6 @@ export declare const config: {
     jwtSecret: string;
     jwtExpiresIn: string;
     nodeEnv: string;
+    corsOrigin: string;
 };
 //# sourceMappingURL=env.d.ts.map
