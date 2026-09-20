@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { IRotation } from '../../../models/Rotation';
 export declare class RotationService {
+    static getShiftLabel(rot: IRotation, shiftType: 'DAY' | 'NIGHT'): string;
+    static getActivePool(rot: IRotation): any[];
     static computeDayAssignments(rot: IRotation, date: Date): {
         guardId: mongoose.Types.ObjectId;
         shiftType: 'DAY' | 'NIGHT';
@@ -10,9 +12,12 @@ export declare class RotationService {
         name: string;
         description?: string;
         siteId: string;
+        shiftMode?: 'STANDARD_12H' | 'SINGLE_24H';
         dayShiftCount: number;
         nightShiftCount: number;
         dayStartTime?: string;
+        dayEndTime?: string;
+        nightStartTime?: string;
         nightEndTime?: string;
         startDate: string;
     }, userId: string, _auditCtx?: {
@@ -115,8 +120,20 @@ export declare class RotationService {
     }): Promise<{
         count: number;
         days: number;
+        skipped: {
+            guardId: string;
+            date: string;
+            shiftType: string;
+            reason: string;
+        }[];
+        total: number;
     }>;
     static getAssignments(id: string, startDate?: string, endDate?: string): Promise<(mongoose.Document<unknown, {}, import("../../../models/RotationAssignment").IRotationAssignment, {}, {}> & import("../../../models/RotationAssignment").IRotationAssignment & Required<{
+        _id: mongoose.Types.ObjectId;
+    }> & {
+        __v: number;
+    })[]>;
+    static rotateAssignments(id: string, date: string): Promise<(mongoose.Document<unknown, {}, import("../../../models/RotationAssignment").IRotationAssignment, {}, {}> & import("../../../models/RotationAssignment").IRotationAssignment & Required<{
         _id: mongoose.Types.ObjectId;
     }> & {
         __v: number;

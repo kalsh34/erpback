@@ -14,6 +14,7 @@ export declare class RotationController {
     static preview(req: Request, res: Response, next: NextFunction): Promise<void>;
     static generate(req: Request, res: Response, next: NextFunction): Promise<void>;
     static getAssignments(req: Request, res: Response, next: NextFunction): Promise<void>;
+    static rotateAssignments(req: Request, res: Response, next: NextFunction): Promise<void>;
     static activate(req: Request, res: Response, next: NextFunction): Promise<void>;
     static pause(req: Request, res: Response, next: NextFunction): Promise<void>;
     static archive(req: Request, res: Response, next: NextFunction): Promise<void>;

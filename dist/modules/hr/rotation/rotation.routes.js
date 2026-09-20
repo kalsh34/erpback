@@ -21,6 +21,7 @@ router.get('/utils/fairness', rotation_controller_1.RotationController.checkFair
 router.get('/:id/preview', (0, rbac_1.authorize)(types_1.PERMISSIONS.ROTATION_READ), rotation_controller_1.RotationController.preview);
 router.post('/:id/generate', (0, rbac_1.authorize)(types_1.PERMISSIONS.ROTATION_GENERATE), rotation_controller_1.RotationController.generate);
 router.get('/:id/assignments', (0, rbac_1.authorize)(types_1.PERMISSIONS.ROTATION_READ), rotation_controller_1.RotationController.getAssignments);
+router.post('/:id/rotate', (0, rbac_1.authorize)(types_1.PERMISSIONS.ROTATION_MANAGE), rotation_controller_1.RotationController.rotateAssignments);
 router.post('/:id/activate', (0, rbac_1.authorize)(types_1.PERMISSIONS.ROTATION_MANAGE), rotation_controller_1.RotationController.activate);
 router.post('/:id/pause', (0, rbac_1.authorize)(types_1.PERMISSIONS.ROTATION_MANAGE), rotation_controller_1.RotationController.pause);
 router.post('/:id/archive', (0, rbac_1.authorize)(types_1.PERMISSIONS.ROTATION_MANAGE), rotation_controller_1.RotationController.archive);

@@ -52,5 +52,6 @@ shiftAssignmentSchema.index({ siteId: 1, status: 1 });
 shiftAssignmentSchema.index({ startDate: 1, endDate: 1 });
 shiftAssignmentSchema.index({ source: 1 });
 shiftAssignmentSchema.index({ rotationId: 1 }, { sparse: true });
+shiftAssignmentSchema.index({ guardId: 1, status: 1, startDate: 1, endDate: 1 });
 exports.ShiftAssignment = mongoose_1.default.model('ShiftAssignment', shiftAssignmentSchema);
 //# sourceMappingURL=ShiftAssignment.js.map

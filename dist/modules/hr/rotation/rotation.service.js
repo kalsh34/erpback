@@ -7,32 +7,61 @@ exports.RotationService = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Rotation_1 = require("../../../models/Rotation");
 const RotationAssignment_1 = require("../../../models/RotationAssignment");
+const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
 const Site_1 = require("../../../models/Site");
 const ApiError_1 = require("../../../common/ApiError");
 const EventBus_1 = require("../../../core/events/EventBus");
+const conflict_check_1 = require("../shifts/conflict-check");
 function gcd(a, b) {
     return b === 0 ? a : gcd(b, a % b);
 }
 class RotationService {
-    static computeDayAssignments(rot, date) {
-        const activeGuards = rot.guardPool
+    static getShiftLabel(rot, shiftType) {
+        if (shiftType === 'DAY') {
+            const start = rot.dayStartTime || '06:00';
+            const end = rot.dayEndTime || rot.nightEndTime || '18:00';
+            return `${start}-${end}`;
+        }
+        const start = rot.nightStartTime || rot.nightEndTime || '18:00';
+        const end = rot.nightEndTime || '06:00';
+        return `${start}-${end}`;
+    }
+    static getActivePool(rot) {
+        return rot.guardPool
             .filter((g) => g.status === 'ACTIVE')
-            .sort((a, b) => a.order - b.order);
+            .sort((a, b) => {
+            const aId = (a.guardId?.toString() || '');
+            const bId = (b.guardId?.toString() || '');
+            if (aId === bId)
+                return 0;
+            return aId.localeCompare(bId);
+        });
+    }
+    static computeDayAssignments(rot, date) {
+        const activeGuards = this.getActivePool(rot);
         const poolSize = activeGuards.length;
-        const slotCountPerDay = rot.dayShiftCount + rot.nightShiftCount;
-        if (poolSize === 0 || slotCountPerDay === 0)
+        const dayShiftCount = rot.shiftMode === 'SINGLE_24H' ? Math.max(0, rot.dayShiftCount) : rot.dayShiftCount;
+        const nightShiftCount = rot.shiftMode === 'SINGLE_24H' ? 0 : rot.nightShiftCount;
+        const totalSlots = dayShiftCount + nightShiftCount;
+        if (poolSize === 0 || totalSlots === 0)
             return [];
         const startDate = new Date(rot.startDate);
         startDate.setHours(0, 0, 0, 0);
         const dayOffset = Math.max(0, Math.floor((date.getTime() - startDate.getTime()) / 86400000));
-        const offset = (dayOffset * slotCountPerDay) % poolSize;
+        const startIndex = dayOffset % poolSize;
+        const orderedPool = activeGuards.map((_, index) => activeGuards[(index + startIndex) % poolSize]);
         const assignments = [];
-        for (let i = 0; i < slotCountPerDay; i++) {
-            const guardIndex = (offset + i) % poolSize;
-            const guard = activeGuards[guardIndex];
-            const shiftType = i < rot.dayShiftCount ? 'DAY' : 'NIGHT';
-            const shiftTime = shiftType === 'DAY' ? rot.dayStartTime : rot.nightEndTime;
-            assignments.push({ guardId: guard.guardId, shiftType, shiftTime });
+        for (let i = 0; i < dayShiftCount; i += 1) {
+            const guard = orderedPool[i];
+            if (guard) {
+                assignments.push({ guardId: guard.guardId, shiftType: 'DAY', shiftTime: this.getShiftLabel(rot, 'DAY') });
+            }
+        }
+        for (let i = 0; i < nightShiftCount; i += 1) {
+            const guard = orderedPool[(dayShiftCount + i) % poolSize];
+            if (guard) {
+                assignments.push({ guardId: guard.guardId, shiftType: 'NIGHT', shiftTime: this.getShiftLabel(rot, 'NIGHT') });
+            }
         }
         return assignments;
     }
@@ -40,19 +69,31 @@ class RotationService {
         const site = await Site_1.Site.findById(data.siteId);
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
-        const slotCountPerDay = data.dayShiftCount + data.nightShiftCount;
-        if (slotCountPerDay < 2)
-            throw ApiError_1.ApiError.badRequest('Total working positions must be at least 2');
-        if (data.dayShiftCount < 1 || data.nightShiftCount < 1)
-            throw ApiError_1.ApiError.badRequest('Need at least 1 guard on each shift');
+        const shiftMode = data.shiftMode || 'STANDARD_12H';
+        const dayShiftCount = Number(data.dayShiftCount ?? 0);
+        const nightShiftCount = Number(data.nightShiftCount ?? 0);
+        if (dayShiftCount < 0 || nightShiftCount < 0) {
+            throw ApiError_1.ApiError.badRequest('Shift counts cannot be negative');
+        }
+        if (shiftMode === 'SINGLE_24H') {
+            if (dayShiftCount < 1)
+                throw ApiError_1.ApiError.badRequest('Single-shift rotations need at least 1 guard on duty');
+        }
+        const finalDayCount = shiftMode === 'SINGLE_24H' ? Math.max(1, dayShiftCount) : dayShiftCount;
+        const finalNightCount = shiftMode === 'SINGLE_24H' ? 0 : nightShiftCount;
+        if (finalDayCount + finalNightCount <= 0)
+            throw ApiError_1.ApiError.badRequest('At least one guard must be scheduled per day');
         const rotation = await Rotation_1.Rotation.create({
             name: data.name,
             description: data.description,
             siteId: data.siteId,
-            dayShiftCount: data.dayShiftCount,
-            nightShiftCount: data.nightShiftCount,
+            shiftMode,
+            dayShiftCount: finalDayCount,
+            nightShiftCount: finalNightCount,
             dayStartTime: data.dayStartTime || '06:00',
-            nightEndTime: data.nightEndTime || '18:00',
+            dayEndTime: data.dayEndTime || '18:00',
+            nightStartTime: data.nightStartTime || '18:00',
+            nightEndTime: data.nightEndTime || '06:00',
             startDate: new Date(data.startDate),
             status: 'DRAFT',
             guardPool: [],
@@ -86,11 +127,32 @@ class RotationService {
             throw ApiError_1.ApiError.notFound('Rotation not found');
         if (rotation.status !== 'DRAFT')
             throw ApiError_1.ApiError.badRequest('Can only edit DRAFT rotations');
-        const allowed = ['name', 'description', 'dayShiftCount', 'nightShiftCount', 'dayStartTime', 'nightEndTime', 'startDate'];
-        for (const key of allowed) {
-            if (data[key] !== undefined)
-                rotation[key] = data[key];
+        const allowed = ['name', 'description', 'shiftMode', 'dayShiftCount', 'nightShiftCount', 'dayStartTime', 'dayEndTime', 'nightStartTime', 'nightEndTime', 'startDate'];
+        const nextMode = data.shiftMode ?? rotation.shiftMode ?? 'STANDARD_12H';
+        const nextDay = Number(data.dayShiftCount ?? rotation.dayShiftCount ?? 0);
+        let nextNight = Number(data.nightShiftCount ?? rotation.nightShiftCount ?? 0);
+        if (nextMode === 'SINGLE_24H') {
+            if (nextDay < 1)
+                throw ApiError_1.ApiError.badRequest('Single-shift rotations need at least 1 guard on duty');
+            nextNight = 0;
         }
+        if (nextDay < 0 || nextNight < 0)
+            throw ApiError_1.ApiError.badRequest('Shift counts cannot be negative');
+        if (nextDay + nextNight <= 0)
+            throw ApiError_1.ApiError.badRequest('At least one guard must be scheduled per day');
+        rotation.shiftMode = nextMode;
+        rotation.dayShiftCount = nextDay;
+        rotation.nightShiftCount = nextNight;
+        rotation.dayStartTime = data.dayStartTime ?? rotation.dayStartTime ?? '06:00';
+        rotation.dayEndTime = data.dayEndTime ?? rotation.dayEndTime ?? '18:00';
+        rotation.nightStartTime = data.nightStartTime ?? rotation.nightStartTime ?? '18:00';
+        rotation.nightEndTime = data.nightEndTime ?? rotation.nightEndTime ?? '18:00';
+        if (data.startDate)
+            rotation.startDate = new Date(data.startDate);
+        if (data.name !== undefined)
+            rotation.name = data.name;
+        if (data.description !== undefined)
+            rotation.description = data.description;
         await rotation.save();
         return rotation;
     }
@@ -167,7 +229,7 @@ class RotationService {
         if (poolSize < slotCountPerDay)
             return { isFair: false, message: `Need at least ${slotCountPerDay} guards, have ${poolSize}` };
         const cycleDays = poolSize / gcd(poolSize, slotCountPerDay);
-        const workDaysPerCycle = cycleDays * slotCountPerDay / poolSize;
+        const workDaysPerCycle = (cycleDays * slotCountPerDay) / poolSize;
         return {
             isFair: true,
             cycleDays,
@@ -179,17 +241,17 @@ class RotationService {
         const rot = await Rotation_1.Rotation.findById(id).populate('siteId', 'siteName siteCode');
         if (!rot)
             throw ApiError_1.ApiError.notFound('Rotation not found');
-        const activeGuards = rot.guardPool.filter((g) => g.status === 'ACTIVE').sort((a, b) => a.order - b.order);
+        const activeGuards = this.getActivePool(rot);
         const poolSize = activeGuards.length;
-        const slotCountPerDay = rot.dayShiftCount + rot.nightShiftCount;
+        const slotCountPerDay = rot.shiftMode === 'SINGLE_24H' ? Math.max(rot.dayShiftCount, 1) : rot.dayShiftCount + rot.nightShiftCount;
         if (poolSize === 0)
             throw ApiError_1.ApiError.badRequest('No active guards in pool');
-        if (poolSize < slotCountPerDay)
-            throw ApiError_1.ApiError.badRequest(`Need at least ${slotCountPerDay} guards`);
+        if (slotCountPerDay <= 0)
+            throw ApiError_1.ApiError.badRequest('At least one shift duty must be assigned');
         const result = [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        for (let d = 0; d < days; d++) {
+        for (let d = 0; d < days; d += 1) {
             const date = new Date(today);
             date.setDate(date.getDate() + d);
             date.setHours(0, 0, 0, 0);
@@ -206,7 +268,7 @@ class RotationService {
         }
         return {
             assignments: result,
-            shiftTimes: { day: rot.dayStartTime, night: rot.nightEndTime },
+            shiftTimes: { day: this.getShiftLabel(rot, 'DAY'), night: this.getShiftLabel(rot, 'NIGHT') },
             siteName: rot.siteId?.siteName || '',
             poolSize,
             slotCountPerDay,
@@ -217,23 +279,71 @@ class RotationService {
         const rot = await Rotation_1.Rotation.findById(id);
         if (!rot)
             throw ApiError_1.ApiError.notFound('Rotation not found');
-        const activeGuards = rot.guardPool.filter((g) => g.status === 'ACTIVE').sort((a, b) => a.order - b.order);
+        const activeGuards = this.getActivePool(rot);
         const poolSize = activeGuards.length;
-        const slotCountPerDay = rot.dayShiftCount + rot.nightShiftCount;
+        const slotCountPerDay = rot.shiftMode === 'SINGLE_24H' ? Math.max(rot.dayShiftCount, 1) : rot.dayShiftCount + rot.nightShiftCount;
         if (poolSize === 0)
             throw ApiError_1.ApiError.badRequest('No active guards in pool');
-        if (poolSize < slotCountPerDay)
-            throw ApiError_1.ApiError.badRequest(`Need at least ${slotCountPerDay} guards`);
+        if (slotCountPerDay <= 0)
+            throw ApiError_1.ApiError.badRequest('At least one shift duty must be assigned');
         await RotationAssignment_1.RotationAssignment.deleteMany({ rotationId: id });
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const assignments = [];
-        for (let d = 0; d < days; d++) {
+        const skipped = [];
+        const guardIds = activeGuards.map((g) => g.guardId.toString());
+        const allExistingAssignments = await ShiftAssignment_1.ShiftAssignment.find({
+            guardId: { $in: guardIds },
+            status: 'ACTIVE',
+        }).populate('shiftTemplateId', 'startTime endTime');
+        const existingByGuard = new Map();
+        for (const a of allExistingAssignments) {
+            const gid = a.guardId.toString();
+            if (!existingByGuard.has(gid))
+                existingByGuard.set(gid, []);
+            existingByGuard.get(gid).push(a);
+        }
+        for (let d = 0; d < days; d += 1) {
             const date = new Date(today);
             date.setDate(date.getDate() + d);
             date.setHours(0, 0, 0, 0);
             const dayAssigns = this.computeDayAssignments(rot, date);
             for (const a of dayAssigns) {
+                const guardIdStr = a.guardId.toString();
+                const shiftStart = a.shiftType === 'DAY' ? rot.dayStartTime : rot.nightStartTime;
+                const shiftEnd = a.shiftType === 'DAY' ? rot.dayEndTime : rot.nightEndTime;
+                const existingList = existingByGuard.get(guardIdStr) || [];
+                let conflict = false;
+                let conflictInfo = '';
+                for (const existing of existingList) {
+                    const dayEnd = new Date(date);
+                    dayEnd.setHours(23, 59, 59, 999);
+                    const existStart = existing.startDate;
+                    const existEnd = existing.endDate && existing.endDate.getTime() > 0 ? existing.endDate : new Date('2099-12-31');
+                    if (!(date < existEnd && existStart <= dayEnd))
+                        continue;
+                    const template = existing.shiftTemplateId;
+                    if (!template)
+                        continue;
+                    const eS = template.startTime;
+                    const eE = template.endTime;
+                    const overlaps = (0, conflict_check_1.shiftsTimeOverlap)(shiftStart || '06:00', shiftEnd || '18:00', eS, eE);
+                    if (overlaps) {
+                        conflict = true;
+                        const site = existing.siteId;
+                        conflictInfo = `conflicts with shift "${template.name}" (${eS}-${eE}) at ${site?.siteName || 'another site'}`;
+                        break;
+                    }
+                }
+                if (conflict) {
+                    skipped.push({
+                        guardId: guardIdStr,
+                        date: date.toISOString().split('T')[0],
+                        shiftType: a.shiftType,
+                        reason: conflictInfo,
+                    });
+                    continue;
+                }
                 assignments.push({
                     rotationId: rot._id,
                     guardId: a.guardId,
@@ -248,8 +358,8 @@ class RotationService {
         const created = await RotationAssignment_1.RotationAssignment.insertMany(assignments);
         rot.lastGeneratedDate = new Date();
         await rot.save();
-        EventBus_1.eventBus.emit('hr.rotation.generated', { rotationId: id, count: created.length, days });
-        return { count: created.length, days };
+        EventBus_1.eventBus.emit('hr.rotation.generated', { rotationId: id, count: created.length, days, skippedCount: skipped.length });
+        return { count: created.length, days, skipped, total: created.length + skipped.length };
     }
     static async getAssignments(id, startDate, endDate) {
         const filter = { rotationId: id };
@@ -263,6 +373,34 @@ class RotationService {
         return RotationAssignment_1.RotationAssignment.find(filter)
             .populate('guardId', 'firstName lastName employeeCode')
             .sort({ date: 1, shiftType: 1 });
+    }
+    static async rotateAssignments(id, date) {
+        const rotation = await Rotation_1.Rotation.findById(id);
+        if (!rotation)
+            throw ApiError_1.ApiError.notFound('Rotation not found');
+        const targetDate = new Date(date);
+        targetDate.setHours(0, 0, 0, 0);
+        const assignments = await RotationAssignment_1.RotationAssignment.find({ rotationId: id, date: targetDate }).sort({ shiftType: 1, createdAt: 1 });
+        if (!assignments.length)
+            return [];
+        const dayAssignments = assignments.filter((a) => a.shiftType === 'DAY');
+        const nightAssignments = assignments.filter((a) => a.shiftType === 'NIGHT');
+        const swapCount = Math.min(dayAssignments.length, nightAssignments.length);
+        for (let i = 0; i < swapCount; i += 1) {
+            const dayAssignment = dayAssignments[i];
+            const nightAssignment = nightAssignments[i];
+            const dayGuard = dayAssignment.guardId;
+            const nightGuard = nightAssignment.guardId;
+            if (dayGuard && nightGuard) {
+                dayAssignment.guardId = nightGuard;
+                dayAssignment.shiftTime = this.getShiftLabel(rotation, 'DAY');
+                nightAssignment.guardId = dayGuard;
+                nightAssignment.shiftTime = this.getShiftLabel(rotation, 'NIGHT');
+                await dayAssignment.save();
+                await nightAssignment.save();
+            }
+        }
+        return RotationAssignment_1.RotationAssignment.find({ rotationId: id, date: targetDate }).populate('guardId', 'firstName lastName employeeCode').sort({ shiftType: 1 });
     }
     static async activate(id, _userId, _auditCtx) {
         const rot = await Rotation_1.Rotation.findById(id);

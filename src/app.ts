@@ -26,6 +26,8 @@ import candidateRoutes from './modules/hr/onboarding/candidate.routes';
 import performanceRoutes from './modules/hr/performance/performance.routes';
 import guarantorRoutes from './modules/hr/guarantor/guarantor.routes';
 import rotationRoutes from './modules/hr/rotation/rotation.routes';
+import shiftScheduleRoutes from './modules/hr/shiftSchedule/shiftSchedule.routes';
+
 import salaryStructureRoutes from './modules/hr/salaryStructure/salaryStructure.routes';
 import departmentRoutes from './modules/hr/organization/department.routes';
 import positionRoutes from './modules/hr/organization/position.routes';
@@ -74,6 +76,8 @@ app.use('/api/candidates', candidateRoutes);
 app.use('/api/performance', performanceRoutes);
 app.use('/api/guarantors', guarantorRoutes);
 app.use('/api/rotations', rotationRoutes);
+app.use('/api/shift-schedules', shiftScheduleRoutes);
+
 app.use('/api/salary-structures', salaryStructureRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/positions', positionRoutes);

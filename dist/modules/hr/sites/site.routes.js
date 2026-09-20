@@ -6,6 +6,7 @@ const auth_1 = require("../../../middleware/auth");
 const rbac_1 = require("../../../middleware/rbac");
 const types_1 = require("../../../types");
 const Site_1 = require("../../../models/Site");
+const ShiftTemplate_1 = require("../../../models/ShiftTemplate");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
 const AttendanceRecord_1 = require("../../../models/AttendanceRecord");
@@ -24,7 +25,8 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
         const site = await Site_1.Site.findById(req.params.id);
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
-        const [activeAssignments, currentAssignments, recentAttendance, recentNotes, rotationAssignments] = await Promise.all([
+        const [shiftTemplates, activeAssignments, currentAssignments, recentAttendance, recentNotes, rotationAssignments] = await Promise.all([
+            ShiftTemplate_1.ShiftTemplate.find({}).sort({ name: 1 }),
             ShiftAssignment_1.ShiftAssignment.find({ siteId: req.params.id, status: 'ACTIVE' })
                 .populate('guardId', 'firstName lastName employeeCode status'),
             PrimarySiteAssignment_1.PrimarySiteAssignment.find({ siteId: req.params.id, isCurrent: true })
@@ -56,6 +58,7 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
             success: true,
             data: {
                 site,
+                shiftTemplates,
                 activeAssignments,
                 currentAssignments,
                 recentAttendance,

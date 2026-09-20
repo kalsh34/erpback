@@ -10,6 +10,7 @@ const User_1 = require("../../../models/User");
 const Site_1 = require("../../../models/Site");
 const Employee_1 = require("../../../models/Employee");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
+const RotationAssignment_1 = require("../../../models/RotationAssignment");
 const PayrollPeriod_1 = require("../../../models/PayrollPeriod");
 const ApiError_1 = require("../../../common/ApiError");
 const types_1 = require("../../../types");
@@ -22,6 +23,7 @@ class AttendanceService {
         today.setHours(0, 0, 0, 0);
         const activeShift = await AttendanceRecord_1.AttendanceRecord.findOne({
             guardId: data.guardId,
+            siteId: data.siteId,
             date: today,
             clockOut: null,
         });
@@ -76,11 +78,10 @@ class AttendanceService {
     static async clockOut(guardId, data, auditCtx) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const record = await AttendanceRecord_1.AttendanceRecord.findOne({
-            guardId,
-            date: today,
-            clockOut: null,
-        });
+        const filter = { guardId, date: today, clockOut: null };
+        if (data?.siteId)
+            filter.siteId = data.siteId;
+        const record = await AttendanceRecord_1.AttendanceRecord.findOne(filter);
         if (!record)
             throw ApiError_1.ApiError.badRequest('No open shift to clock out from');
         record.clockOut = new Date();
@@ -311,8 +312,15 @@ class AttendanceService {
                 { endDate: null },
             ],
         });
-        if (!shiftAssignment) {
-            throw ApiError_1.ApiError.badRequest(`No shift assignment found for this guard at this site on ${entryDate.toISOString().split('T')[0]} — assign a shift first.`);
+        const rotationAssignment = shiftAssignment
+            ? null
+            : await RotationAssignment_1.RotationAssignment.findOne({
+                guardId: data.guardId,
+                siteId: data.siteId,
+                date: entryDate,
+            });
+        if (!shiftAssignment && !rotationAssignment) {
+            throw ApiError_1.ApiError.badRequest(`No shift or rotation assignment found for this guard at this site on ${entryDate.toISOString().split('T')[0]} — assign a shift first.`);
         }
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -321,10 +329,11 @@ class AttendanceService {
         }
         const existing = await AttendanceRecord_1.AttendanceRecord.findOne({
             guardId: data.guardId,
+            siteId: data.siteId,
             date: entryDate,
         });
         if (existing) {
-            throw ApiError_1.ApiError.badRequest(`Attendance record already exists for this guard on ${entryDate.toISOString().split('T')[0]}. Use the update endpoint to correct it.`);
+            throw ApiError_1.ApiError.badRequest(`Attendance record already exists for this guard at this site on ${entryDate.toISOString().split('T')[0]}. Use the update endpoint to correct it.`);
         }
         if (data.hoursWorked < 0 || data.hoursWorked > 24) {
             throw ApiError_1.ApiError.badRequest('Hours worked must be between 0 and 24');

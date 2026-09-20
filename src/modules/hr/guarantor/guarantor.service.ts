@@ -84,17 +84,20 @@ export class GuarantorService {
   }
 
   static async verify(id: string, verifiedById: string, auditCtx?: AuditCtx): Promise<IGuarantor> {
-    const guarantor = await Guarantor.findByIdAndUpdate(
-      id,
-      {
-        verificationStatus: GuarantorVerificationStatus.VERIFIED,
-        verifiedById,
-        verifiedAt: new Date(),
-        rejectionReason: undefined,
-      },
-      { new: true }
-    );
+    const guarantor = await Guarantor.findById(id);
     if (!guarantor) throw ApiError.notFound('Guarantor not found');
+
+    const hasRealDocuments = guarantor.documents && guarantor.documents.length > 0 &&
+      guarantor.documents.some(d => d.url && !d.url.startsWith('/uploads/doc_'));
+    if (!hasRealDocuments) {
+      throw ApiError.badRequest('Cannot verify guarantor without at least one uploaded document');
+    }
+
+    guarantor.verificationStatus = GuarantorVerificationStatus.VERIFIED;
+    guarantor.verifiedById = verifiedById as any;
+    guarantor.verifiedAt = new Date();
+    guarantor.rejectionReason = undefined;
+    await guarantor.save();
 
     if (auditCtx) {
       AuditService.log({

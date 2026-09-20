@@ -11,6 +11,7 @@ export declare class AttendanceService {
         ua?: string;
     }): Promise<IAttendanceRecord>;
     static clockOut(guardId: string, data?: {
+        siteId?: string;
         declaredRelieverId?: string;
         declaredRelieverSiteId?: string;
     }, auditCtx?: {

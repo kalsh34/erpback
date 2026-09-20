@@ -8,6 +8,7 @@ const ShiftTemplate_1 = require("../../../models/ShiftTemplate");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
 const rotation_service_1 = require("../rotation/rotation.service");
 const ApiError_1 = require("../../../common/ApiError");
+const conflict_check_1 = require("./conflict-check");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.get('/templates', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), async (req, res, next) => {
@@ -120,6 +121,10 @@ router.post('/assignments', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSI
         const existingCount = await ShiftAssignment_1.ShiftAssignment.countDocuments({ shiftTemplateId, status: 'ACTIVE', startDate: { $lte: assignDate }, $or: [{ endDate: { $gte: assignDate } }, { endDate: { $exists: false } }, { endDate: null }] });
         if (existingCount >= template.maxGuards)
             throw ApiError_1.ApiError.badRequest(`Shift full: ${existingCount}/${template.maxGuards} guards already assigned to "${template.name}"`);
+        const conflict = await (0, conflict_check_1.checkCrossSiteConflict)(guardId, assignDate, endDate ? new Date(endDate) : null, template.startTime, template.endTime);
+        if (conflict.hasConflict) {
+            throw ApiError_1.ApiError.badRequest(`Cannot assign to this shift: ${conflict.message}`);
+        }
         const assignment = await ShiftAssignment_1.ShiftAssignment.create({ guardId, siteId, shiftTemplateId, startDate: assignDate, endDate: endDate ? new Date(endDate) : undefined, assignedById: req.user?.userId });
         res.status(201).json({ success: true, data: assignment });
     }
