@@ -1,6 +1,6 @@
 import { Guarantor, IGuarantor, GuarantorType, GuarantorVerificationStatus } from '../../../models/Guarantor';
 import { Employee } from '../../../models/Employee';
-import { Contract } from '../../../models/Contract';
+import { activateEmployeeIfEligible } from '../employees/activation';
 import { ApiError } from '../../../common/ApiError';
 import { AuditService } from '../../../core/audit/AuditService';
 import { eventBus } from '../../../core/events/EventBus';
@@ -9,26 +9,6 @@ interface AuditCtx {
   userId: string;
   ip?: string;
   userAgent?: string;
-}
-
-async function checkAndActivateEmployee(employeeId: string) {
-  const employee = await Employee.findById(employeeId);
-  if (!employee) return;
-
-  const hasVerifiedGuarantor = await Guarantor.findOne({
-    employeeId,
-    verificationStatus: GuarantorVerificationStatus.VERIFIED,
-  });
-
-  const hasActiveContract = await Contract.findOne({
-    employeeId,
-    status: 'ACTIVE',
-  });
-
-  if (hasVerifiedGuarantor && hasActiveContract && employee.status !== 'ACTIVE') {
-    employee.status = 'ACTIVE' as any;
-    await employee.save();
-  }
 }
 
 export class GuarantorService {
@@ -84,20 +64,17 @@ export class GuarantorService {
   }
 
   static async verify(id: string, verifiedById: string, auditCtx?: AuditCtx): Promise<IGuarantor> {
-    const guarantor = await Guarantor.findById(id);
+    const guarantor = await Guarantor.findByIdAndUpdate(
+      id,
+      {
+        verificationStatus: GuarantorVerificationStatus.VERIFIED,
+        verifiedById,
+        verifiedAt: new Date(),
+        rejectionReason: undefined,
+      },
+      { new: true }
+    );
     if (!guarantor) throw ApiError.notFound('Guarantor not found');
-
-    const hasRealDocuments = guarantor.documents && guarantor.documents.length > 0 &&
-      guarantor.documents.some(d => d.url && !d.url.startsWith('/uploads/doc_'));
-    if (!hasRealDocuments) {
-      throw ApiError.badRequest('Cannot verify guarantor without at least one uploaded document');
-    }
-
-    guarantor.verificationStatus = GuarantorVerificationStatus.VERIFIED;
-    guarantor.verifiedById = verifiedById as any;
-    guarantor.verifiedAt = new Date();
-    guarantor.rejectionReason = undefined;
-    await guarantor.save();
 
     if (auditCtx) {
       AuditService.log({
@@ -110,7 +87,7 @@ export class GuarantorService {
       });
     }
 
-    await checkAndActivateEmployee(guarantor.employeeId.toString());
+    await activateEmployeeIfEligible(guarantor.employeeId.toString());
     eventBus.emit('hr.guarantor.verified', { guarantorId: guarantor._id, employeeId: guarantor.employeeId });
     return guarantor;
   }

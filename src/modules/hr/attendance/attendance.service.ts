@@ -5,7 +5,6 @@ import { Site } from '../../../models/Site';
 import { Employee } from '../../../models/Employee';
 import { PrimarySiteAssignment } from '../../../models/PrimarySiteAssignment';
 import { ShiftAssignment } from '../../../models/ShiftAssignment';
-import { RotationAssignment } from '../../../models/RotationAssignment';
 import { PayrollPeriod } from '../../../models/PayrollPeriod';
 import { ApiError } from '../../../common/ApiError';
 import { AttendanceSource, UserRole, PayrollPeriodStatus, EmployeeStatus } from '../../../types';
@@ -23,7 +22,6 @@ export class AttendanceService {
 
     const activeShift = await AttendanceRecord.findOne({
       guardId: data.guardId,
-      siteId: data.siteId,
       date: today,
       clockOut: null,
     });
@@ -83,16 +81,17 @@ export class AttendanceService {
 
   static async clockOut(
     guardId: string,
-    data?: { siteId?: string; declaredRelieverId?: string; declaredRelieverSiteId?: string },
+    data?: { declaredRelieverId?: string; declaredRelieverSiteId?: string },
     auditCtx?: { userId: string; ip?: string; ua?: string }
   ): Promise<IAttendanceRecord> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const filter: any = { guardId, date: today, clockOut: null };
-    if (data?.siteId) filter.siteId = data.siteId;
-
-    const record = await AttendanceRecord.findOne(filter);
+    const record = await AttendanceRecord.findOne({
+      guardId,
+      date: today,
+      clockOut: null,
+    });
     if (!record) throw ApiError.badRequest('No open shift to clock out from');
 
     record.clockOut = new Date();
@@ -364,16 +363,9 @@ export class AttendanceService {
         { endDate: null },
       ],
     });
-    const rotationAssignment = shiftAssignment
-      ? null
-      : await RotationAssignment.findOne({
-          guardId: data.guardId,
-          siteId: data.siteId,
-          date: entryDate,
-        });
-    if (!shiftAssignment && !rotationAssignment) {
+    if (!shiftAssignment) {
       throw ApiError.badRequest(
-        `No shift or rotation assignment found for this guard at this site on ${entryDate.toISOString().split('T')[0]} — assign a shift first.`
+        `No shift assignment found for this guard at this site on ${entryDate.toISOString().split('T')[0]} — assign a shift first.`
       );
     }
 
@@ -385,12 +377,11 @@ export class AttendanceService {
 
     const existing = await AttendanceRecord.findOne({
       guardId: data.guardId,
-      siteId: data.siteId,
       date: entryDate,
     });
     if (existing) {
       throw ApiError.badRequest(
-        `Attendance record already exists for this guard at this site on ${entryDate.toISOString().split('T')[0]}. Use the update endpoint to correct it.`
+        `Attendance record already exists for this guard on ${entryDate.toISOString().split('T')[0]}. Use the update endpoint to correct it.`
       );
     }
 

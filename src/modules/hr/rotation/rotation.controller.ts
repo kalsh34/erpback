@@ -105,13 +105,6 @@ export class RotationController {
     } catch (error) { next(error); }
   }
 
-  static async rotateAssignments(req: Request, res: Response, next: NextFunction) {
-    try {
-      const result = await RotationService.rotateAssignments(req.params.id, req.body.date || req.query.date as string);
-      res.json({ success: true, data: result });
-    } catch (error) { next(error); }
-  }
-
   static async activate(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await RotationService.activate(req.params.id, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });

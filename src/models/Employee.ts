@@ -47,7 +47,7 @@ const employeeSchema = new Schema<IEmployee>(
     middleName: { type: String, trim: true },
     lastName: { type: String, required: true, trim: true },
     category: { type: String, enum: Object.values(EmployeeCategory), required: true },
-    status: { type: String, enum: Object.values(EmployeeStatus), default: EmployeeStatus.ACTIVE },
+    status: { type: String, enum: Object.values(EmployeeStatus), default: EmployeeStatus.INACTIVE },
     companyId: { type: Schema.Types.ObjectId, ref: 'Organization', default: null },
     partyId: { type: Schema.Types.ObjectId, ref: 'Party', default: null },
     homeSiteId: { type: Schema.Types.ObjectId, ref: 'Site', default: null },

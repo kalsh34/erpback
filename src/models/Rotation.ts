@@ -21,20 +21,15 @@ export interface ILeaveCoverage {
   appliedAt: Date;
 }
 
-export type RotationShiftMode = 'STANDARD_12H' | 'SINGLE_24H';
-
 export interface IRotation extends Document {
   name: string;
   description?: string;
   siteId: mongoose.Types.ObjectId;
   guardPool: IRotationGuard[];
   floaterPool: IRotationFloater[];
-  shiftMode: RotationShiftMode;
   dayShiftCount: number;
   nightShiftCount: number;
   dayStartTime: string;
-  dayEndTime?: string;
-  nightStartTime?: string;
   nightEndTime: string;
   startDate: Date;
   endDate?: Date;
@@ -83,12 +78,9 @@ const rotationSchema = new Schema<IRotation>(
     siteId: { type: Schema.Types.ObjectId, ref: 'Site', required: true },
     guardPool: [rotationGuardSchema],
     floaterPool: [rotationFloaterSchema],
-    shiftMode: { type: String, enum: ['STANDARD_12H', 'SINGLE_24H'], default: 'STANDARD_12H' },
-    dayShiftCount: { type: Number, required: true, min: 0 },
-    nightShiftCount: { type: Number, required: true, min: 0 },
+    dayShiftCount: { type: Number, required: true, min: 1 },
+    nightShiftCount: { type: Number, required: true, min: 1 },
     dayStartTime: { type: String, required: true, default: '06:00' },
-    dayEndTime: { type: String, default: '18:00' },
-    nightStartTime: { type: String, default: '18:00' },
     nightEndTime: { type: String, required: true, default: '18:00' },
     startDate: { type: Date, required: true },
     endDate: { type: Date },

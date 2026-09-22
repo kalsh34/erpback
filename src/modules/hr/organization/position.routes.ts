@@ -7,7 +7,7 @@ import { Position } from '../../../models/Position';
 const router = Router();
 router.use(authenticate);
 
-router.get('/', authorize(PERMISSIONS.SETTINGS_READ), async (req, res, next) => {
+router.get('/', authorize(PERMISSIONS.ORGANIZATION_READ, PERMISSIONS.SETTINGS_READ), async (req, res, next) => {
   try {
     const filter: any = {};
     if (req.query.departmentId) filter.departmentId = req.query.departmentId;
@@ -16,7 +16,7 @@ router.get('/', authorize(PERMISSIONS.SETTINGS_READ), async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-router.post('/', authorize(PERMISSIONS.SETTINGS_UPDATE), async (req, res, next) => {
+router.post('/', authorize(PERMISSIONS.ORGANIZATION_MANAGE), async (req, res, next) => {
   try {
     const position = await Position.create(req.body);
     res.status(201).json({ success: true, data: position });
@@ -29,7 +29,7 @@ router.post('/', authorize(PERMISSIONS.SETTINGS_UPDATE), async (req, res, next) 
   }
 });
 
-router.put('/:id', authorize(PERMISSIONS.SETTINGS_UPDATE), async (req, res, next) => {
+router.put('/:id', authorize(PERMISSIONS.ORGANIZATION_MANAGE), async (req, res, next) => {
   try {
     const position = await Position.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!position) { res.status(404).json({ success: false, message: 'Position not found' }); return; }
@@ -37,7 +37,7 @@ router.put('/:id', authorize(PERMISSIONS.SETTINGS_UPDATE), async (req, res, next
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', authorize(PERMISSIONS.SETTINGS_UPDATE), async (req, res, next) => {
+router.delete('/:id', authorize(PERMISSIONS.ORGANIZATION_MANAGE), async (req, res, next) => {
   try {
     await Position.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Position deleted' });

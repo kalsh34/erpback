@@ -1,56 +1,6 @@
 import mongoose from 'mongoose';
 import { IRotation } from '../../../models/Rotation';
 export declare class RotationService {
-    static getShiftLabel(rot: IRotation, shiftType: 'DAY' | 'NIGHT'): string;
-    static getActivePool(rot: IRotation): any[];
-    static parseHM(value: string | undefined | null, fallback: string): {
-        h: number;
-        m: number;
-    };
-    static atTime(date: Date, h: number, m: number): Date;
-    /** Actual start/end Date of a shift slot on a given calendar day (night shifts cross midnight). */
-    static getSlotWindow(rot: IRotation, date: Date, shiftType: 'DAY' | 'NIGHT'): {
-        start: Date;
-        end: Date;
-    };
-    static fmtHM(d: Date): string;
-    static fmtDay(d: Date): string;
-    /** Pick the best slot candidate: most rest first, then fewest shifts, then pool order, then id. */
-    private static isBetterRestCandidate;
-    /**
-     * Fair-rest scheduling ("most-rested guard first").
-     *
-     * Rules:
-     * - Slots are filled day by day: all DAY slots, then all NIGHT slots.
-     * - A guard is eligible for a slot only if the rest since their previous
-     *   shift ended is >= the required rest:
-     *     12h shift  → 12h rest minimum
-     *     24h shift  → 48h rest minimum
-     *   If no guard qualifies (pool too small), the most-rested guard is used
-     *   anyway so the post is never left uncovered, and a warning is recorded.
-     * - Cross-site conflicts: if a guard has an existing shift assignment at
-     *   another site that overlaps the candidate slot, they are excluded.
-     * - Among eligible guards the one with the MOST rest wins (ties broken by
-     *   fewest total shifts, then pool order).
-     *
-     * @param existingByGuard  optional map of guardId → array of time ranges
-     *                         { start: Date, end: Date } representing known
-     *                         assignments at OTHER sites (cross-site conflicts).
-     */
-    static buildRestAwareSchedule(rot: IRotation, fromDate: Date, days: number, existingByGuard?: Map<string, {
-        start: Date;
-        end: Date;
-    }[]>): {
-        assignments: {
-            date: Date;
-            guardId: mongoose.Types.ObjectId;
-            shiftType: 'DAY' | 'NIGHT';
-            startTime: string;
-            endTime: string;
-            shiftTime: string;
-        }[];
-        warnings: string[];
-    };
     static computeDayAssignments(rot: IRotation, date: Date): {
         guardId: mongoose.Types.ObjectId;
         shiftType: 'DAY' | 'NIGHT';
@@ -60,12 +10,9 @@ export declare class RotationService {
         name: string;
         description?: string;
         siteId: string;
-        shiftMode?: 'STANDARD_12H' | 'SINGLE_24H';
         dayShiftCount: number;
         nightShiftCount: number;
         dayStartTime?: string;
-        dayEndTime?: string;
-        nightStartTime?: string;
         nightEndTime?: string;
         startDate: string;
     }, userId: string, _auditCtx?: {
@@ -152,20 +99,7 @@ export declare class RotationService {
         message?: undefined;
     };
     static preview(id: string, days: number): Promise<{
-        assignments: {
-            guard: {
-                _id: any;
-                firstName: any;
-                lastName: any;
-                employeeCode: any;
-            } | null;
-            date: Date;
-            guardId: mongoose.Types.ObjectId;
-            shiftType: "DAY" | "NIGHT";
-            startTime: string;
-            endTime: string;
-            shiftTime: string;
-        }[];
+        assignments: any[];
         shiftTimes: {
             day: string;
             night: string;
@@ -174,7 +108,6 @@ export declare class RotationService {
         poolSize: number;
         slotCountPerDay: number;
         cycleDays: number;
-        warnings: string[];
         guardStats: {
             guardId: any;
             name: string;
@@ -191,21 +124,8 @@ export declare class RotationService {
     }): Promise<{
         count: number;
         days: number;
-        skipped: {
-            guardId: string;
-            date: string;
-            shiftType: string;
-            reason: string;
-        }[];
-        total: number;
-        warnings: string[];
     }>;
     static getAssignments(id: string, startDate?: string, endDate?: string): Promise<(mongoose.Document<unknown, {}, import("../../../models/RotationAssignment").IRotationAssignment, {}, {}> & import("../../../models/RotationAssignment").IRotationAssignment & Required<{
-        _id: mongoose.Types.ObjectId;
-    }> & {
-        __v: number;
-    })[]>;
-    static rotateAssignments(id: string, date: string): Promise<(mongoose.Document<unknown, {}, import("../../../models/RotationAssignment").IRotationAssignment, {}, {}> & import("../../../models/RotationAssignment").IRotationAssignment & Required<{
         _id: mongoose.Types.ObjectId;
     }> & {
         __v: number;

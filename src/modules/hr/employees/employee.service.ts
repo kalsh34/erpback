@@ -3,6 +3,7 @@ import { ApiError } from '../../../common/ApiError';
 import { EmployeeCategory, EmployeeStatus } from '../../../types';
 import { AuditService } from '../../../core/audit/AuditService';
 import { eventBus } from '../../../core/events/EventBus';
+import { getActivationRequirements, describeMissingRequirements } from './activation';
 
 export class EmployeeService {
   static async getAll(query: { page?: number; limit?: number; category?: EmployeeCategory; status?: EmployeeStatus; search?: string }) {
@@ -37,7 +38,15 @@ export class EmployeeService {
   static async create(data: Partial<IEmployee>, auditCtx?: { userId: string; ip?: string; ua?: string }): Promise<IEmployee> {
     const existing = await Employee.findOne({ employeeCode: data.employeeCode });
     if (existing) throw ApiError.conflict('Employee code already exists');
-    const employee = await Employee.create(data);
+
+    // A freshly added employee has neither a contract nor a guarantor yet, so it
+    // must not start life as ACTIVE. It is promoted automatically once both are
+    // in place (see activateEmployeeIfEligible).
+    const status = data.status && data.status !== EmployeeStatus.ACTIVE
+      ? data.status
+      : EmployeeStatus.INACTIVE;
+
+    const employee = await Employee.create({ ...data, status });
 
     if (auditCtx) {
       AuditService.log({
@@ -60,7 +69,15 @@ export class EmployeeService {
     if (!old) throw ApiError.notFound('Employee not found');
     const oldValues = old.toObject();
 
-    const employee = await Employee.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    const payload = { ...data };
+    if (payload.status !== undefined && payload.status !== old.status) {
+      throw ApiError.badRequest(
+        'Employee status cannot be changed here. Use the status change action (contract + verified guarantor are required for ACTIVE).'
+      );
+    }
+    delete payload.status;
+
+    const employee = await Employee.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
     if (!employee) throw ApiError.notFound('Employee not found');
 
     if (auditCtx) {
@@ -125,6 +142,17 @@ export class EmployeeService {
     if (!reason || reason.length < 3) {
       throw ApiError.badRequest('A reason (minimum 3 characters) is required to change employee status');
     }
+
+    // Both the contract and the guarantor are pre-requisites for ACTIVE.
+    if (to === EmployeeStatus.ACTIVE) {
+      const requirements = await getActivationRequirements(id);
+      if (!requirements.hasActiveContract || !requirements.hasVerifiedGuarantor) {
+        throw ApiError.badRequest(
+          `Employee cannot be activated yet: ${describeMissingRequirements(requirements)} is required first.`
+        );
+      }
+    }
+
     if (employee.status === to) {
       throw ApiError.badRequest(`Employee is already ${to}`);
     }

@@ -19,7 +19,6 @@ class AttendanceController {
     static async clockOut(req, res, next) {
         try {
             const record = await attendance_service_1.AttendanceService.clockOut(req.params.guardId, {
-                siteId: req.body.siteId || req.query.siteId,
                 declaredRelieverId: req.body.declaredRelieverId,
                 declaredRelieverSiteId: req.body.declaredRelieverSiteId,
             }, {

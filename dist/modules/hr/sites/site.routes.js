@@ -6,8 +6,8 @@ const auth_1 = require("../../../middleware/auth");
 const rbac_1 = require("../../../middleware/rbac");
 const types_1 = require("../../../types");
 const Site_1 = require("../../../models/Site");
-const ShiftTemplate_1 = require("../../../models/ShiftTemplate");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
+const ShiftTemplate_1 = require("../../../models/ShiftTemplate");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
 const AttendanceRecord_1 = require("../../../models/AttendanceRecord");
 const SiteNote_1 = require("../../../models/SiteNote");
@@ -25,8 +25,7 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
         const site = await Site_1.Site.findById(req.params.id);
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
-        const [shiftTemplates, activeAssignments, currentAssignments, recentAttendance, recentNotes, rotationAssignments] = await Promise.all([
-            ShiftTemplate_1.ShiftTemplate.find({}).sort({ name: 1 }),
+        const [activeAssignments, currentAssignments, recentAttendance, recentNotes, rotationAssignments, shiftTemplates] = await Promise.all([
             ShiftAssignment_1.ShiftAssignment.find({ siteId: req.params.id, status: 'ACTIVE' })
                 .populate('guardId', 'firstName lastName employeeCode status'),
             PrimarySiteAssignment_1.PrimarySiteAssignment.find({ siteId: req.params.id, isCurrent: true })
@@ -41,8 +40,9 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
                 .limit(20),
             RotationAssignment_1.RotationAssignment.find({ siteId: req.params.id })
                 .populate('guardId', 'firstName lastName employeeCode')
-                .sort({ date: 1 })
+                .sort({ date: -1 })
                 .limit(60),
+            ShiftTemplate_1.ShiftTemplate.find({}).sort({ name: 1 }),
         ]);
         const today = new Date();
         today.setHours(0, 0, 0, 0);

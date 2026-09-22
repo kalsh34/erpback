@@ -55,7 +55,7 @@ const attendanceRecordSchema = new mongoose_1.Schema({
     overrideBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', default: null },
     overrideReason: { type: String },
 }, { timestamps: true });
-attendanceRecordSchema.index({ guardId: 1, siteId: 1, date: 1 }, { unique: true });
+attendanceRecordSchema.index({ guardId: 1, date: 1 });
 attendanceRecordSchema.index({ siteId: 1, date: 1 });
 attendanceRecordSchema.index({ siteId: 1, clockOut: 1 });
 attendanceRecordSchema.index({ source: 1 });

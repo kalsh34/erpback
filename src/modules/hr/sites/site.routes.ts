@@ -4,8 +4,8 @@ import { authenticate } from '../../../middleware/auth';
 import { authorize } from '../../../middleware/rbac';
 import { PERMISSIONS } from '../../../types';
 import { Site } from '../../../models/Site';
-import { ShiftTemplate } from '../../../models/ShiftTemplate';
 import { ShiftAssignment } from '../../../models/ShiftAssignment';
+import { ShiftTemplate } from '../../../models/ShiftTemplate';
 import { PrimarySiteAssignment } from '../../../models/PrimarySiteAssignment';
 import { AttendanceRecord } from '../../../models/AttendanceRecord';
 import { SiteNote } from '../../../models/SiteNote';
@@ -27,8 +27,7 @@ router.get('/:id/detail', authorize(PERMISSIONS.SITE_READ), async (req: Request,
     const site = await Site.findById(req.params.id);
     if (!site) throw ApiError.notFound('Site not found');
 
-    const [shiftTemplates, activeAssignments, currentAssignments, recentAttendance, recentNotes, rotationAssignments] = await Promise.all([
-      ShiftTemplate.find({}).sort({ name: 1 }),
+    const [activeAssignments, currentAssignments, recentAttendance, recentNotes, rotationAssignments, shiftTemplates] = await Promise.all([
       ShiftAssignment.find({ siteId: req.params.id, status: 'ACTIVE' })
         .populate('guardId', 'firstName lastName employeeCode status'),
       PrimarySiteAssignment.find({ siteId: req.params.id, isCurrent: true })
@@ -43,8 +42,9 @@ router.get('/:id/detail', authorize(PERMISSIONS.SITE_READ), async (req: Request,
         .limit(20),
       RotationAssignment.find({ siteId: req.params.id })
         .populate('guardId', 'firstName lastName employeeCode')
-        .sort({ date: 1 })
+        .sort({ date: -1 })
         .limit(60),
+      ShiftTemplate.find({}).sort({ name: 1 }),
     ]);
 
     const today = new Date();

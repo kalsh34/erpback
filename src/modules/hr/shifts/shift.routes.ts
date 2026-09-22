@@ -6,7 +6,6 @@ import { ShiftTemplate } from '../../../models/ShiftTemplate';
 import { ShiftAssignment } from '../../../models/ShiftAssignment';
 import { RotationService } from '../rotation/rotation.service';
 import { ApiError } from '../../../common/ApiError';
-import { checkCrossSiteConflict } from './conflict-check';
 
 const router = Router();
 router.use(authenticate);
@@ -95,16 +94,6 @@ router.post('/assignments', authorize(PERMISSIONS.GUARD_ASSIGN_SITE), async (req
     if (existingForGuard) throw ApiError.badRequest('This guard already has an active shift assignment at this site. Remove it first.');
     const existingCount = await ShiftAssignment.countDocuments({ shiftTemplateId, status: 'ACTIVE', startDate: { $lte: assignDate }, $or: [{ endDate: { $gte: assignDate } }, { endDate: { $exists: false } }, { endDate: null }] });
     if (existingCount >= (template as any).maxGuards) throw ApiError.badRequest(`Shift full: ${existingCount}/${(template as any).maxGuards} guards already assigned to "${template.name}"`);
-    const conflict = await checkCrossSiteConflict(
-      guardId,
-      assignDate,
-      endDate ? new Date(endDate) : null,
-      (template as any).startTime,
-      (template as any).endTime,
-    );
-    if (conflict.hasConflict) {
-      throw ApiError.badRequest(`Cannot assign to this shift: ${conflict.message}`);
-    }
     const assignment = await ShiftAssignment.create({ guardId, siteId, shiftTemplateId, startDate: assignDate, endDate: endDate ? new Date(endDate) : undefined, assignedById: req.user?.userId });
     res.status(201).json({ success: true, data: assignment });
   } catch (error) { next(error); }

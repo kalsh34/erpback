@@ -17,19 +17,15 @@ export interface ILeaveCoverage {
     appliedBy: mongoose.Types.ObjectId;
     appliedAt: Date;
 }
-export type RotationShiftMode = 'STANDARD_12H' | 'SINGLE_24H';
 export interface IRotation extends Document {
     name: string;
     description?: string;
     siteId: mongoose.Types.ObjectId;
     guardPool: IRotationGuard[];
     floaterPool: IRotationFloater[];
-    shiftMode: RotationShiftMode;
     dayShiftCount: number;
     nightShiftCount: number;
     dayStartTime: string;
-    dayEndTime?: string;
-    nightStartTime?: string;
     nightEndTime: string;
     startDate: Date;
     endDate?: Date;

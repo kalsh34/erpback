@@ -37,18 +37,36 @@ router.post('/', authorize(PERMISSIONS.EMPLOYEE_CREATE, PERMISSIONS.EMPLOYEE_UPD
   try {
     if (!req.file) { res.status(400).json({ success: false, message: 'No file provided' }); return; }
     const { entityType, entityId, title, description } = req.body;
-    const attachment = await FileAttachment.create({
+
+    const fileData = {
       filename: req.file.filename,
       originalName: req.file.originalname,
       mimeType: req.file.mimetype,
       size: req.file.size,
       path: `/uploads/${req.file.filename}`,
-      uploadedBy: (req as any).user.userId,
-      entityType: entityType || 'employee',
-      entityId,
-      description: title || description,
-      tags: title ? [title] : [],
-    });
+      title: title || req.file.originalname,
+    };
+
+    // A file can be uploaded BEFORE the record it belongs to exists (e.g. the
+    // documents of a guarantor that is still being created). In that case we
+    // only store the file on disk and hand back its metadata, so the caller can
+    // keep the returned path in its own documents array. A FileAttachment row
+    // is persisted only when an entityId is supplied.
+    let attachment: any = null;
+    if (entityId) {
+      attachment = await FileAttachment.create({
+        filename: fileData.filename,
+        originalName: fileData.originalName,
+        mimeType: fileData.mimeType,
+        size: fileData.size,
+        path: fileData.path,
+        uploadedBy: (req as any).user.userId,
+        entityType: entityType || 'employee',
+        entityId,
+        description: title || description,
+        tags: title ? [title] : [],
+      });
+    }
 
     if (entityType === 'employee' && entityId) {
       await Employee.findByIdAndUpdate(entityId, {
@@ -63,7 +81,10 @@ router.post('/', authorize(PERMISSIONS.EMPLOYEE_CREATE, PERMISSIONS.EMPLOYEE_UPD
       });
     }
 
-    res.status(201).json({ success: true, data: { ...attachment.toJSON(), title: title || req.file.originalname } });
+    res.status(201).json({
+      success: true,
+      data: attachment ? { ...attachment.toJSON(), title: fileData.title } : fileData,
+    });
   } catch (err) { next(err); }
 });
 

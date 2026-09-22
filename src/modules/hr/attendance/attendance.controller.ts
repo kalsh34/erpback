@@ -23,7 +23,6 @@ export class AttendanceController {
       const record = await AttendanceService.clockOut(
         req.params.guardId,
         {
-          siteId: req.body.siteId || req.query.siteId as string,
           declaredRelieverId: req.body.declaredRelieverId,
           declaredRelieverSiteId: req.body.declaredRelieverSiteId,
         },

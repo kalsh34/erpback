@@ -1,6 +1,7 @@
 import { Contract, IContract } from '../../../models/Contract';
 import { Employee } from '../../../models/Employee';
 import { EmployeeStatus } from '../../../types';
+import { activateEmployeeIfEligible } from '../employees/activation';
 import { ApiError } from '../../../common/ApiError';
 import { AuditService } from '../../../core/audit/AuditService';
 import { eventBus } from '../../../core/events/EventBus';
@@ -35,6 +36,10 @@ export class ContractService {
 
     await Employee.findByIdAndUpdate(data.employeeId, { status: EmployeeStatus.CONTRACTED });
 
+    // With the contract in place the employee may now qualify for ACTIVE (when a
+    // verified guarantor is already on file).
+    await activateEmployeeIfEligible(String(data.employeeId));
+
     if (auditCtx) {
       AuditService.log({
         userId: auditCtx.userId,
@@ -59,10 +64,15 @@ export class ContractService {
     const contract = await Contract.findByIdAndUpdate(id, data, { new: true, runValidators: true });
     if (!contract) throw ApiError.notFound('Contract not found');
 
+    if (data.status === 'ACTIVE' && old.status !== 'ACTIVE') {
+      await activateEmployeeIfEligible(String(old.employeeId));
+    }
+
     if (data.status === 'TERMINATED' && old.status !== 'TERMINATED') {
       const hasOtherActive = await Contract.countDocuments({ employeeId: old.employeeId, status: 'ACTIVE', _id: { $ne: id } });
+      // An employee without an active contract cannot be ACTIVE any more.
       if (hasOtherActive === 0) {
-        await Employee.findByIdAndUpdate(old.employeeId, { status: EmployeeStatus.ACTIVE });
+        await Employee.findByIdAndUpdate(old.employeeId, { status: EmployeeStatus.INACTIVE });
       }
     }
 
@@ -92,8 +102,9 @@ export class ContractService {
 
     if (snapshot.status === 'ACTIVE') {
       const hasOtherActive = await Contract.countDocuments({ employeeId: snapshot.employeeId, status: 'ACTIVE' });
+      // No contract left -> the employee cannot stay ACTIVE.
       if (hasOtherActive === 0) {
-        await Employee.findByIdAndUpdate(snapshot.employeeId, { status: EmployeeStatus.ACTIVE });
+        await Employee.findByIdAndUpdate(snapshot.employeeId, { status: EmployeeStatus.INACTIVE });
       }
     }
 
