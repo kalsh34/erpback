@@ -12,7 +12,7 @@ router.use(authenticate);
 
 router.get('/templates', authorize(PERMISSIONS.ATTENDANCE_READ), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const filter: any = { active: true };
+    const filter: any = { active: { $ne: false } };
     if (req.query.siteId) filter.siteId = req.query.siteId;
     const templates = await ShiftTemplate.find(filter).populate('siteId', 'siteName siteCode').sort({ createdAt: -1 });
     res.json({ success: true, data: templates });
@@ -29,12 +29,29 @@ router.get('/templates/:id', authorize(PERMISSIONS.ATTENDANCE_READ), async (req:
 
 router.post('/templates', authorize(PERMISSIONS.SITE_CREATE), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { siteId, name, startTime, endTime, daysOfWeek, color, maxGuards } = req.body;
+    const { siteId, name, startTime, endTime, daysOfWeek, color, maxGuards, minGuards, shiftType, active } = req.body;
     if (!siteId || !name || !startTime || !endTime) throw ApiError.badRequest('siteId, name, startTime, and endTime are required');
+    let uniqueName = String(name).trim();
+    let attempt = 1;
+    // ShiftTemplate.name is globally unique — auto-suffix on conflict
+    // eslint-disable-next-line no-await-in-loop
+    while (await ShiftTemplate.findOne({ name: uniqueName }) && attempt < 50) {
+      uniqueName = `${name} (${attempt})`;
+      attempt += 1;
+    }
+    const inferredType = String(shiftType || '').toUpperCase().includes('NIGHT') ? 'NIGHT'
+      : String(shiftType || '').toUpperCase().includes('DAY') ? 'DAY' : undefined;
     const template = await ShiftTemplate.create({
-      siteId, name, startTime, endTime,
+      siteId,
+      name: uniqueName,
+      startTime,
+      endTime,
       daysOfWeek: daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
-      maxGuards: maxGuards || 1, color: color || '#3B82F6',
+      minGuards: minGuards || 1,
+      maxGuards: maxGuards || 1,
+      shiftType: inferredType || 'DAY',
+      active: active !== false,
+      color: color || '#3B82F6',
     });
     res.status(201).json({ success: true, data: template });
   } catch (error) { next(error); }
@@ -82,12 +99,14 @@ router.post('/assignments', authorize(PERMISSIONS.GUARD_ASSIGN_SITE), async (req
     if (!guardId || !siteId || !shiftTemplateId || !startDate) throw ApiError.badRequest('guardId, siteId, shiftTemplateId, and startDate are required');
     const template = await ShiftTemplate.findById(shiftTemplateId);
     if (!template) throw ApiError.notFound('Shift template not found');
-    if ((template as any).siteId.toString() !== siteId) throw ApiError.badRequest('Shift template does not belong to the specified site');
+    const tmplSiteId = (template as any).siteId?.toString?.();
+    if (tmplSiteId && tmplSiteId !== siteId) throw ApiError.badRequest('Shift template does not belong to the specified site');
     const rotationId = await RotationService.isGuardInActiveRotation(guardId);
     if (rotationId) throw ApiError.badRequest('This guard is enrolled in an active rotation. Remove from rotation before manual shift assignment.');
     const assignDate = new Date(startDate);
     const assignDayOfWeek = assignDate.getDay();
-    if (!(template as any).daysOfWeek.includes(assignDayOfWeek)) {
+    const days = (template as any).daysOfWeek;
+    if (Array.isArray(days) && days.length > 0 && !days.includes(assignDayOfWeek)) {
       throw ApiError.badRequest(`Shift "${template.name}" does not run on ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][assignDayOfWeek]}s`);
     }
     const existingForGuard = await ShiftAssignment.findOne({ guardId, siteId, status: 'ACTIVE', $or: [{ endDate: { $exists: false } }, { endDate: null }] });

@@ -1,0 +1,73 @@
+══════════════════════════════════════════════════════════════════
+VALIDATION 1 — 6 guards, requirement 1 Day (0600) + 2 Night (1800)
+══════════════════════════════════════════════════════════════════
+buildBaseSequence(6, 1, 2) = [Rest, Rest, Night, Rest, Day, Night]
+expected base               = [Rest, Rest, Night, Rest, Day, Night]
+  ✓ base sequence matches
+
+Day    | Kibrom Abreha     | Esayas Gari       | Hailu Bekele      | Tadese Tasew      | Belay Yilma       | Yednekachew Assefa
+-------------------------------------------------------------------------------------------------------------------------------
+D1     | Rest              | Night             | Day               | Rest              | Night             | Rest             
+D2     | Rest              | Rest              | Night             | Day               | Rest              | Night            
+D3     | Night             | Rest              | Rest              | Night             | Day               | Rest             
+D4     | Rest              | Night             | Rest              | Rest              | Night             | Day              
+D5     | Day               | Rest              | Night             | Rest              | Rest              | Night            
+D6     | Night             | Day               | Rest              | Night             | Rest              | Rest             
+D7     | Rest              | Night             | Day               | Rest              | Night             | Rest             
+
+  ✓ ALL 42 CELLS MATCH THE GROUND-TRUTH TABLE EXACTLY
+
+Per-guard trail (ground truth output):
+  Kibrom Abreha     | Rest |Rest |Night|Rest |Day  |Night|Rest  | D=1 N=2 R=4
+  Esayas Gari       | Night|Rest |Rest |Night|Rest |Day  |Night | D=1 N=3 R=3
+  Hailu Bekele      | Day  |Night|Rest |Rest |Night|Rest |Day   | D=2 N=2 R=3
+  Tadese Tasew      | Rest |Day  |Night|Rest |Rest |Night|Rest  | D=1 N=2 R=4
+  Belay Yilma       | Night|Rest |Day  |Night|Rest |Rest |Night | D=1 N=3 R=3
+  Yednekachew Assefa | Rest |Night|Rest |Day  |Night|Rest |Rest  | D=1 N=2 R=4
+  ✓ exact 1 Day + 2 Night coverage every day
+  ✓ day 7 repeats day 1 (period = N = 6 days)
+
+Formula identity check (baseSequence[(d - i) mod 6]):
+  ✓ rotationSlotFor(base, d, i) reproduces the table for every (d, i)
+
+══════════════════════════════════════════════════════════════════
+VALIDATION 2 — 14 guards, requirement 3 Day + 4 Night (was static)
+══════════════════════════════════════════════════════════════════
+base sequence: [Rest, Rest, Night, Rest, Day, Night, Rest, Day, Night, Rest, Day, Night, Rest, Rest]
+  Guard-1  | Rest |Rest |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Rest  | D=3 N=4 R=7
+  Guard-2  | Rest |Rest |Rest |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Day  |Night|Rest  | D=3 N=4 R=7
+  Guard-3  | Rest |Rest |Rest |Rest |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Day  |Night | D=3 N=4 R=7
+  Guard-4  | Night|Rest |Rest |Rest |Rest |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Day   | D=3 N=4 R=7
+  Guard-5  | Day  |Night|Rest |Rest |Rest |Rest |Night|Rest |Day  |Night|Rest |Day  |Night|Rest  | D=3 N=4 R=7
+  Guard-6  | Rest |Day  |Night|Rest |Rest |Rest |Rest |Night|Rest |Day  |Night|Rest |Day  |Night | D=3 N=4 R=7
+  Guard-7  | Night|Rest |Day  |Night|Rest |Rest |Rest |Rest |Night|Rest |Day  |Night|Rest |Day   | D=3 N=4 R=7
+  Guard-8  | Day  |Night|Rest |Day  |Night|Rest |Rest |Rest |Rest |Night|Rest |Day  |Night|Rest  | D=3 N=4 R=7
+  Guard-9  | Rest |Day  |Night|Rest |Day  |Night|Rest |Rest |Rest |Rest |Night|Rest |Day  |Night | D=3 N=4 R=7
+  Guard-10 | Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Rest |Rest |Rest |Night|Rest |Day   | D=3 N=4 R=7
+  Guard-11 | Day  |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Rest |Rest |Rest |Night|Rest  | D=3 N=4 R=7
+  Guard-12 | Rest |Day  |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Rest |Rest |Rest |Night | D=3 N=4 R=7
+  Guard-13 | Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Rest |Rest |Rest  | D=3 N=4 R=7
+  Guard-14 | Rest |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Day  |Night|Rest |Rest |Rest  | D=3 N=4 R=7
+  ✓ exact 3 Day + 4 Night coverage every day
+  ✓ every guard sees Day, Night AND Rest across one full cycle
+  ✓ no guard is stuck on one static shift
+
+══════════════════════════════════════════════════════════════════
+VALIDATION 3 — 8 guards, requirement 2 Day + 2 Night (was static)
+══════════════════════════════════════════════════════════════════
+base sequence: [Rest, Day, Night, Rest, Rest, Day, Night, Rest]
+  Guard-1  | Rest |Day  |Night|Rest |Rest |Day  |Night|Rest  | D=2 N=2 R=4
+  Guard-2  | Rest |Rest |Day  |Night|Rest |Rest |Day  |Night | D=2 N=2 R=4
+  Guard-3  | Night|Rest |Rest |Day  |Night|Rest |Rest |Day   | D=2 N=2 R=4
+  Guard-4  | Day  |Night|Rest |Rest |Day  |Night|Rest |Rest  | D=2 N=2 R=4
+  Guard-5  | Rest |Day  |Night|Rest |Rest |Day  |Night|Rest  | D=2 N=2 R=4
+  Guard-6  | Rest |Rest |Day  |Night|Rest |Rest |Day  |Night | D=2 N=2 R=4
+  Guard-7  | Night|Rest |Rest |Day  |Night|Rest |Rest |Day   | D=2 N=2 R=4
+  Guard-8  | Day  |Night|Rest |Rest |Day  |Night|Rest |Rest  | D=2 N=2 R=4
+  ✓ exact 2 Day + 2 Night coverage every day
+  ✓ every guard sees Day, Night AND Rest across one full cycle
+  ✓ no guard is stuck on one static shift
+
+══════════════════════════════════════════════════════════════════
+RESULT: ALL VALIDATIONS PASSED
+══════════════════════════════════════════════════════════════════
