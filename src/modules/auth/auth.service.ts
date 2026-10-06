@@ -66,13 +66,13 @@ export class AuthService {
     };
   }
 
-  static async getMe(userId: string): Promise<IUser & { permissions: Permission[] }> {
+  static async getMe(userId: string) {
     const user = await User.findById(userId);
     if (!user) {
       throw ApiError.notFound('User not found');
     }
     return {
-      ...(user.toObject() as unknown as IUser & { permissions: Permission[] }),
+      ...user.toObject(),
       permissions: computeEffectivePermissions(user),
     };
   }
@@ -98,17 +98,20 @@ export class AuthService {
 
   static async updateProfile(
     userId: string,
-    data: { firstName?: string; lastName?: string; phone?: string }
+    data: { firstName?: string; lastName?: string; phone?: string; avatarUrl?: string }
   ): Promise<IUser> {
     const user = await User.findById(userId);
     if (!user) throw ApiError.notFound('User not found');
 
-    if (data.firstName) user.firstName = data.firstName;
-    if (data.lastName) user.lastName = data.lastName;
+    if (data.firstName !== undefined) user.firstName = data.firstName.trim();
+    if (data.lastName !== undefined) user.lastName = data.lastName.trim();
+    if (data.phone !== undefined) user.phone = data.phone.trim();
+    if (data.avatarUrl !== undefined) user.avatarUrl = data.avatarUrl;
     await user.save();
 
+    // Keep the linked employee record's phone in sync (HR views read from there).
     if (data.phone !== undefined && user.employeeId) {
-      await Employee.findByIdAndUpdate(user.employeeId, { phone: data.phone });
+      await Employee.findByIdAndUpdate(user.employeeId, { phone: data.phone.trim() });
     }
 
     return user;

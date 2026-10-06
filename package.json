@@ -4,13 +4,16 @@
   "description": "Vital Security PLC Payroll Management System - Backend",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "infisical run --env=dev -- ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev:local": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "start:infisical": "infisical run --env=prod -- node dist/server.js",
     "typecheck": "tsc --noEmit",
     "check:guard-payroll": "ts-node --transpile-only tests/guardPayrollEngine.check.ts",
     "check:staff-payroll": "ts-node --transpile-only tests/staffPayrollEngine.check.ts",
-    "seed": "ts-node-dev --transpile-only src/seed.ts"
+    "seed": "infisical run --env=dev -- ts-node-dev --transpile-only src/seed.ts",
+    "seed:local": "ts-node-dev --transpile-only src/seed.ts"
   },
   "dependencies": {
     "@types/multer": "^2.2.0",

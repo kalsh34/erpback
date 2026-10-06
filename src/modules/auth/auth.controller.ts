@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
 import { ApiError } from '../../common/ApiError';
+import { AuthUser } from '../../middleware/auth';
+
+interface AuthenticatedRequest extends Request {
+  user?: AuthUser;
+}
 
 export class AuthController {
   static async register(req: Request, res: Response, next: NextFunction) {
@@ -52,6 +57,24 @@ export class AuthController {
       const userObj = user.toObject();
       const { password: _, ...userWithoutPassword } = userObj as any;
       res.json({ success: true, data: userWithoutPassword });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** POST /api/auth/avatar — multipart upload, sets the caller's profile picture. */
+  static async uploadAvatar(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.user) return next(ApiError.unauthorized());
+      if (!req.file) {
+        res.status(400).json({ success: false, message: 'No image provided' });
+        return;
+      }
+      const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+      const user = await AuthService.updateProfile(req.user.userId, { avatarUrl });
+      const userObj = user.toObject();
+      const { password: _, ...userWithoutPassword } = userObj as any;
+      res.status(201).json({ success: true, data: userWithoutPassword });
     } catch (error) {
       next(error);
     }

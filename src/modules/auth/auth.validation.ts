@@ -21,5 +21,6 @@ export const changePasswordValidation = [
 export const updateProfileValidation = [
   body('firstName').optional().notEmpty().withMessage('First name cannot be empty'),
   body('lastName').optional().notEmpty().withMessage('Last name cannot be empty'),
-  body('phone').optional().isString(),
+  body('phone').optional({ nullable: true }).isString(),
+  body('avatarUrl').optional({ nullable: true }).isString(),
 ];
