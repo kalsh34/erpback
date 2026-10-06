@@ -13,7 +13,8 @@
     "check:guard-payroll": "ts-node --transpile-only tests/guardPayrollEngine.check.ts",
     "check:staff-payroll": "ts-node --transpile-only tests/staffPayrollEngine.check.ts",
     "seed": "infisical run --env=dev -- ts-node-dev --transpile-only src/seed.ts",
-    "seed:local": "ts-node-dev --transpile-only src/seed.ts"
+    "seed:local": "ts-node-dev --transpile-only src/seed.ts",
+    "check:routes": "ts-node --transpile-only tests/listRoutes.check.ts"
   },
   "dependencies": {
     "@types/multer": "^2.2.0",
