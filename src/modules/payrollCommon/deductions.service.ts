@@ -19,7 +19,7 @@ export function periodKeyOf(d: Date): string {
 
 /**
  * EMPLOYEE DEDUCTIONS — loans / advances / penalties / other.
- * Shared by guard payroll today and staff payroll later.
+ * Shared by guard payroll and staff payroll.
  */
 export class DeductionsService {
   /**
@@ -45,10 +45,40 @@ export class DeductionsService {
   }
 
   /**
+   * Batch fetch deductions for multiple employees in a single query (10x faster).
+   */
+  static async listForPeriodBatch(
+    employeeIds: (string | mongoose.Types.ObjectId)[],
+    periodKey: string
+  ): Promise<Map<string, AppliableDeduction[]>> {
+    const docs = await EmployeeDeduction.find({
+      employeeId: { $in: employeeIds },
+      status: DeductionStatus.ACTIVE,
+    });
+    const out = new Map<string, AppliableDeduction[]>();
+    for (const doc of docs) {
+      const empKey = doc.employeeId.toString();
+      if (!out.has(empKey)) out.set(empKey, []);
+      const list = out.get(empKey)!;
+
+      if (doc.type === EmployeeDeductionType.LOAN || doc.type === EmployeeDeductionType.ADVANCE) {
+        if (doc.remainingBalance <= 0 || !doc.startDate) continue;
+        if (periodKeyOf(doc.startDate) > periodKey) continue;
+        const installment = doc.monthlyInstallment && doc.monthlyInstallment > 0 ? doc.monthlyInstallment : doc.remainingBalance;
+        const amount = round2(Math.min(installment, doc.remainingBalance));
+        if (amount > 0) list.push({ deductionId: doc._id.toString(), type: doc.type, label: doc.label, amount });
+      } else if (doc.periodKey === periodKey && doc.totalAmount > 0) {
+        list.push({ deductionId: doc._id.toString(), type: doc.type, label: doc.label, amount: round2(doc.totalAmount) });
+      }
+    }
+    return out;
+  }
+
+  /**
    * Reduce loan/advance balances for the deductions actually taken in a run.
    * Called once when the run is APPROVED — never while it is still draft.
    */
-  static async settleRun(records: { deductions: { deductionId: mongoose.Types.ObjectId; amount: number }[] }[]) {
+  static async settleRun(records: { deductions: { deductionId: mongoose.Types.ObjectId | string; amount: number }[] }[]) {
     const applied = new Map<string, number>();
     for (const record of records) {
       for (const line of record.deductions) {
@@ -62,6 +92,31 @@ export class DeductionsService {
       if (doc.type === EmployeeDeductionType.LOAN || doc.type === EmployeeDeductionType.ADVANCE) {
         doc.remainingBalance = round2(Math.max(0, doc.remainingBalance - amount));
         if (doc.remainingBalance <= 0) doc.status = DeductionStatus.COMPLETED;
+        await doc.save();
+      }
+    }
+  }
+
+  /**
+   * Rollback loan/advance balance reductions if an APPROVED run is RETURNED for correction.
+   * Prevents double-deduction when payroll is recalculated and re-approved.
+   */
+  static async revertRun(records: { deductions: { deductionId: mongoose.Types.ObjectId | string; amount: number }[] }[]) {
+    const applied = new Map<string, number>();
+    for (const record of records) {
+      for (const line of record.deductions) {
+        const key = line.deductionId.toString();
+        applied.set(key, round2((applied.get(key) || 0) + line.amount));
+      }
+    }
+    for (const [id, amount] of applied) {
+      const doc = await EmployeeDeduction.findById(id);
+      if (!doc) continue;
+      if (doc.type === EmployeeDeductionType.LOAN || doc.type === EmployeeDeductionType.ADVANCE) {
+        doc.remainingBalance = round2(Math.min(doc.totalAmount, doc.remainingBalance + amount));
+        if (doc.status === DeductionStatus.COMPLETED && doc.remainingBalance > 0) {
+          doc.status = DeductionStatus.ACTIVE;
+        }
         await doc.save();
       }
     }

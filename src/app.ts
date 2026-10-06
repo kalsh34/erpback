@@ -90,6 +90,7 @@ app.use('/api/files', fileRoutes);
 
 // Payroll v2 — separate systems. Logic to be defined by the owner.
 app.use('/api/staff-payroll', staffPayrollRoutes);
+app.use('/api/office-payroll', staffPayrollRoutes);
 app.use('/api/guard-payroll', guardPayrollRoutes);
 app.use('/api/payroll-common', payrollCommonRoutes);
 

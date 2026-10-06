@@ -1,15 +1,15 @@
 import { StaffPayrollRun, IStaffPayrollRun } from '../../models/StaffPayrollRun';
 import { StaffPayrollRecord } from '../../models/StaffPayrollRecord';
-import { StaffOvertimeEntry, StaffBonus } from '../../models/StaffPayrollEntries';
 import { Employee } from '../../models/Employee';
 import { Contract } from '../../models/Contract';
+import { StaffOvertimeEntry, StaffBonus } from '../../models/StaffPayrollEntries';
 import { computeStaffPayroll, round2 } from './staffPayrollEngine';
 import { StatutoryService } from '../payrollCommon/statutory.service';
 import { DeductionsService } from '../payrollCommon/deductions.service';
-import { AttendanceSummaryService, daysInMonth } from '../payrollCommon/attendanceSummary.service';
+import { AttendanceSummaryService } from '../payrollCommon/attendanceSummary.service';
 import { ApiError } from '../../common/ApiError';
 import { AuditService } from '../../core/audit/AuditService';
-import { DeductionStatus, EmployeeCategory, EmployeeStatus, PayrollRecordStatus } from '../../types';
+import { EmployeeCategory, EmployeeStatus, PayrollRecordStatus, DeductionStatus } from '../../types';
 
 interface AuditCtx { ip?: string; ua?: string }
 
@@ -28,12 +28,7 @@ function monthWindow(periodKey: string) {
 }
 
 /**
- * STAFF PAYROLL RUN SERVICE — orchestrator.
- *
- * Fetch-first: reads staff employees, their active contracts, period-keyed
- * overtime/bonus entries, shared deductions and the STAFF-scoped statutory
- * tables, then writes one immutable snapshot per employee. No attendance
- * proration — staff pay is contract-driven.
+ * STAFF PAYROLL RUN SERVICE — contract-driven, high-performance batch calculations.
  */
 export class StaffPayrollRunService {
   // ───────────────────────────────────────────────────────────────────
@@ -54,8 +49,6 @@ export class StaffPayrollRunService {
     }
     const wasReturned = run.status === PayrollRecordStatus.RETURNED;
 
-    await StaffPayrollRecord.deleteMany({ runId: run._id });
-
     const [pensionRule, taxTable] = await Promise.all([
       StatutoryService.getPensionRuleForPeriod(start, 'STAFF'),
       StatutoryService.getTaxTableForPeriod(start, 'STAFF'),
@@ -68,37 +61,41 @@ export class StaffPayrollRunService {
     }).sort({ employeeCode: 1 });
 
     const employeeIds = employees.map((e) => e._id);
-    const contracts = await Contract.find({
-      employeeId: { $in: employeeIds },
-      status: 'ACTIVE',
-      contractStartDate: { $lte: end },
-      $or: [{ contractEndDate: null }, { contractEndDate: { $exists: false } }, { contractEndDate: { $gte: start } }],
-    }).sort({ contractStartDate: -1 });
 
-    const contractsByEmployee = new Map<string, any[]>();
-    for (const contract of contracts) {
-      const key = contract.employeeId.toString();
-      if (!contractsByEmployee.has(key)) contractsByEmployee.set(key, []);
-      contractsByEmployee.get(key)!.push(contract);
-    }
-
-    const [otEntries, bonusEntries] = await Promise.all([
+    // Parallel batch queries for contracts, OT, bonus, and deductions
+    const [contracts, otEntries, bonusEntries, deductionsMap] = await Promise.all([
+      Contract.find({
+        employeeId: { $in: employeeIds },
+        status: 'ACTIVE',
+        contractStartDate: { $lte: end },
+        $or: [{ contractEndDate: null }, { contractEndDate: { $exists: false } }, { contractEndDate: { $gte: start } }],
+      }).sort({ contractStartDate: -1 }),
       StaffOvertimeEntry.find({ employeeId: { $in: employeeIds }, periodKey, status: DeductionStatus.ACTIVE }),
       StaffBonus.find({ employeeId: { $in: employeeIds }, periodKey, status: DeductionStatus.ACTIVE }),
+      DeductionsService.listForPeriodBatch(employeeIds, periodKey),
     ]);
+
+    const contractsByEmployee = new Map<string, any[]>();
+    for (const c of contracts) {
+      const key = c.employeeId.toString();
+      if (!contractsByEmployee.has(key)) contractsByEmployee.set(key, []);
+      contractsByEmployee.get(key)!.push(c);
+    }
+
     const otByEmployee = new Map<string, number>();
     for (const e of otEntries) {
-      const key = e.employeeId.toString();
-      otByEmployee.set(key, round2((otByEmployee.get(key) || 0) + e.amount));
+      const k = e.employeeId.toString();
+      otByEmployee.set(k, round2((otByEmployee.get(k) || 0) + e.amount));
     }
+
     const bonusByEmployee = new Map<string, number>();
     for (const b of bonusEntries) {
-      const key = b.employeeId.toString();
-      bonusByEmployee.set(key, round2((bonusByEmployee.get(key) || 0) + b.amount));
+      const k = b.employeeId.toString();
+      bonusByEmployee.set(k, round2((bonusByEmployee.get(k) || 0) + b.amount));
     }
 
     const problems: IStaffPayrollRun['problems'] = [];
-    const records: any[] = [];
+    const recordDocs: any[] = [];
 
     for (const employee of employees) {
       const key = employee._id.toString();
@@ -127,7 +124,7 @@ export class StaffPayrollRunService {
       }
 
       const contract = employeeContracts[0];
-      const deductions = await DeductionsService.listForPeriod(key, periodKey);
+      const deductions = deductionsMap.get(key) || [];
       const overtimeAmount = otByEmployee.get(key) || 0;
       const bonusAmount = bonusByEmployee.get(key) || 0;
 
@@ -155,41 +152,45 @@ export class StaffPayrollRunService {
           : null,
       });
 
-      records.push(
-        await StaffPayrollRecord.create({
-          runId: run._id,
-          periodKey,
-          employeeId: employee._id,
-          snapshot: {
-            employeeCode: employee.employeeCode,
-            fullName: employeeName,
-            department: contract.department || employee.department || undefined,
-            jobPosition: contract.jobPosition || employee.position || undefined,
-            contractId: contract._id.toString(),
-            contractType: contract.contractType,
-            basic: round2(contract.wage || 0),
-            responsibilityAllowance: round2(contract.responsibilityAllowance || 0),
-            teleAllowance: round2(contract.teleAllowance || 0),
-            taxableTransport: round2(contract.taxableTransport || 0),
-            nonTaxableTransport: round2(contract.nonTaxableAllowance || 0),
-            pensionEnrolled: contract.pensionEnrolled !== false,
-          },
-          overtimeAmount: result.overtimeAmount,
-          bonusAmount: result.bonusAmount,
-          grossEarnings: result.grossEarnings,
-          taxableEarnings: result.taxableEarnings,
-          employeePension: result.employeePension,
-          employerPension: result.employerPension,
-          incomeTax: result.incomeTax,
-          deductions: result.deductions.map((d) => ({ ...d, deductionId: d.deductionId as any })),
-          totalDeductions: result.totalDeductions,
-          netPay: result.netPay,
-          bonus: result.bonus,
-          finalAmountPaid: result.finalAmountPaid,
-          warnings: result.warnings,
-        })
-      );
+      recordDocs.push({
+        runId: run._id,
+        periodKey,
+        employeeId: employee._id,
+        snapshot: {
+          employeeCode: employee.employeeCode,
+          fullName: employeeName,
+          bankName: employee.bankName,
+          accountNumber: employee.accountNumber,
+          department: contract.department || employee.department || undefined,
+          jobPosition: contract.jobPosition || employee.position || undefined,
+          contractId: contract._id.toString(),
+          contractType: contract.contractType,
+          basic: round2(contract.wage || 0),
+          responsibilityAllowance: round2(contract.responsibilityAllowance || 0),
+          teleAllowance: round2(contract.teleAllowance || 0),
+          taxableTransport: round2(contract.taxableTransport || 0),
+          nonTaxableTransport: round2(contract.nonTaxableAllowance || 0),
+          pensionEnrolled: contract.pensionEnrolled !== false,
+        },
+        overtimeAmount: result.overtimeAmount,
+        bonusAmount: result.bonusAmount,
+        grossEarnings: result.grossEarnings,
+        taxableEarnings: result.taxableEarnings,
+        employeePension: result.employeePension,
+        employerPension: result.employerPension,
+        incomeTax: result.incomeTax,
+        deductions: result.deductions.map((d) => ({ ...d, deductionId: d.deductionId as any })),
+        totalDeductions: result.totalDeductions,
+        netPay: result.netPay,
+        bonus: result.bonus,
+        finalAmountPaid: result.finalAmountPaid,
+        warnings: result.warnings,
+      });
     }
+
+    // Atomically replace previous records in bulk
+    await StaffPayrollRecord.deleteMany({ runId: run._id });
+    const records = recordDocs.length > 0 ? await StaffPayrollRecord.insertMany(recordDocs) : [];
 
     const totals = {
       employees: records.length,
@@ -223,7 +224,6 @@ export class StaffPayrollRunService {
     return this.getRun(run._id.toString());
   }
 
-  /** Recalculate an existing run by id (same rules as calculate). */
   static async recalculate(runId: string, userId: string, auditCtx?: AuditCtx) {
     const run = await this.loadRun(runId);
     if (!EDITABLE_STATUSES.includes(run.status)) {
@@ -250,19 +250,10 @@ export class StaffPayrollRunService {
     if (!run) throw ApiError.notFound('Staff payroll run not found');
     const records = await StaffPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
 
-    // Attendance summary: status counts per employee + a suggestion of what
-    // the missed days were worth (basic ÷ days in month, per missed day).
-    const dim = daysInMonth(run.periodKey);
-    const dayValues = new Map<string, number>();
-    for (const r of records) {
-      const empId = r.employeeId?.toString();
-      if (empId && !dayValues.has(empId)) dayValues.set(empId, (r.snapshot?.basic || 0) / dim);
-    }
     const attendance = await AttendanceSummaryService.forRun(
       'STAFF',
       run.periodKey,
-      records.map((r) => r.employeeId.toString()),
-      dayValues
+      records.map((r) => r.employeeId.toString())
     );
 
     return { run, records, attendance };
@@ -286,18 +277,15 @@ export class StaffPayrollRunService {
 
   private static assertStatus(run: IStaffPayrollRun, allowed: PayrollRecordStatus[], action: string) {
     if (!allowed.includes(run.status)) {
-      throw ApiError.conflict(`Cannot ${action}: staff payroll is ${run.status} (expected ${allowed.join(' or ')}).`);
+      throw ApiError.conflict(`Cannot ${action}: payroll is ${run.status} (expected ${allowed.join(' or ')}).`);
     }
   }
 
-  /** CALCULATED → SUBMITTED. */
   static async submit(runId: string, userId: string, auditCtx?: AuditCtx) {
     const run = await this.loadRun(runId);
     this.assertStatus(run, [PayrollRecordStatus.CALCULATED], 'submit');
     if (run.problems.length > 0) {
-      throw ApiError.badRequest(
-        `Resolve ${run.problems.length} payroll problem(s) before submitting (e.g. employees without an active contract).`
-      );
+      throw ApiError.badRequest(`Resolve ${run.problems.length} payroll problem(s) before submitting.`);
     }
     run.status = PayrollRecordStatus.SUBMITTED;
     run.submittedBy = userId as any;
@@ -307,7 +295,6 @@ export class StaffPayrollRunService {
     return this.getRun(runId);
   }
 
-  /** SUBMITTED → CHECKED. */
   static async check(runId: string, userId: string, auditCtx?: AuditCtx) {
     const run = await this.loadRun(runId);
     this.assertStatus(run, [PayrollRecordStatus.SUBMITTED], 'check');
@@ -319,7 +306,6 @@ export class StaffPayrollRunService {
     return this.getRun(runId);
   }
 
-  /** CHECKED → APPROVED. Settles loan/advance balances for the deductions taken. */
   static async approve(runId: string, userId: string, auditCtx?: AuditCtx) {
     const run = await this.loadRun(runId);
     this.assertStatus(run, [PayrollRecordStatus.CHECKED], 'approve');
@@ -335,7 +321,10 @@ export class StaffPayrollRunService {
     return this.getRun(runId);
   }
 
-  /** SUBMITTED / CHECKED / APPROVED → RETURNED. */
+  /**
+   * SUBMITTED / CHECKED / APPROVED → RETURNED.
+   * If returned after approval, loan settlements are safely rolled back to prevent double deduction.
+   */
   static async returnForCorrection(runId: string, reason: string, userId: string, auditCtx?: AuditCtx) {
     const run = await this.loadRun(runId);
     if (!reason || !reason.trim()) throw ApiError.badRequest('A reason is required to return payroll for correction');
@@ -344,6 +333,8 @@ export class StaffPayrollRunService {
       [PayrollRecordStatus.SUBMITTED, PayrollRecordStatus.CHECKED, PayrollRecordStatus.APPROVED],
       'return'
     );
+    const wasApproved = run.status === PayrollRecordStatus.APPROVED;
+
     run.status = PayrollRecordStatus.RETURNED;
     run.returnReason = reason.trim();
     run.returnedBy = userId as any;
@@ -352,14 +343,19 @@ export class StaffPayrollRunService {
       reason: reason.trim(),
       by: userId as any,
       at: new Date(),
-      fromStatus: PayrollRecordStatus.RETURNED,
+      fromStatus: wasApproved ? PayrollRecordStatus.APPROVED : PayrollRecordStatus.CHECKED,
     });
     await run.save();
+
+    if (wasApproved) {
+      const records = await StaffPayrollRecord.find({ runId: run._id });
+      await DeductionsService.revertRun(records as any);
+    }
+
     await this.log(userId, 'STAFF_PAYROLL_RETURN', run, auditCtx, reason.trim());
     return this.getRun(runId);
   }
 
-  /** APPROVED → PAID. Final. */
   static async markPaid(runId: string, paymentRef: string | undefined, userId: string, auditCtx?: AuditCtx) {
     const run = await this.loadRun(runId);
     this.assertStatus(run, [PayrollRecordStatus.APPROVED], 'mark paid');
@@ -370,6 +366,155 @@ export class StaffPayrollRunService {
     await run.save();
     await this.log(userId, 'STAFF_PAYROLL_PAY', run, auditCtx);
     return this.getRun(runId);
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  // Exports & Payslips
+  // ───────────────────────────────────────────────────────────────────
+
+  /** Export bank disbursement batch CSV (CBE / Awash / Dashen / All). */
+  static async exportBankDisbursement(runId: string, bankFilter?: string) {
+    const run = await StaffPayrollRun.findById(runId);
+    if (!run) throw ApiError.notFound('Staff payroll run not found');
+    const records = await StaffPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+
+    const filtered = bankFilter && bankFilter !== 'ALL'
+      ? records.filter((r) => (r.snapshot.bankName || '').toLowerCase().includes(bankFilter.toLowerCase()))
+      : records;
+
+    const headers = ['Employee Code', 'Beneficiary Full Name', 'Department', 'Bank Name', 'Account Number', 'Net Amount Paid (ETB)', 'Reference', 'Narration'];
+    const rows = filtered.map((r) => [
+      r.snapshot.employeeCode || '',
+      `"${(r.snapshot.fullName || '').replace(/"/g, '""')}"`,
+      `"${(r.snapshot.department || '').replace(/"/g, '""')}"`,
+      `"${(r.snapshot.bankName || 'CBE').replace(/"/g, '""')}"`,
+      `"${r.snapshot.accountNumber || ''}"`,
+      r.finalAmountPaid.toFixed(2),
+      `"PAY-${run.periodKey}-${r.snapshot.employeeCode || ''}"`,
+      `"Vital Security Office Staff Salary ${run.periodKey}"`,
+    ]);
+
+    return {
+      filename: `staff-bank-disbursement-${run.periodKey}${bankFilter ? `-${bankFilter}` : ''}.csv`,
+      csv: [headers.join(','), ...rows.map((row) => row.join(','))].join('\n'),
+    };
+  }
+
+  /** Statutory income tax schedule export (ERCA). */
+  static async exportTaxReport(runId: string) {
+    const run = await StaffPayrollRun.findById(runId);
+    if (!run) throw ApiError.notFound('Staff payroll run not found');
+    const records = await StaffPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+
+    const headers = [
+      'Employee Code',
+      'Full Name',
+      'Department',
+      'Basic Salary (ETB)',
+      'Gross Salary (ETB)',
+      'Non-Taxable Transport (ETB)',
+      'Taxable Earnings (ETB)',
+      'Tax Withheld (ETB)',
+      'Period',
+    ];
+    const rows = records.map((r) => [
+      r.snapshot.employeeCode || '',
+      `"${(r.snapshot.fullName || '').replace(/"/g, '""')}"`,
+      `"${(r.snapshot.department || '').replace(/"/g, '""')}"`,
+      r.snapshot.basic.toFixed(2),
+      r.grossEarnings.toFixed(2),
+      r.snapshot.nonTaxableTransport.toFixed(2),
+      r.taxableEarnings.toFixed(2),
+      r.incomeTax.toFixed(2),
+      run.periodKey,
+    ]);
+
+    return {
+      filename: `staff-tax-declaration-${run.periodKey}.csv`,
+      csv: [headers.join(','), ...rows.map((row) => row.join(','))].join('\n'),
+    };
+  }
+
+  /** Statutory pension schedule export (POESSA 7% / 11%). */
+  static async exportPensionReport(runId: string) {
+    const run = await StaffPayrollRun.findById(runId);
+    if (!run) throw ApiError.notFound('Staff payroll run not found');
+    const records = await StaffPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+
+    const headers = [
+      'Employee Code',
+      'Full Name',
+      'Department',
+      'Pension Enrolled',
+      'Basic Salary Base (ETB)',
+      'Employee Share 7% (ETB)',
+      'Employer Share 11% (ETB)',
+      'Total POESSA Remittance 18% (ETB)',
+      'Period',
+    ];
+    const rows = records.map((r) => [
+      r.snapshot.employeeCode || '',
+      `"${(r.snapshot.fullName || '').replace(/"/g, '""')}"`,
+      `"${(r.snapshot.department || '').replace(/"/g, '""')}"`,
+      r.snapshot.pensionEnrolled ? 'YES' : 'NO',
+      r.snapshot.basic.toFixed(2),
+      r.employeePension.toFixed(2),
+      r.employerPension.toFixed(2),
+      round2(r.employeePension + r.employerPension).toFixed(2),
+      run.periodKey,
+    ]);
+
+    return {
+      filename: `staff-pension-poessa-${run.periodKey}.csv`,
+      csv: [headers.join(','), ...rows.map((row) => row.join(','))].join('\n'),
+    };
+  }
+
+  /** Formatted Official Staff Payslip Document Data. */
+  static async getPayslip(recordId: string) {
+    const record = await this.getRecord(recordId);
+    const run = await StaffPayrollRun.findById(record.runId);
+
+    return {
+      company: {
+        name: 'VITAL SECURITY SERVICES PLC',
+        address: 'Bole Sub-City, Addis Ababa, Ethiopia',
+        department: 'Headquarters & Office Administration',
+      },
+      period: record.periodKey,
+      status: run?.status || 'CALCULATED',
+      employee: {
+        id: record.employeeId,
+        code: record.snapshot.employeeCode,
+        fullName: record.snapshot.fullName,
+        department: record.snapshot.department,
+        jobPosition: record.snapshot.jobPosition,
+        bankName: record.snapshot.bankName,
+        accountNumber: record.snapshot.accountNumber,
+        pensionEnrolled: record.snapshot.pensionEnrolled,
+      },
+      earnings: {
+        basicSalary: record.snapshot.basic,
+        responsibilityAllowance: record.snapshot.responsibilityAllowance,
+        teleAllowance: record.snapshot.teleAllowance,
+        taxableTransport: record.snapshot.taxableTransport,
+        nonTaxableTransport: record.snapshot.nonTaxableTransport,
+        overtimeAmount: record.overtimeAmount,
+        grossEarnings: record.grossEarnings,
+      },
+      deductions: {
+        employeePension: record.employeePension,
+        employerPension: record.employerPension,
+        incomeTax: record.incomeTax,
+        otherDeductions: record.deductions,
+        totalDeductions: record.totalDeductions,
+      },
+      netPay: record.netPay,
+      bonus: record.bonus,
+      finalAmountPaid: record.finalAmountPaid,
+      generatedAt: new Date().toISOString(),
+      watermark: `VTL-STF-${record._id.toString().slice(-8).toUpperCase()}`,
+    };
   }
 
   private static async log(userId: string, action: string, run: IStaffPayrollRun, auditCtx?: AuditCtx, reason?: string) {

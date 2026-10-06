@@ -108,7 +108,30 @@ export class SiteCompensationService {
     }
     return rows[0];
   }
+
+  /**
+   * Batch lookup of compensations for multiple sites in a payroll window.
+   * Returns Map<siteIdString, IGuardSiteCompensation>.
+   */
+  static async getForSites(siteIds: string[], periodStart: Date, periodEnd?: Date): Promise<Map<string, IGuardSiteCompensation>> {
+    const end = periodEnd || new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0, 23, 59, 59, 999);
+    const rows = await GuardSiteCompensation.find({
+      siteId: { $in: siteIds },
+      effectiveFrom: { $lte: end },
+      $or: [{ effectiveTo: null }, { effectiveTo: { $gte: periodStart } }],
+    }).sort({ effectiveFrom: -1 });
+
+    const result = new Map<string, IGuardSiteCompensation>();
+    for (const row of rows) {
+      const key = row.siteId.toString();
+      if (!result.has(key)) {
+        result.set(key, row);
+      }
+    }
+    return result;
+  }
 }
+
 
 function ymKey(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
