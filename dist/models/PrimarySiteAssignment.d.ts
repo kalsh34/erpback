@@ -3,6 +3,9 @@ export interface IPrimarySiteAssignment extends Document {
     guardId: mongoose.Types.ObjectId;
     siteId: mongoose.Types.ObjectId;
     role: 'GUARD' | 'SUPERVISOR';
+    /** Explicit primary-site flag — never inferred from array order. Exactly one
+     *  current assignment per guard carries true (kept in sync with homeSiteId). */
+    isPrimary: boolean;
     standardMonthlyHours: number;
     hourlyRate: number;
     transportAllowance: number;

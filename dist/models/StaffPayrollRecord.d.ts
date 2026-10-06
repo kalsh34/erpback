@@ -43,6 +43,19 @@ export interface IStaffPayrollRecord extends Document {
     paymentMethod?: string;
     bankReference?: string;
     attendanceDataMissing: boolean;
+    /** Payable-day calendar (spec §5): expected over the period, actual earned. */
+    expectedPayableDays: number;
+    actualPayableDays: number;
+    calculatedGrossSalary?: number;
+    calculatedNetPay?: number;
+    overrides: {
+        field: 'grossSalary' | 'netPay';
+        originalValue: number;
+        overrideValue: number;
+        reason: string;
+        by: mongoose.Types.ObjectId;
+        at: Date;
+    }[];
     createdAt: Date;
     updatedAt: Date;
 }

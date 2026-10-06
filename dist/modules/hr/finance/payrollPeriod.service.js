@@ -6,6 +6,7 @@ const ApiError_1 = require("../../../common/ApiError");
 const types_1 = require("../../../types");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
+const dateUtils_1 = require("../../../common/dateUtils");
 class PayrollPeriodService {
     static async getAll(query) {
         const filter = {};
@@ -22,10 +23,21 @@ class PayrollPeriodService {
         return period;
     }
     static async create(data, auditCtx) {
+        if (!data.year || !data.month)
+            throw ApiError_1.ApiError.badRequest('year and month are required');
         const existing = await PayrollPeriod_1.PayrollPeriod.findOne({ year: data.year, month: data.month });
         if (existing)
             throw ApiError_1.ApiError.conflict('Period already exists');
-        const period = await PayrollPeriod_1.PayrollPeriod.create(data);
+        // Spec §6: payroll periods run the 26th → 25th. The (year, month) label is
+        // the ENDING month; client-supplied dates are ignored so every period is
+        // created on the same calendar.
+        const { startDate, endDate } = (0, dateUtils_1.payrollPeriodRange)(data.year, data.month);
+        const period = await PayrollPeriod_1.PayrollPeriod.create({
+            ...data,
+            startDate,
+            endDate,
+            monthName: dateUtils_1.MONTH_NAMES[data.month - 1],
+        });
         if (auditCtx) {
             AuditService_1.AuditService.log({
                 userId: auditCtx.userId,

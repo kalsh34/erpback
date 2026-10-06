@@ -3,27 +3,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GuarantorService = void 0;
 const Guarantor_1 = require("../../../models/Guarantor");
 const Employee_1 = require("../../../models/Employee");
-const Contract_1 = require("../../../models/Contract");
+const activation_1 = require("../employees/activation");
 const ApiError_1 = require("../../../common/ApiError");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
-async function checkAndActivateEmployee(employeeId) {
-    const employee = await Employee_1.Employee.findById(employeeId);
-    if (!employee)
-        return;
-    const hasVerifiedGuarantor = await Guarantor_1.Guarantor.findOne({
-        employeeId,
-        verificationStatus: Guarantor_1.GuarantorVerificationStatus.VERIFIED,
-    });
-    const hasActiveContract = await Contract_1.Contract.findOne({
-        employeeId,
-        status: 'ACTIVE',
-    });
-    if (hasVerifiedGuarantor && hasActiveContract && employee.status !== 'ACTIVE') {
-        employee.status = 'ACTIVE';
-        await employee.save();
-    }
-}
 class GuarantorService {
     static async getByEmployeeId(employeeId) {
         return Guarantor_1.Guarantor.find({ employeeId }).sort({ createdAt: -1 });
@@ -89,7 +72,7 @@ class GuarantorService {
                 userAgent: auditCtx.userAgent,
             });
         }
-        await checkAndActivateEmployee(guarantor.employeeId.toString());
+        await (0, activation_1.activateEmployeeIfEligible)(guarantor.employeeId.toString());
         EventBus_1.eventBus.emit('hr.guarantor.verified', { guarantorId: guarantor._id, employeeId: guarantor.employeeId });
         return guarantor;
     }

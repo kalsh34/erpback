@@ -6,6 +6,7 @@ const ApiError_1 = require("../../../common/ApiError");
 const types_1 = require("../../../types");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
+const activation_1 = require("./activation");
 class EmployeeService {
     static async getAll(query) {
         const { page = 1, limit = 20, category, status, search } = query;
@@ -38,7 +39,13 @@ class EmployeeService {
         const existing = await Employee_1.Employee.findOne({ employeeCode: data.employeeCode });
         if (existing)
             throw ApiError_1.ApiError.conflict('Employee code already exists');
-        const employee = await Employee_1.Employee.create(data);
+        // A freshly added employee has neither a contract nor a guarantor yet, so it
+        // must not start life as ACTIVE. It is promoted automatically once both are
+        // in place (see activateEmployeeIfEligible).
+        const status = data.status && data.status !== types_1.EmployeeStatus.ACTIVE
+            ? data.status
+            : types_1.EmployeeStatus.INACTIVE;
+        const employee = await Employee_1.Employee.create({ ...data, status });
         if (auditCtx) {
             AuditService_1.AuditService.log({
                 userId: auditCtx.userId,
@@ -58,7 +65,12 @@ class EmployeeService {
         if (!old)
             throw ApiError_1.ApiError.notFound('Employee not found');
         const oldValues = old.toObject();
-        const employee = await Employee_1.Employee.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+        const payload = { ...data };
+        if (payload.status !== undefined && payload.status !== old.status) {
+            throw ApiError_1.ApiError.badRequest('Employee status cannot be changed here. Use the status change action (contract + verified guarantor are required for ACTIVE).');
+        }
+        delete payload.status;
+        const employee = await Employee_1.Employee.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
         if (!employee)
             throw ApiError_1.ApiError.notFound('Employee not found');
         if (auditCtx) {
@@ -112,6 +124,13 @@ class EmployeeService {
         const reason = (data.reason || '').trim();
         if (!reason || reason.length < 3) {
             throw ApiError_1.ApiError.badRequest('A reason (minimum 3 characters) is required to change employee status');
+        }
+        // Both the contract and the guarantor are pre-requisites for ACTIVE.
+        if (to === types_1.EmployeeStatus.ACTIVE) {
+            const requirements = await (0, activation_1.getActivationRequirements)(id);
+            if (!requirements.hasActiveContract || !requirements.hasVerifiedGuarantor) {
+                throw ApiError_1.ApiError.badRequest(`Employee cannot be activated yet: ${(0, activation_1.describeMissingRequirements)(requirements)} is required first.`);
+            }
         }
         if (employee.status === to) {
             throw ApiError_1.ApiError.badRequest(`Employee is already ${to}`);

@@ -16,5 +16,6 @@ router.get('/:guardId/sites', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE
 router.delete('/site-assignment/:assignmentId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSIGN_SITE), guard_controller_1.GuardController.removeSiteAssignment);
 router.put('/pay-rate/:assignmentId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_RATES), guard_controller_1.GuardController.updatePayRate);
 router.put('/:employeeId/home-site', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_UPDATE), guard_controller_1.GuardController.setHomeSite);
+router.put('/:guardId/primary-site', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSIGN_SITE), guard_controller_1.GuardController.setPrimarySite);
 exports.default = router;
 //# sourceMappingURL=guard.routes.js.map

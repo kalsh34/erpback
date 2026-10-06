@@ -3,7 +3,6 @@ import { EmployeeService } from './employee.service';
 import { AuthUser } from '../../../middleware/auth';
 import { Employee } from '../../../models/Employee';
 import { Contract } from '../../../models/Contract';
-import { SalaryStructure } from '../../../models/SalaryStructure';
 
 interface AuthenticatedRequest extends Request {
   user?: AuthUser;
@@ -111,7 +110,7 @@ export class EmployeeController {
     try {
       const employees = await Employee.find({}).sort({ employeeCode: 1 }).lean();
       const employeeIds = employees.map((e: any) => e._id);
-      const contracts = await Contract.find({ employeeId: { $in: employeeIds } }).populate('salaryStructureId').lean();
+      const contracts = await Contract.find({ employeeId: { $in: employeeIds } }).lean();
 
       const contractMap = new Map<string, any>();
       for (const c of contracts) {
@@ -123,13 +122,11 @@ export class EmployeeController {
         'Code', 'First Name', 'Last Name', 'Category', 'Status', 'Department', 'Position',
         'Phone', 'Email', 'Gender',
         'Wage/Salary', 'Bank Name', 'Account Number',
-        'Contract Start', 'Contract Type', 'Pension Enrolled',
-        'OT Multiplier', 'Holiday Multiplier',
+        'Contract Start', 'Contract Type',        'Pension Enrolled',
       ];
 
       const rows = employees.map((e: any) => {
         const contract = contractMap.get(e._id.toString());
-        const structure = contract?.salaryStructureId;
         return [
           e.employeeCode,
           e.firstName,
@@ -147,8 +144,6 @@ export class EmployeeController {
           contract?.contractStartDate ? new Date(contract.contractStartDate).toISOString().split('T')[0] : '',
           contract?.contractType || '',
           contract?.pensionEnrolled !== undefined ? (contract.pensionEnrolled ? 'Yes' : 'No') : '',
-          structure?.otMultiplier || '',
-          structure?.holidayMultiplier || '',
         ];
       });
 

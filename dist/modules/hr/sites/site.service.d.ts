@@ -29,6 +29,11 @@ export declare class SiteService {
         ip?: string;
         ua?: string;
     }): Promise<ISite>;
+    /**
+     * Soft-deactivate: set status=INACTIVE, stamp deactivatedAt,
+     * relieve all current PrimarySiteAssignments and active ShiftAssignments.
+     * History (isCurrent=false rows) is kept for the Guards tab.
+     */
     static delete(id: string, auditCtx?: {
         userId: string;
         ip?: string;

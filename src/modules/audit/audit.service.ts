@@ -15,11 +15,12 @@ export class AuditService {
     return AuditLog.create(data);
   }
 
-  static async getAll(query: { page?: number; limit?: number; entity?: string; userId?: string }) {
-    const { page = 1, limit = 20, entity, userId } = query;
+  static async getAll(query: { page?: number; limit?: number; entity?: string; entityId?: string; userId?: string }) {
+    const { page = 1, limit = 20, entity, entityId, userId } = query;
     const skip = (page - 1) * limit;
     const filter: any = {};
     if (entity) filter.entity = entity;
+    if (entityId) filter.entityId = entityId;
     if (userId) filter.userId = userId;
 
     const [logs, total] = await Promise.all([

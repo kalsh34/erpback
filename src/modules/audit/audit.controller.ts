@@ -4,11 +4,13 @@ import { AuditService } from './audit.service';
 export class AuditController {
   static async getAll(req: any, res: Response, next: NextFunction) {
     try {
-      const { page, limit, entity, userId } = req.query;
+      const { page, limit, entity, entityId, userId } = req.query;
       const result = await AuditService.getAll({
         page: parseInt(page as string) || 1,
         limit: parseInt(limit as string) || 20,
-        entity, userId,
+        entity,
+        entityId: (entityId as string) || undefined,
+        userId,
       });
       res.json({ success: true, ...result });
     } catch (error) { next(error); }

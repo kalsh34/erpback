@@ -49,9 +49,12 @@ const siteSchema = new mongoose_1.Schema({
     radiusMeters: { type: Number, default: 100 },
     agreedManpower: { type: Number, required: true },
     actualManpower: { type: Number, required: true },
+    maleCount: { type: Number, min: 0, default: undefined },
+    femaleCount: { type: Number, min: 0, default: undefined },
     contactPerson: { type: String, trim: true },
     contactPhone: { type: String, trim: true },
     address: { type: String, trim: true },
+    deactivatedAt: { type: Date, default: undefined },
 }, { timestamps: true });
 siteSchema.index({ siteCode: 1 });
 siteSchema.index({ status: 1 });

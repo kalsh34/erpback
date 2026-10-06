@@ -16,5 +16,6 @@ router.get('/:guardId/sites', authorize(PERMISSIONS.EMPLOYEE_READ), GuardControl
 router.delete('/site-assignment/:assignmentId', authorize(PERMISSIONS.GUARD_ASSIGN_SITE), GuardController.removeSiteAssignment);
 router.put('/pay-rate/:assignmentId', authorize(PERMISSIONS.GUARD_PAYROLL_RATES), GuardController.updatePayRate);
 router.put('/:employeeId/home-site', authorize(PERMISSIONS.EMPLOYEE_UPDATE), GuardController.setHomeSite);
+router.put('/:guardId/primary-site', authorize(PERMISSIONS.GUARD_ASSIGN_SITE), GuardController.setPrimarySite);
 
 export default router;

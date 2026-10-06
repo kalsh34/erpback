@@ -21,10 +21,39 @@ export class EmployeeService {
       ];
     }
 
-    const [employees, total] = await Promise.all([
-      Employee.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      Employee.countDocuments(filter),
+    // Join day = the day entered on the employee's active CONTRACT
+    // (contractStartDate); falls back to the employee hireDate only when no
+    // active contract exists yet.
+    const [agg] = await Employee.aggregate<any>([
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'contracts',
+          let: { eid: '$_id' },
+          pipeline: [
+            { $match: { $expr: { $and: [{ $eq: ['$employeeId', '$$eid'] }, { $eq: ['$status', 'ACTIVE'] }] } } },
+            { $sort: { contractStartDate: -1 } },
+            { $limit: 1 },
+          ],
+          as: 'contract',
+        },
+      },
+      {
+        $addFields: {
+          joinDate: { $ifNull: [{ $arrayElemAt: ['$contract.contractStartDate', 0] }, '$hireDate'] },
+        },
+      },
+      { $project: { contract: 0 } },
+      {
+        $facet: {
+          data: [{ $sort: { createdAt: -1 } }, { $skip: skip }, { $limit: limit }],
+          total: [{ $count: 'count' }],
+        },
+      },
     ]);
+
+    const employees = agg?.data ?? [];
+    const total: number = agg?.total?.[0]?.count ?? 0;
 
     return { data: employees, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }

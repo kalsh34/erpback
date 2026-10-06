@@ -2,6 +2,7 @@ import mongoose, { Document } from 'mongoose';
 export interface IShiftTemplate extends Document {
     name: string;
     description?: string;
+    siteId?: mongoose.Types.ObjectId;
     shiftType: 'DAY' | 'NIGHT' | 'MIXED';
     startTime: string;
     endTime: string;
@@ -9,6 +10,8 @@ export interface IShiftTemplate extends Document {
     minGuards: number;
     daysOfWeek: number[];
     overtimeRate?: number;
+    active: boolean;
+    color?: string;
     createdAt: Date;
     updatedAt: Date;
 }

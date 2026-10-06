@@ -20,6 +20,7 @@ const SalaryComponent_1 = require("./models/SalaryComponent");
 const PayrollFormulaVersion_1 = require("./models/PayrollFormulaVersion");
 const SalaryStructure_1 = require("./models/SalaryStructure");
 const types_1 = require("./types");
+const dateUtils_1 = require("./common/dateUtils");
 dotenv_1.default.config();
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/vitalpayroll';
 async function seed() {
@@ -53,7 +54,7 @@ async function seed() {
         await upsertUser({ email: 'head@vitalpayroll.com', firstName: 'Head', lastName: 'Officer', role: types_1.UserRole.HEAD });
         await upsertUser({ email: 'ceo@vitalpayroll.com', firstName: 'Chief', lastName: 'Executive', role: types_1.UserRole.CEO });
         // --- Guard Employee + User ---
-        // Guards must be CONTRACTED or guard attendance filing rejects them.
+        // Guards must be CONTRACTED to show up in guard payroll.
         let guardEmp = await Employee_1.Employee.findOne({ employeeCode: 'VSP-100' });
         if (!guardEmp) {
             guardEmp = await Employee_1.Employee.create({
@@ -100,10 +101,10 @@ async function seed() {
         if (guardEmp) {
             const hqSite = await Site_1.Site.findOne({ siteCode: 'VSP-HQ' });
             if (hqSite && !(await PrimarySiteAssignment_1.PrimarySiteAssignment.findOne({ guardId: guardEmp._id, isCurrent: true }))) {
-                await PrimarySiteAssignment_1.PrimarySiteAssignment.create({ guardId: guardEmp._id, siteId: hqSite._id, standardMonthlyHours: 208, hourlyRate: 26.63, effectiveFrom: new Date('2024-01-01'), isCurrent: true });
-                console.log('[SEED] Guard VSP-100 -> VSP-HQ (208 hrs, 26.63 ETB/hr)');
+                await PrimarySiteAssignment_1.PrimarySiteAssignment.create({ guardId: guardEmp._id, siteId: hqSite._id, standardMonthlyHours: 240, hourlyRate: 26.63, effectiveFrom: new Date('2024-01-01'), isCurrent: true });
+                console.log('[SEED] Guard VSP-100 -> VSP-HQ (240 hrs, 26.63 ETB/hr)');
             }
-            // --- Shift assignment (required before guard attendance can be filed) ---
+            // --- Shift assignment (the standard day template used by the roster) ---
             if (hqSite) {
                 let template = await ShiftTemplate_1.ShiftTemplate.findOne({ name: 'Standard Day (06:00-18:00)' });
                 if (!template) {
@@ -254,18 +255,17 @@ async function seed() {
             });
             console.log('[SEED] Default guard salary structure created');
         }
-        // --- Payroll Period ---
+        // --- Payroll Period (spec §6: 26th → 25th, label = ending month) ---
         const now = new Date();
         if (!(await PayrollPeriod_1.PayrollPeriod.findOne({ year: now.getFullYear(), month: now.getMonth() + 1 }))) {
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            const { startDate, endDate } = (0, dateUtils_1.payrollPeriodRange)(now.getFullYear(), now.getMonth() + 1);
             await PayrollPeriod_1.PayrollPeriod.create({
-                year: now.getFullYear(), month: now.getMonth() + 1, monthName: monthNames[now.getMonth()],
-                startDate: new Date(now.getFullYear(), now.getMonth(), 1),
-                // End of the LAST day (23:59:59.999) so attendance on the final day is included
-                endDate: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
+                year: now.getFullYear(), month: now.getMonth() + 1, monthName: dateUtils_1.MONTH_NAMES[now.getMonth()],
+                startDate,
+                endDate,
                 status: types_1.PayrollPeriodStatus.OPEN,
             });
-            console.log(`[SEED] Period: ${monthNames[now.getMonth()]} ${now.getFullYear()} (OPEN)`);
+            console.log(`[SEED] Period: ${dateUtils_1.MONTH_NAMES[now.getMonth()]} ${now.getFullYear()} (OPEN, ${startDate.toDateString()} → ${endDate.toDateString()})`);
         }
         console.log('\n========================================');
         console.log('ALL USERS (password: password123)');

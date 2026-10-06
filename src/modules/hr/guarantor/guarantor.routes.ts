@@ -8,11 +8,11 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/employee/:employeeId', authorize(PERMISSIONS.EMPLOYEE_READ), controller.getByEmployeeId);
-router.get('/:id', authorize(PERMISSIONS.EMPLOYEE_READ), controller.getById);
-router.post('/', authorize(PERMISSIONS.EMPLOYEE_CREATE), controller.create);
-router.put('/:id', authorize(PERMISSIONS.EMPLOYEE_UPDATE), controller.update);
-router.put('/:id/verify', authorize(PERMISSIONS.EMPLOYEE_UPDATE), controller.verify);
+router.get('/employee/:employeeId', authorize(PERMISSIONS.GUARANTOR_READ), controller.getByEmployeeId);
+router.get('/:id', authorize(PERMISSIONS.GUARANTOR_READ), controller.getById);
+router.post('/', authorize(PERMISSIONS.GUARANTOR_MANAGE), controller.create);
+router.put('/:id', authorize(PERMISSIONS.GUARANTOR_MANAGE), controller.update);
+router.put('/:id/verify', authorize(PERMISSIONS.GUARANTOR_MANAGE), controller.verify);
 router.put('/:id/reject', authorize(PERMISSIONS.EMPLOYEE_UPDATE), controller.reject);
 router.delete('/:id', authorize(PERMISSIONS.EMPLOYEE_UPDATE), controller.remove);
 

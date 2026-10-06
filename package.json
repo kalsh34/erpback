@@ -8,6 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "check:guard-payroll": "ts-node --transpile-only tests/guardPayrollEngine.check.ts",
+    "check:staff-payroll": "ts-node --transpile-only tests/staffPayrollEngine.check.ts",
     "seed": "ts-node-dev --transpile-only src/seed.ts"
   },
   "dependencies": {

@@ -10,9 +10,9 @@ const rotation_service_1 = require("../rotation/rotation.service");
 const ApiError_1 = require("../../../common/ApiError");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
-router.get('/templates', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), async (req, res, next) => {
+router.get('/templates', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), async (req, res, next) => {
     try {
-        const filter = { active: true };
+        const filter = { active: { $ne: false } };
         if (req.query.siteId)
             filter.siteId = req.query.siteId;
         const templates = await ShiftTemplate_1.ShiftTemplate.find(filter).populate('siteId', 'siteName siteCode').sort({ createdAt: -1 });
@@ -22,7 +22,7 @@ router.get('/templates', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_RE
         next(error);
     }
 });
-router.get('/templates/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), async (req, res, next) => {
+router.get('/templates/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), async (req, res, next) => {
     try {
         const template = await ShiftTemplate_1.ShiftTemplate.findById(req.params.id).populate('siteId', 'siteName siteCode');
         if (!template)
@@ -35,13 +35,30 @@ router.get('/templates/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANC
 });
 router.post('/templates', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_CREATE), async (req, res, next) => {
     try {
-        const { siteId, name, startTime, endTime, daysOfWeek, color, maxGuards } = req.body;
+        const { siteId, name, startTime, endTime, daysOfWeek, color, maxGuards, minGuards, shiftType, active } = req.body;
         if (!siteId || !name || !startTime || !endTime)
             throw ApiError_1.ApiError.badRequest('siteId, name, startTime, and endTime are required');
+        let uniqueName = String(name).trim();
+        let attempt = 1;
+        // ShiftTemplate.name is globally unique — auto-suffix on conflict
+        // eslint-disable-next-line no-await-in-loop
+        while (await ShiftTemplate_1.ShiftTemplate.findOne({ name: uniqueName }) && attempt < 50) {
+            uniqueName = `${name} (${attempt})`;
+            attempt += 1;
+        }
+        const inferredType = String(shiftType || '').toUpperCase().includes('NIGHT') ? 'NIGHT'
+            : String(shiftType || '').toUpperCase().includes('DAY') ? 'DAY' : undefined;
         const template = await ShiftTemplate_1.ShiftTemplate.create({
-            siteId, name, startTime, endTime,
+            siteId,
+            name: uniqueName,
+            startTime,
+            endTime,
             daysOfWeek: daysOfWeek || [0, 1, 2, 3, 4, 5, 6],
-            maxGuards: maxGuards || 1, color: color || '#3B82F6',
+            minGuards: minGuards || 1,
+            maxGuards: maxGuards || 1,
+            shiftType: inferredType || 'DAY',
+            active: active !== false,
+            color: color || '#3B82F6',
         });
         res.status(201).json({ success: true, data: template });
     }
@@ -71,7 +88,7 @@ router.delete('/templates/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_U
         next(error);
     }
 });
-router.get('/assignments', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), async (req, res, next) => {
+router.get('/assignments', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), async (req, res, next) => {
     try {
         const filter = {};
         if (req.query.siteId)
@@ -104,14 +121,16 @@ router.post('/assignments', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSI
         const template = await ShiftTemplate_1.ShiftTemplate.findById(shiftTemplateId);
         if (!template)
             throw ApiError_1.ApiError.notFound('Shift template not found');
-        if (template.siteId.toString() !== siteId)
+        const tmplSiteId = template.siteId?.toString?.();
+        if (tmplSiteId && tmplSiteId !== siteId)
             throw ApiError_1.ApiError.badRequest('Shift template does not belong to the specified site');
         const rotationId = await rotation_service_1.RotationService.isGuardInActiveRotation(guardId);
         if (rotationId)
             throw ApiError_1.ApiError.badRequest('This guard is enrolled in an active rotation. Remove from rotation before manual shift assignment.');
         const assignDate = new Date(startDate);
         const assignDayOfWeek = assignDate.getDay();
-        if (!template.daysOfWeek.includes(assignDayOfWeek)) {
+        const days = template.daysOfWeek;
+        if (Array.isArray(days) && days.length > 0 && !days.includes(assignDayOfWeek)) {
             throw ApiError_1.ApiError.badRequest(`Shift "${template.name}" does not run on ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][assignDayOfWeek]}s`);
         }
         const existingForGuard = await ShiftAssignment_1.ShiftAssignment.findOne({ guardId, siteId, status: 'ACTIVE', $or: [{ endDate: { $exists: false } }, { endDate: null }] });

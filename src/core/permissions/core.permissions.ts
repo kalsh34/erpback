@@ -20,9 +20,11 @@ export function registerCorePermissions(): void {
         PERMISSIONS.USER_CREATE,
         PERMISSIONS.USER_UPDATE,
         PERMISSIONS.USER_READ,
+        PERMISSIONS.USER_DELETE,
         PERMISSIONS.SETTINGS_READ,
         PERMISSIONS.SETTINGS_UPDATE,
         PERMISSIONS.AUDIT_READ,
+        PERMISSIONS.REPORT_READ,
       ],
       [UserRole.HR_ADMIN]: [
         PERMISSIONS.USER_READ,

@@ -11,6 +11,9 @@ export declare class FinanceController {
     static lockPeriod(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static setRates(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static getRates(req: Request, res: Response, next: NextFunction): Promise<void>;
+    static getSiteRates(req: Request, res: Response, next: NextFunction): Promise<void>;
+    static upsertSiteRates(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
+    static deleteSiteRate(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
 }
 export {};
 //# sourceMappingURL=finance.controller.d.ts.map

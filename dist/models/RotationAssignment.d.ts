@@ -4,8 +4,11 @@ export interface IRotationAssignment extends Document {
     guardId: mongoose.Types.ObjectId;
     siteId: mongoose.Types.ObjectId;
     date: Date;
-    shiftType: 'DAY' | 'NIGHT';
+    shiftType: string;
+    shiftName?: string;
     shiftTime: string;
+    startAt?: Date;
+    endAt?: Date;
     assignedBy?: mongoose.Types.ObjectId;
     notes?: string;
     createdAt: Date;

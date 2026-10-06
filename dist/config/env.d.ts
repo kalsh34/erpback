@@ -5,5 +5,7 @@ export declare const config: {
     jwtExpiresIn: string;
     nodeEnv: string;
     corsOrigin: string;
+    attendanceMaxDailyHours: number;
+    attendanceExpectedDailyHours: number;
 };
 //# sourceMappingURL=env.d.ts.map

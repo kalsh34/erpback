@@ -102,16 +102,58 @@ class GuardService {
         if (existing)
             throw ApiError_1.ApiError.conflict('Guard is already assigned to this site');
         const profile = await GuardProfile_1.GuardProfile.findOne({ employeeId: data.guardId });
+        // First site assignment automatically becomes the guard's Primary Site.
+        const currentCount = await PrimarySiteAssignment_1.PrimarySiteAssignment.countDocuments({ guardId: data.guardId, isCurrent: true });
+        const isPrimary = currentCount === 0;
         const assignment = await PrimarySiteAssignment_1.PrimarySiteAssignment.create({
             guardId: data.guardId, siteId: data.siteId, role: data.role || 'GUARD',
-            standardMonthlyHours: 208, hourlyRate: profile?.rate || 0,
+            isPrimary,
+            standardMonthlyHours: 240, hourlyRate: profile?.rate || 0,
             transportAllowance: profile?.transportAllowance || 0, effectiveFrom: new Date(), isCurrent: true,
         });
-        if (auditCtx) {
-            AuditService_1.AuditService.log({ userId: auditCtx.userId, action: 'GUARD_ASSIGN_SITE', entity: 'PrimarySiteAssignment', entityId: assignment._id.toString(), newValues: { guardId: data.guardId, siteId: data.siteId, role: data.role || 'GUARD' }, ipAddress: auditCtx.ip, userAgent: auditCtx.ua });
+        if (isPrimary) {
+            employee.homeSiteId = data.siteId;
+            await employee.save();
         }
-        EventBus_1.eventBus.emit('hr.guard.siteAssigned', { guardId: data.guardId, siteId: data.siteId, assignmentId: assignment._id, role: data.role || 'GUARD' });
+        if (auditCtx) {
+            AuditService_1.AuditService.log({ userId: auditCtx.userId, action: 'GUARD_ASSIGN_SITE', entity: 'PrimarySiteAssignment', entityId: assignment._id.toString(), newValues: { guardId: data.guardId, siteId: data.siteId, role: data.role || 'GUARD', isPrimary }, ipAddress: auditCtx.ip, userAgent: auditCtx.ua });
+        }
+        EventBus_1.eventBus.emit('hr.guard.siteAssigned', { guardId: data.guardId, siteId: data.siteId, assignmentId: assignment._id, role: data.role || 'GUARD', isPrimary });
         return assignment;
+    }
+    /**
+     * Operations can move the Primary Site later. The flag lives on the
+     * assignment itself (never inferred from array order) and homeSiteId is kept
+     * in sync. Historical attendance stays attached to the site it was recorded
+     * at — nothing about attendance rows changes here.
+     */
+    static async setPrimarySite(guardId, siteId, auditCtx) {
+        const employee = await Employee_1.Employee.findById(guardId);
+        if (!employee)
+            throw ApiError_1.ApiError.notFound('Guard not found');
+        const target = await PrimarySiteAssignment_1.PrimarySiteAssignment.findOne({ guardId, siteId, isCurrent: true });
+        if (!target)
+            throw ApiError_1.ApiError.badRequest('The guard has no active assignment for that site — the primary site must be an active assignment');
+        const current = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId, isCurrent: true });
+        const previousPrimary = current.find((a) => a.isPrimary);
+        if (previousPrimary && previousPrimary._id.toString() === target._id.toString())
+            return target;
+        await PrimarySiteAssignment_1.PrimarySiteAssignment.updateMany({ guardId, isCurrent: true }, { $set: { isPrimary: false } });
+        target.isPrimary = true;
+        await target.save();
+        employee.homeSiteId = siteId;
+        await employee.save();
+        if (auditCtx) {
+            AuditService_1.AuditService.log({
+                userId: auditCtx.userId, action: 'GUARD_PRIMARY_SITE_UPDATE', entity: 'PrimarySiteAssignment',
+                entityId: target._id.toString(),
+                oldValues: { primarySiteId: previousPrimary ? previousPrimary.siteId.toString() : null },
+                newValues: { primarySiteId: siteId },
+                ipAddress: auditCtx.ip, userAgent: auditCtx.ua,
+            });
+        }
+        EventBus_1.eventBus.emit('hr.guard.primarySiteChanged', { guardId, siteId, assignmentId: target._id });
+        return target;
     }
     static async getGuardSites(guardId) {
         return PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId }).populate('siteId').sort({ effectiveFrom: -1 });
@@ -121,8 +163,21 @@ class GuardService {
         if (!assignment)
             throw ApiError_1.ApiError.notFound('Assignment not found');
         assignment.isCurrent = false;
+        assignment.isPrimary = false;
         assignment.effectiveTo = new Date();
         await assignment.save();
+        // The primary site must always be one of the guard's ACTIVE assignments:
+        // if we just relieved the primary, promote another active one (or clear it).
+        if (assignment.guardId) {
+            const remaining = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: assignment.guardId, isCurrent: true }).sort({ effectiveFrom: -1 });
+            const next = remaining.find((a) => a.isPrimary) || remaining[0];
+            await PrimarySiteAssignment_1.PrimarySiteAssignment.updateMany({ guardId: assignment.guardId, isCurrent: true }, { $set: { isPrimary: false } });
+            if (next) {
+                next.isPrimary = true;
+                await next.save();
+            }
+            await Employee_1.Employee.updateOne({ _id: assignment.guardId }, { $set: { homeSiteId: next ? next.siteId : null } });
+        }
         if (auditCtx) {
             AuditService_1.AuditService.log({ userId: auditCtx.userId, action: 'GUARD_REMOVE_SITE', entity: 'PrimarySiteAssignment', entityId: assignmentId, oldValues: { guardId: assignment.guardId.toString(), siteId: assignment.siteId.toString(), isCurrent: true }, newValues: { isCurrent: false }, ipAddress: auditCtx.ip, userAgent: auditCtx.ua });
         }

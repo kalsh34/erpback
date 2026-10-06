@@ -60,10 +60,6 @@ export declare enum PayrollRecordStatus {
     RETURNED = "RETURNED",
     CANCELLED = "CANCELLED"
 }
-export declare enum AttendanceStatus {
-    CLOCKED_IN = "CLOCKED_IN",
-    CLOCKED_OUT = "CLOCKED_OUT"
-}
 export declare enum AttendanceSource {
     SYSTEM = "SYSTEM",
     SELF_CLOCK = "SELF_CLOCK",
@@ -71,6 +67,11 @@ export declare enum AttendanceSource {
     HR_MANUAL = "HR_MANUAL",
     MANUAL_ENTRY = "MANUAL_ENTRY",
     ROTATION = "ROTATION"
+}
+/** Lifecycle of a guard attendance row: VOID is a controlled correction, never a hard delete. */
+export declare enum GuardAttendanceStatus {
+    ACTIVE = "ACTIVE",
+    VOID = "VOID"
 }
 export declare enum ShiftAssignmentSource {
     MANUAL = "MANUAL",
@@ -80,6 +81,18 @@ export declare enum RotationStatus {
     DRAFT = "DRAFT",
     ACTIVE = "ACTIVE",
     PAUSED = "PAUSED",
+    ARCHIVED = "ARCHIVED"
+}
+export declare enum RotationLifecycle {
+    DRAFT = "DRAFT",
+    GENERATING = "GENERATING",
+    GENERATED = "GENERATED",
+    REVIEW = "REVIEW",
+    APPROVED = "APPROVED",
+    PUBLISHED = "PUBLISHED",
+    ACTIVE = "ACTIVE",
+    COMPLETED = "COMPLETED",
+    CANCELLED = "CANCELLED",
     ARCHIVED = "ARCHIVED"
 }
 export declare enum RotationGuardStatus {
@@ -125,10 +138,9 @@ export declare const PERMISSIONS: {
     readonly GUARD_REGISTER: "guard.register";
     readonly GUARD_ASSIGN_SITE: "guard.assign-site";
     readonly GUARD_MODIFY_HOURS: "guard.modify-hours";
-    readonly ATTENDANCE_READ: "attendance.read";
-    readonly ATTENDANCE_CLOCK: "attendance.clock";
-    readonly ATTENDANCE_MANAGE: "attendance.manage";
-    readonly ATTENDANCE_FILE: "attendance.file";
+    readonly GUARD_ATTENDANCE_READ: "guard-attendance.read";
+    readonly GUARD_ATTENDANCE_MANAGE: "guard-attendance.manage";
+    readonly GUARD_ATTENDANCE_FUTURE: "guard-attendance.future";
     readonly STAFF_ATTENDANCE_MANAGE: "staff-attendance.manage";
     readonly GUARD_PAYROLL_READ: "guard-payroll.read";
     readonly GUARD_PAYROLL_RATES: "guard-payroll.rates";
@@ -152,6 +164,8 @@ export declare const PERMISSIONS: {
     readonly SETTINGS_UPDATE: "settings.update";
     readonly PAYROLL_PERIOD_READ: "payroll-period.read";
     readonly PAYROLL_CONFIG_MANAGE: "payroll-config.manage";
+    readonly ORGANIZATION_READ: "organization.read";
+    readonly ORGANIZATION_MANAGE: "organization.manage";
     readonly CANDIDATE_READ: "candidate.read";
     readonly CANDIDATE_MANAGE: "candidate.manage";
     readonly PERFORMANCE_READ: "performance.read";
@@ -159,6 +173,9 @@ export declare const PERMISSIONS: {
     readonly ROTATION_READ: "rotation.read";
     readonly ROTATION_MANAGE: "rotation.manage";
     readonly ROTATION_GENERATE: "rotation.generate";
+    readonly ROTATION_APPROVE: "rotation.approve";
+    readonly ROTATION_PUBLISH: "rotation.publish";
+    readonly ROTATION_OVERRIDE: "rotation.override";
 };
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 export declare const ROLE_PERMISSIONS: Record<UserRole, Permission[]>;

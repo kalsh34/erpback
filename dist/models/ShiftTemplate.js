@@ -38,14 +38,18 @@ const mongoose_1 = __importStar(require("mongoose"));
 const shiftTemplateSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true },
     description: { type: String },
-    shiftType: { type: String, enum: ['DAY', 'NIGHT', 'MIXED'], required: true },
+    siteId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Site', default: null },
+    shiftType: { type: String, enum: ['DAY', 'NIGHT', 'MIXED'], required: true, default: 'DAY' },
     startTime: { type: String, required: true },
     endTime: { type: String, required: true },
-    maxGuards: { type: Number, required: true, min: 1 },
-    minGuards: { type: Number, required: true, min: 1 },
+    maxGuards: { type: Number, required: true, min: 1, default: 1 },
+    minGuards: { type: Number, required: true, min: 1, default: 1 },
     daysOfWeek: { type: [Number] },
     overtimeRate: { type: Number, default: 1.5 },
+    active: { type: Boolean, default: true },
+    color: { type: String, default: '#3B82F6' },
 }, { timestamps: true });
 shiftTemplateSchema.index({ name: 1 });
+shiftTemplateSchema.index({ siteId: 1 });
 exports.ShiftTemplate = mongoose_1.default.model('ShiftTemplate', shiftTemplateSchema);
 //# sourceMappingURL=ShiftTemplate.js.map

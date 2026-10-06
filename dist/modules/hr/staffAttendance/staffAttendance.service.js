@@ -8,11 +8,16 @@ const ApiError_1 = require("../../../common/ApiError");
 const types_1 = require("../../../types");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
+const dateUtils_1 = require("../../../common/dateUtils");
 class StaffAttendanceService {
     static async saveDayStatus(data, auditCtx) {
         const period = await this.getOrCreatePeriod(data.year, data.month);
-        if (period.status === types_1.PayrollPeriodStatus.LOCKED) {
-            throw ApiError_1.ApiError.forbidden('This period is locked. Finance must unlock it before changes can be made.');
+        // Date-aware lock gate (spec §6): days 26–31 belong to the payroll period
+        // that ends on the 25th of the NEXT month, so they are gated by THAT
+        // period's lock — not the calendar month's.
+        const gatePeriod = await this.getGatePeriod(data.year, data.month, data.dayOfMonth);
+        if (gatePeriod.status === types_1.PayrollPeriodStatus.LOCKED) {
+            throw ApiError_1.ApiError.forbidden(`Payroll period ${gatePeriod.monthName} ${gatePeriod.year} is locked. Finance must unlock it before changes can be made.`);
         }
         const dateStr = `${data.year}-${String(data.month).padStart(2, '0')}-${String(data.dayOfMonth).padStart(2, '0')}`;
         const existing = await StaffAttendance_1.StaffAttendance.findOne({
@@ -66,9 +71,9 @@ class StaffAttendanceService {
         return record;
     }
     static async bulkMarkDay(data, auditCtx) {
-        const period = await this.getOrCreatePeriod(data.year, data.month);
-        if (period.status === types_1.PayrollPeriodStatus.LOCKED) {
-            throw ApiError_1.ApiError.forbidden('This period is locked.');
+        const gatePeriod = await this.getGatePeriod(data.year, data.month, data.dayOfMonth);
+        if (gatePeriod.status === types_1.PayrollPeriodStatus.LOCKED) {
+            throw ApiError_1.ApiError.forbidden(`Payroll period ${gatePeriod.monthName} ${gatePeriod.year} is locked.`);
         }
         const staff = await Employee_1.Employee.find({ category: types_1.EmployeeCategory.OFFICE_STAFF, status: { $in: ['ACTIVE', 'CONTRACTED'] } });
         const results = [];
@@ -192,15 +197,23 @@ class StaffAttendanceService {
     static async getAllPeriods() {
         return PayrollPeriod_1.PayrollPeriod.find().sort({ year: -1, month: -1 });
     }
+    /**
+     * The payroll period that governs edits to this calendar day (spec §6):
+     * days 1–25 → (year, month); days 26–31 → the NEXT month (year rollover).
+     */
+    static async getGatePeriod(year, month, dayOfMonth) {
+        const key = (0, dateUtils_1.payrollPeriodKeyForDate)(new Date(year, month - 1, dayOfMonth));
+        return this.getOrCreatePeriod(key.year, key.month);
+    }
     static async getOrCreatePeriod(year, month) {
         let period = await PayrollPeriod_1.PayrollPeriod.findOne({ year, month });
         if (!period) {
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+            // Spec §6: payroll periods run the 26th → 25th (label = ENDING month).
+            const { startDate, endDate } = (0, dateUtils_1.payrollPeriodRange)(year, month);
             period = await PayrollPeriod_1.PayrollPeriod.create({
-                year, month, monthName: monthNames[month - 1],
-                startDate: new Date(year, month - 1, 1),
-                // End of the LAST day (23:59:59.999) so attendance on the final day is included
-                endDate: new Date(year, month, 0, 23, 59, 59, 999),
+                year, month, monthName: dateUtils_1.MONTH_NAMES[month - 1],
+                startDate,
+                endDate,
                 status: types_1.PayrollPeriodStatus.OPEN,
             });
         }

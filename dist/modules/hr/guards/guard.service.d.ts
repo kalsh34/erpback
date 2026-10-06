@@ -40,6 +40,21 @@ export declare class GuardService {
     }> & {
         __v: number;
     }>;
+    /**
+     * Operations can move the Primary Site later. The flag lives on the
+     * assignment itself (never inferred from array order) and homeSiteId is kept
+     * in sync. Historical attendance stays attached to the site it was recorded
+     * at — nothing about attendance rows changes here.
+     */
+    static setPrimarySite(guardId: string, siteId: string, auditCtx?: {
+        userId: string;
+        ip?: string;
+        ua?: string;
+    }): Promise<mongoose.Document<unknown, {}, import("../../../models/PrimarySiteAssignment").IPrimarySiteAssignment, {}, {}> & import("../../../models/PrimarySiteAssignment").IPrimarySiteAssignment & Required<{
+        _id: mongoose.Types.ObjectId;
+    }> & {
+        __v: number;
+    }>;
     static getGuardSites(guardId: string): Promise<(mongoose.Document<unknown, {}, import("../../../models/PrimarySiteAssignment").IPrimarySiteAssignment, {}, {}> & import("../../../models/PrimarySiteAssignment").IPrimarySiteAssignment & Required<{
         _id: mongoose.Types.ObjectId;
     }> & {

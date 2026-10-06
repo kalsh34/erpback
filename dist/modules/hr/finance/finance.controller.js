@@ -80,6 +80,35 @@ class FinanceController {
             next(error);
         }
     }
+    static async getSiteRates(req, res, next) {
+        try {
+            const rates = await finance_service_1.FinanceService.getSiteRates(req.params.periodId);
+            res.json({ success: true, data: rates });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async upsertSiteRates(req, res, next) {
+        try {
+            const rates = await finance_service_1.FinanceService.upsertSiteRates(req.params.periodId, req.body?.rates, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            res.json({ success: true, data: rates });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async deleteSiteRate(req, res, next) {
+        try {
+            const result = await finance_service_1.FinanceService.deleteSiteRate(req.params.id, req.user?.userId || '', {
+                ip: req.ip, ua: req.get('user-agent'),
+            });
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
 }
 exports.FinanceController = FinanceController;
 //# sourceMappingURL=finance.controller.js.map

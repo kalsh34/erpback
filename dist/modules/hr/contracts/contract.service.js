@@ -4,6 +4,7 @@ exports.ContractService = void 0;
 const Contract_1 = require("../../../models/Contract");
 const Employee_1 = require("../../../models/Employee");
 const types_1 = require("../../../types");
+const activation_1 = require("../employees/activation");
 const ApiError_1 = require("../../../common/ApiError");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
@@ -34,6 +35,9 @@ class ContractService {
             throw ApiError_1.ApiError.conflict('Employee already has an active contract');
         const contract = await Contract_1.Contract.create(data);
         await Employee_1.Employee.findByIdAndUpdate(data.employeeId, { status: types_1.EmployeeStatus.CONTRACTED });
+        // With the contract in place the employee may now qualify for ACTIVE (when a
+        // verified guarantor is already on file).
+        await (0, activation_1.activateEmployeeIfEligible)(String(data.employeeId));
         if (auditCtx) {
             AuditService_1.AuditService.log({
                 userId: auditCtx.userId,
@@ -56,10 +60,14 @@ class ContractService {
         const contract = await Contract_1.Contract.findByIdAndUpdate(id, data, { new: true, runValidators: true });
         if (!contract)
             throw ApiError_1.ApiError.notFound('Contract not found');
+        if (data.status === 'ACTIVE' && old.status !== 'ACTIVE') {
+            await (0, activation_1.activateEmployeeIfEligible)(String(old.employeeId));
+        }
         if (data.status === 'TERMINATED' && old.status !== 'TERMINATED') {
             const hasOtherActive = await Contract_1.Contract.countDocuments({ employeeId: old.employeeId, status: 'ACTIVE', _id: { $ne: id } });
+            // An employee without an active contract cannot be ACTIVE any more.
             if (hasOtherActive === 0) {
-                await Employee_1.Employee.findByIdAndUpdate(old.employeeId, { status: types_1.EmployeeStatus.ACTIVE });
+                await Employee_1.Employee.findByIdAndUpdate(old.employeeId, { status: types_1.EmployeeStatus.INACTIVE });
             }
         }
         if (auditCtx) {
@@ -85,8 +93,9 @@ class ContractService {
         await Contract_1.Contract.findByIdAndDelete(id);
         if (snapshot.status === 'ACTIVE') {
             const hasOtherActive = await Contract_1.Contract.countDocuments({ employeeId: snapshot.employeeId, status: 'ACTIVE' });
+            // No contract left -> the employee cannot stay ACTIVE.
             if (hasOtherActive === 0) {
-                await Employee_1.Employee.findByIdAndUpdate(snapshot.employeeId, { status: types_1.EmployeeStatus.ACTIVE });
+                await Employee_1.Employee.findByIdAndUpdate(snapshot.employeeId, { status: types_1.EmployeeStatus.INACTIVE });
             }
         }
         if (auditCtx) {

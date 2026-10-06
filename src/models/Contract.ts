@@ -25,7 +25,6 @@ export interface IContract extends Document {
 const contractSchema = new Schema<IContract>(
   {
     employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
-    salaryStructureId: { type: Schema.Types.ObjectId, ref: 'SalaryStructure' },
     contractStartDate: { type: Date, required: true },
     contractEndDate: { type: Date },
     department: { type: String, trim: true },

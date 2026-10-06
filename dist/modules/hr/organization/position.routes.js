@@ -7,7 +7,7 @@ const types_1 = require("../../../types");
 const Position_1 = require("../../../models/Position");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
-router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETTINGS_READ), async (req, res, next) => {
+router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.ORGANIZATION_READ, types_1.PERMISSIONS.SETTINGS_READ), async (req, res, next) => {
     try {
         const filter = {};
         if (req.query.departmentId)
@@ -19,7 +19,7 @@ router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETTINGS_READ), async 
         next(err);
     }
 });
-router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETTINGS_UPDATE), async (req, res, next) => {
+router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.ORGANIZATION_MANAGE), async (req, res, next) => {
     try {
         const position = await Position_1.Position.create(req.body);
         res.status(201).json({ success: true, data: position });
@@ -32,7 +32,7 @@ router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETTINGS_UPDATE), asy
         next(err);
     }
 });
-router.put('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETTINGS_UPDATE), async (req, res, next) => {
+router.put('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.ORGANIZATION_MANAGE), async (req, res, next) => {
     try {
         const position = await Position_1.Position.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!position) {
@@ -45,7 +45,7 @@ router.put('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETTINGS_UPDATE), a
         next(err);
     }
 });
-router.delete('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETTINGS_UPDATE), async (req, res, next) => {
+router.delete('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.ORGANIZATION_MANAGE), async (req, res, next) => {
     try {
         await Position_1.Position.findByIdAndDelete(req.params.id);
         res.json({ success: true, message: 'Position deleted' });

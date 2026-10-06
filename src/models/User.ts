@@ -8,6 +8,10 @@ export interface IUser extends Document {
   lastName: string;
   role: UserRole;
   employeeId?: mongoose.Types.ObjectId;
+  /** Module access overrides set by an admin at user-creation/edit time.
+   *  Effective permissions = role defaults + granted modules − denied modules. */
+  moduleGrants: string[];
+  moduleDenies: string[];
   isActive: boolean;
   lastLogin?: Date;
   createdAt: Date;
@@ -22,6 +26,8 @@ const userSchema = new Schema<IUser>(
     lastName: { type: String, required: true, trim: true },
     role: { type: String, enum: Object.values(UserRole), required: true },
     employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', default: null },
+    moduleGrants: { type: [String], default: [] },
+    moduleDenies: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
     lastLogin: { type: Date },
   },

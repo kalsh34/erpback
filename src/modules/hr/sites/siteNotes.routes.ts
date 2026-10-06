@@ -7,7 +7,7 @@ import { SiteNote } from '../../../models/SiteNote';
 const router = Router();
 router.use(authenticate);
 
-router.post('/', authorize(PERMISSIONS.ATTENDANCE_FILE), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', authorize(PERMISSIONS.SITE_UPDATE), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { siteId, date, noteText } = req.body;
     if (!siteId || !date || !noteText?.trim()) {
@@ -23,7 +23,7 @@ router.post('/', authorize(PERMISSIONS.ATTENDANCE_FILE), async (req: Request, re
   } catch (error) { next(error); }
 });
 
-router.get('/', authorize(PERMISSIONS.ATTENDANCE_READ), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/', authorize(PERMISSIONS.SITE_READ), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { siteId, date, dateFrom, dateTo } = req.query;
     const filter: any = {};

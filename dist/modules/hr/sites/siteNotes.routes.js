@@ -7,7 +7,7 @@ const types_1 = require("../../../types");
 const SiteNote_1 = require("../../../models/SiteNote");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
-router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_FILE), async (req, res, next) => {
+router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_UPDATE), async (req, res, next) => {
     try {
         const { siteId, date, noteText } = req.body;
         if (!siteId || !date || !noteText?.trim()) {
@@ -25,7 +25,7 @@ router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_FILE), asy
         next(error);
     }
 });
-router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.ATTENDANCE_READ), async (req, res, next) => {
+router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), async (req, res, next) => {
     try {
         const { siteId, date, dateFrom, dateTo } = req.query;
         const filter = {};

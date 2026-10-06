@@ -83,6 +83,11 @@ export declare class StaffAttendanceService {
     }> & {
         __v: number;
     })[]>;
+    /**
+     * The payroll period that governs edits to this calendar day (spec §6):
+     * days 1–25 → (year, month); days 26–31 → the NEXT month (year rollover).
+     */
+    private static getGatePeriod;
     static getOrCreatePeriod(year: number, month: number): Promise<import("mongoose").Document<unknown, {}, import("../../../models/PayrollPeriod").IPayrollPeriod, {}, {}> & import("../../../models/PayrollPeriod").IPayrollPeriod & Required<{
         _id: import("mongoose").Types.ObjectId;
     }> & {

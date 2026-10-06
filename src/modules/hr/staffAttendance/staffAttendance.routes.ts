@@ -10,9 +10,6 @@ router.use(authenticate);
 router.post('/day', authorize(PERMISSIONS.STAFF_ATTENDANCE_MANAGE), StaffAttendanceController.saveDayStatus);
 router.post('/bulk', authorize(PERMISSIONS.STAFF_ATTENDANCE_MANAGE), StaffAttendanceController.bulkMarkDay);
 router.get('/grid', authorize(PERMISSIONS.STAFF_ATTENDANCE_MANAGE), StaffAttendanceController.getGrid);
-router.get('/summary', authorize(PERMISSIONS.GUARD_PAYROLL_READ), StaffAttendanceController.getMonthlySummary);
-router.get('/periods', authorize(PERMISSIONS.STAFF_ATTENDANCE_MANAGE), StaffAttendanceController.getAllPeriods);
-router.post('/lock', authorize(PERMISSIONS.OFFICE_PAYROLL_RATES), StaffAttendanceController.lockPeriod);
-router.post('/unlock', authorize(PERMISSIONS.SETTINGS_UPDATE), StaffAttendanceController.unlockPeriod);
+router.get('/summary', authorize(PERMISSIONS.REPORT_READ), StaffAttendanceController.getMonthlySummary);
 
 export default router;

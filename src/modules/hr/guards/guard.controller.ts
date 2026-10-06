@@ -49,7 +49,12 @@ export class GuardController {
 
   static async getAllGuards(req: Request, res: Response, next: NextFunction) {
     try {
-      const guards = await GuardService.getAllGuards();
+      const guards = await GuardService.getAllGuards({
+        siteId: typeof req.query.siteId === 'string' ? req.query.siteId : undefined,
+        assignment: typeof req.query.assignment === 'string' ? (req.query.assignment as 'assigned' | 'unassigned') : undefined,
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
+        search: typeof req.query.search === 'string' ? req.query.search : undefined,
+      });
       res.json({ success: true, data: guards });
     } catch (error) { next(error); }
   }
@@ -91,6 +96,17 @@ export class GuardController {
         ua: req.get('user-agent'),
       });
       res.json({ success: true, data: employee });
+    } catch (error) { next(error); }
+  }
+
+  static async setPrimarySite(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const assignment = await GuardService.setPrimarySite(req.params.guardId, req.body.siteId, {
+        userId: req.user?.userId || '',
+        ip: req.ip,
+        ua: req.get('user-agent'),
+      });
+      res.json({ success: true, data: assignment });
     } catch (error) { next(error); }
   }
 }

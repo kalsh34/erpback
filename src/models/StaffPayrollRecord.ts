@@ -1,118 +1,100 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { PayrollRecordStatus } from '../types';
 
+/**
+ * STAFF PAYROLL RECORD — immutable snapshot of one employee's payroll for one
+ * run/period. Every input actually used is preserved (contract pay fields,
+ * overtime, bonus, deductions, statutory config), so finalized payroll never
+ * changes when the employee's contract or the statutory tables change later.
+ *
+ * FORMULA (company spreadsheet, frozen):
+ *   Gross    = Basic + Responsibility + Tele + NonTaxTransport + TaxTransport + OT
+ *   Taxable  = Basic + Responsibility + Tele + TaxTransport + OT        (no non-tax transport)
+ *   Pension  = Basic × 7% / 11%   (Basic ONLY; 0 when contract.pensionEnrolled = false)
+ *   Tax      = progressive staff table applied to Taxable
+ *   Deduct.  = Income Tax + Employee Pension + Penalty + Loan(s)
+ *   Net Pay  = Gross − Total Deduction
+ *   BONUS    = completely OUTSIDE the formula — never taxed, never pensionable,
+ *              never in gross or deductions. Final Amount Paid = Net Pay + Bonus.
+ */
 export interface IStaffPayrollRecord extends Document {
-  payrollPeriodId: mongoose.Types.ObjectId;
+  runId: mongoose.Types.ObjectId;
+  periodKey: string;
   employeeId: mongoose.Types.ObjectId;
-  formulaVersionId?: mongoose.Types.ObjectId;
-
-  basicSalary: number;
-  responsibilityAllowance: number;
-  teleAllowance: number;
-  taxableTransport: number;
-  nonTaxableTransport: number;
-  overtime: number;
-  regularOtHours: number;
-  holidayOtHours: number;
-  regularOtPay: number;
-  holidayOtPay: number;
-  bonus: number;
-  penalty: number;
-  grossSalary: number;
-
-  taxableSalary: number;
-  incomeTax: number;
+  snapshot: {
+    employeeCode: string;
+    fullName: string;
+    department?: string;
+    jobPosition?: string;
+    contractId: string;
+    contractType?: string;
+    // Pay inputs as of calculation time (ETB/month):
+    basic: number; // Contract.wage
+    responsibilityAllowance: number;
+    teleAllowance: number;
+    taxableTransport: number;
+    nonTaxableTransport: number; // Contract.nonTaxableAllowance
+    pensionEnrolled: boolean;
+  };
+  overtimeAmount: number;
+  bonusAmount: number;
+  grossEarnings: number;
+  taxableEarnings: number;
   employeePension: number;
   employerPension: number;
-  loanDeduction: number;
-  otherDeductions: number;
+  incomeTax: number;
+  deductions: { deductionId: mongoose.Types.ObjectId; type: string; label: string; amount: number }[];
   totalDeductions: number;
   netPay: number;
-
-  status: PayrollRecordStatus;
-
-  submittedBy?: mongoose.Types.ObjectId;
-  submittedAt?: Date;
-  calculatedBy?: mongoose.Types.ObjectId;
-  calculatedAt?: Date;
-  checkedBy?: mongoose.Types.ObjectId;
-  checkedAt?: Date;
-  approvedBy?: mongoose.Types.ObjectId;
-  approvedAt?: Date;
-  paidBy?: mongoose.Types.ObjectId;
-  paidAt?: Date;
-  returnedBy?: mongoose.Types.ObjectId;
-  returnedAt?: Date;
-  returnReason?: string;
-
-  paymentDate?: Date;
-  paymentMethod?: string;
-  bankReference?: string;
-
-  attendanceDataMissing: boolean;
-
+  bonus: number;
+  finalAmountPaid: number;
+  warnings: string[];
   createdAt: Date;
   updatedAt: Date;
 }
 
 const staffPayrollRecordSchema = new Schema<IStaffPayrollRecord>(
   {
-    payrollPeriodId: { type: Schema.Types.ObjectId, ref: 'PayrollPeriod', required: true },
+    runId: { type: Schema.Types.ObjectId, ref: 'StaffPayrollRun', required: true },
+    periodKey: { type: String, required: true, match: /^\d{4}-\d{2}$/ },
     employeeId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
-    formulaVersionId: { type: Schema.Types.ObjectId, ref: 'PayrollFormulaVersion' },
-
-    basicSalary: { type: Number, default: 0 },
-    responsibilityAllowance: { type: Number, default: 0 },
-    teleAllowance: { type: Number, default: 0 },
-    taxableTransport: { type: Number, default: 0 },
-    nonTaxableTransport: { type: Number, default: 0 },
-    overtime: { type: Number, default: 0 },
-    regularOtHours: { type: Number, default: 0 },
-    holidayOtHours: { type: Number, default: 0 },
-    regularOtPay: { type: Number, default: 0 },
-    holidayOtPay: { type: Number, default: 0 },
-    bonus: { type: Number, default: 0 },
-    penalty: { type: Number, default: 0 },
-    grossSalary: { type: Number, default: 0 },
-
-    taxableSalary: { type: Number, default: 0 },
-    incomeTax: { type: Number, default: 0 },
-    employeePension: { type: Number, default: 0 },
-    employerPension: { type: Number, default: 0 },
-    loanDeduction: { type: Number, default: 0 },
-    otherDeductions: { type: Number, default: 0 },
-    totalDeductions: { type: Number, default: 0 },
-    netPay: { type: Number, default: 0 },
-
-    status: { type: String, enum: Object.values(PayrollRecordStatus), default: PayrollRecordStatus.DRAFT },
-
-    submittedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    submittedAt: { type: Date },
-    calculatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    calculatedAt: { type: Date },
-    checkedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    checkedAt: { type: Date },
-    approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    approvedAt: { type: Date },
-    paidBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    paidAt: { type: Date },
-    returnedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-    returnedAt: { type: Date },
-    returnReason: { type: String },
-
-    paymentDate: { type: Date },
-    paymentMethod: { type: String },
-    bankReference: { type: String },
-
-    attendanceDataMissing: { type: Boolean, default: false },
+    snapshot: {
+      employeeCode: { type: String, required: true },
+      fullName: { type: String, required: true },
+      department: { type: String },
+      jobPosition: { type: String },
+      contractId: { type: String, required: true },
+      contractType: { type: String },
+      basic: { type: Number, required: true, min: 0 },
+      responsibilityAllowance: { type: Number, required: true, min: 0 },
+      teleAllowance: { type: Number, required: true, min: 0 },
+      taxableTransport: { type: Number, required: true, min: 0 },
+      nonTaxableTransport: { type: Number, required: true, min: 0 },
+      pensionEnrolled: { type: Boolean, required: true },
+    },
+    overtimeAmount: { type: Number, required: true, min: 0 },
+    bonusAmount: { type: Number, required: true, min: 0 },
+    grossEarnings: { type: Number, required: true },
+    taxableEarnings: { type: Number, required: true },
+    employeePension: { type: Number, required: true, min: 0 },
+    employerPension: { type: Number, required: true, min: 0 },
+    incomeTax: { type: Number, required: true, min: 0 },
+    deductions: [{
+      deductionId: { type: Schema.Types.ObjectId, ref: 'EmployeeDeduction', required: true },
+      type: { type: String, required: true },
+      label: { type: String, required: true },
+      amount: { type: Number, required: true },
+    }],
+    totalDeductions: { type: Number, required: true, min: 0 },
+    netPay: { type: Number, required: true },
+    bonus: { type: Number, required: true, min: 0 },
+    finalAmountPaid: { type: Number, required: true },
+    warnings: { type: [String], default: [] },
   },
   { timestamps: true }
 );
 
-staffPayrollRecordSchema.index({ payrollPeriodId: 1, employeeId: 1 }, { unique: true });
-staffPayrollRecordSchema.index({ status: 1 });
+staffPayrollRecordSchema.index({ runId: 1, employeeId: 1 }, { unique: true });
+staffPayrollRecordSchema.index({ employeeId: 1, periodKey: 1 });
 
-export const StaffPayrollRecord = mongoose.model<IStaffPayrollRecord>(
-  'StaffPayrollRecord',
-  staffPayrollRecordSchema
-);
+export const StaffPayrollRecord = mongoose.model<IStaffPayrollRecord>('StaffPayrollRecord', staffPayrollRecordSchema);

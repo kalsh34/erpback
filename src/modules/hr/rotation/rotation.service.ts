@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 import { Rotation, IRotation, IShiftDefinition, IRestRule } from '../../../models/Rotation';
 import { RotationAssignment } from '../../../models/RotationAssignment';
+import { PrimarySiteAssignment } from '../../../models/PrimarySiteAssignment';
 import { ShiftAssignment } from '../../../models/ShiftAssignment';
 import { ShiftTemplate } from '../../../models/ShiftTemplate';
-import { AttendanceRecord } from '../../../models/AttendanceRecord';
 import { Site } from '../../../models/Site';
 import { Employee } from '../../../models/Employee';
 import { ApiError } from '../../../common/ApiError';
@@ -155,7 +155,7 @@ function appendChange(rot: IRotation, action: string, userId: string, details?: 
 }
 
 export class RotationService {
-  // ── legacy formula helper (used by leave-cover suggestions + validation scripts) ──
+  // â”€â”€ legacy formula helper (used by leave-cover suggestions + validation scripts) â”€â”€
   static computeDayAssignments(rot: IRotation, date: Date): { guardId: mongoose.Types.ObjectId; shiftType: 'DAY' | 'NIGHT'; shiftTime: string }[] {
     const activeGuards = (rot.guardPool as any[])
       .filter((g: any) => g.status === 'ACTIVE')
@@ -188,7 +188,7 @@ export class RotationService {
     return assignments;
   }
 
-  // ── engine input loading ────────────────────────────────────────────────
+  // â”€â”€ engine input loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private static async loadGuardCtxs(rot: IRotation): Promise<GuardCtx[]> {
     const entries = (rot.guardPool as any[])
@@ -283,24 +283,6 @@ export class RotationService {
       });
     }
 
-    // Attendance clock-in/out as actual duties (only when both present)
-    const att = await AttendanceRecord.find({
-      guardId: { $in: poolIds },
-      date: { $gte: lookback, $lt: periodEnd },
-      clockIn: { $ne: null },
-      clockOut: { $ne: null },
-    }).lean();
-    for (const a of att as any[]) {
-      duties.push({
-        guardId: a.guardId.toString(),
-        start: new Date(a.clockIn),
-        end: new Date(a.clockOut),
-        siteId: a.siteId?.toString?.(),
-        label: 'Attendance',
-        source: 'ATTENDANCE',
-      });
-    }
-
     return duties;
   }
 
@@ -359,7 +341,7 @@ export class RotationService {
     }
   }
 
-  // ── CRUD ────────────────────────────────────────────────────────────────
+  // â”€â”€ CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static async create(data: {
     name: string;
@@ -512,7 +494,7 @@ export class RotationService {
     if ((wasApproved || wasReview) && changed.length > 0) {
       if (rotation.generation) rotation.generation.stale = true;
       rotation.status = 'DRAFT';
-      appendChange(rotation, 'EDIT_STALE', userId, `Edited (${changed.join(', ')}) — returned to DRAFT, regenerate required`);
+      appendChange(rotation, 'EDIT_STALE', userId, `Edited (${changed.join(', ')}) â€” returned to DRAFT, regenerate required`);
     } else if (changed.length > 0) {
       appendChange(rotation, 'EDIT', userId, `Updated ${changed.join(', ')}`);
     }
@@ -530,13 +512,42 @@ export class RotationService {
     eventBus.emit('hr.rotation.deleted', { rotationId: id });
   }
 
+  /**
+   * A guard may only serve in a site's rotation if they are currently assigned
+   * to that site. Enforced on every pool write and re-checked before each
+   * generation so assignments that ended later cannot keep working shifts.
+   */
+  private static async filterGuardsAssignedToSite(siteId: string, guardIds: string[]): Promise<string[]> {
+    if (guardIds.length === 0) return [];
+    const ids = [...new Set(guardIds)];
+    const assigned = await PrimarySiteAssignment.find({
+      guardId: { $in: ids.map((gid) => new mongoose.Types.ObjectId(gid)) },
+      siteId,
+      isCurrent: true,
+    }).select('guardId').lean();
+    const allowed = new Set(assigned.map((a: any) => a.guardId.toString()));
+    return ids.filter((gid) => allowed.has(gid));
+  }
+
   static async addGuards(id: string, guardIds: string[], userId: string, _auditCtx?: { ip?: string; ua?: string }) {
     const rotation = await Rotation.findById(id);
     if (!rotation) throw ApiError.notFound('Rotation not found');
     if (rotation.generation) rotation.generation.stale = true;
 
+    // Site-scoping: only guards currently assigned to the rotation's site may
+    // join the pool. Reject the whole batch atomically if any guard is not
+    // assigned — the UI only offers site-assigned guards, so a rejection means
+    // stale data and the user should refresh.
+    const allowed = await this.filterGuardsAssignedToSite(rotation.siteId.toString(), guardIds);
+    const rejected = guardIds.filter((gid) => !allowed.includes(gid));
+    if (rejected.length > 0) {
+      throw ApiError.conflict(
+        `${rejected.length} of ${guardIds.length} guard(s) are not assigned to this site — only guards appointed to the rotation's site can join the cycle. Refresh the guard list.`,
+      );
+    }
+
     let added = 0;
-    for (const gid of guardIds) {
+    for (const gid of allowed) {
       const exists = (rotation.guardPool as any[]).find((g: any) => g.guardId.toString() === gid);
       if (!exists) {
         (rotation.guardPool as any[]).push({
@@ -581,6 +592,11 @@ export class RotationService {
   static async addFloaters(id: string, guardIds: string[], _userId: string) {
     const rotation = await Rotation.findById(id);
     if (!rotation) throw ApiError.notFound('Rotation not found');
+    // Floaters cover leave at this site — they must belong to the site too.
+    const floaterAllowed = await this.filterGuardsAssignedToSite(rotation.siteId.toString(), guardIds);
+    if (floaterAllowed.length !== guardIds.length) {
+      throw ApiError.conflict('Floater guards must be assigned to the rotation\'s site');
+    }
     for (const gid of guardIds) {
       const exists = (rotation.floaterPool as any[]).find((g: any) => g.guardId.toString() === gid);
       if (!exists) {
@@ -600,7 +616,10 @@ export class RotationService {
   }
 
   static checkFairness(poolSize: number, slotCountPerDay: number) {
-    if (poolSize <= 0 || slotCountPerDay <= 0) return { isFair: true, cycleDays: 0 };
+    if (poolSize <= 0) {
+      return { isFair: false, message: slotCountPerDay > 0 ? `Need at least ${slotCountPerDay} guards` : 'Select guards first' };
+    }
+    if (slotCountPerDay <= 0) return { isFair: true, cycleDays: 0, dutyPercent: 0 };
     if (poolSize < slotCountPerDay) return { isFair: false, message: `Need at least ${slotCountPerDay} guards, have ${poolSize}` };
     const cycleDays = poolSize / gcd(poolSize, slotCountPerDay);
     const workDaysPerCycle = cycleDays * slotCountPerDay / poolSize;
@@ -612,7 +631,7 @@ export class RotationService {
     };
   }
 
-  // ── preview / generate / validate ──────────────────────────────────────
+  // â”€â”€ preview / generate / validate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static async preview(id: string, days?: number, startDate?: string) {
     const rot = await Rotation.findById(id).populate('siteId', 'siteName siteCode');
@@ -696,6 +715,23 @@ export class RotationService {
     if (!GENERATABLE_STATUSES.has(rot.status)) {
       throw ApiError.badRequest(`Cannot generate a ${rot.status} rotation (cancel or archive it first)`);
     }
+
+    // Site-scoping maintenance: guards whose site assignment has ended are
+    // pruned from the pool so they cannot keep working generated shifts.
+    const poolEntries = (rot.guardPool as any[]) || [];
+    if (poolEntries.length > 0) {
+      const poolIds = poolEntries.map((g: any) => g.guardId.toString());
+      const stillAllowed = new Set(await this.filterGuardsAssignedToSite(rot.siteId.toString(), poolIds));
+      const stale = poolEntries.filter((g: any) => !stillAllowed.has(g.guardId.toString()));
+      if (stale.length > 0) {
+        rot.guardPool = poolEntries
+          .filter((g: any) => stillAllowed.has(g.guardId.toString()))
+          .map((g: any, i: number) => ({ ...g, order: i })) as any[];
+        appendChange(rot, 'PRUNE_POOL', userId || '', `Removed ${stale.length} guard(s) no longer assigned to this site`);
+        await rot.save();
+      }
+    }
+
     if ((rot.guardPool as any[]).filter((g: any) => g.status === 'ACTIVE').length === 0) {
       throw ApiError.badRequest('No active guards in pool');
     }
@@ -837,7 +873,7 @@ export class RotationService {
     };
   }
 
-  // ── lifecycle ───────────────────────────────────────────────────────────
+  // â”€â”€ lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static async approve(id: string, userId: string, _auditCtx?: { ip?: string; ua?: string }) {
     const rot = await Rotation.findById(id);
@@ -869,7 +905,7 @@ export class RotationService {
     const shiftList = resolveShifts(rot);
     const templateIdByKey = new Map<string, mongoose.Types.ObjectId>();
     for (const s of shiftList) {
-      const preferredName = `${rot.name} — ${s.name}`;
+      const preferredName = `${rot.name} â€” ${s.name}`;
       let tmpl = await ShiftTemplate.findOne({ name: preferredName, siteId: rot.siteId });
       if (!tmpl) {
         // globally unique name: suffix on conflict
@@ -940,10 +976,29 @@ export class RotationService {
 
   static async getAssignments(id: string, startDate?: string, endDate?: string) {
     const filter: any = { rotationId: id };
+    // Dates are stored at local midnight. 'YYYY-MM-DD' parsed with new Date() is
+    // UTC midnight, which in UTC+ East timezones sits AFTER local midnight of the
+    // first duty day and silently drops those rows ($gte) / the last day ($lte).
+    const parseYmd = (s: string): Date | null => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s).trim());
+      if (!m) return null;
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
+    };
     if (startDate || endDate) {
       filter.date = {};
-      if (startDate) filter.date.$gte = new Date(startDate);
-      if (endDate) filter.date.$lte = new Date(endDate);
+      if (startDate) {
+        const s = parseYmd(startDate);
+        if (s) filter.date.$gte = s;
+      }
+      if (endDate) {
+        const e = parseYmd(endDate);
+        // inclusive end date â†’ exclusive next-day bound
+        if (e) {
+          e.setDate(e.getDate() + 1);
+          filter.date.$lt = e;
+        }
+      }
+      if (Object.keys(filter.date).length === 0) delete filter.date;
     }
     return RotationAssignment.find(filter)
       .populate('guardId', 'firstName lastName employeeCode')
@@ -1008,7 +1063,7 @@ export class RotationService {
     return rot;
   }
 
-  // ── same-day move / override ───────────────────────────────────────────
+  // â”€â”€ same-day move / override â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Move a cell's guard within the same day (reassign to a resting pool guard,
@@ -1133,7 +1188,7 @@ export class RotationService {
 
     // target must not already work this shift (swap) without freeing it
     if (targetWorking) {
-      // swap: target's current duty goes to fromGuard — check both directions lightly
+      // swap: target's current duty goes to fromGuard â€” check both directions lightly
       // (full check would re-run engine; we flag only clear overlaps/rest issues)
     }
 
@@ -1141,7 +1196,7 @@ export class RotationService {
     const targetDuties = dutiesFor(toGuardId, targetWorking?._id);
     for (const d of targetDuties) {
       if (startAt < d.end && d.start < endAt) {
-        violations.push(`Target guard already has duty ${d.start.toLocaleString('en-GB')} – ${d.end.toLocaleString('en-GB')}`);
+        violations.push(`Target guard already has duty ${d.start.toLocaleString('en-GB')} â€“ ${d.end.toLocaleString('en-GB')}`);
         break;
       }
     }
@@ -1155,7 +1210,7 @@ export class RotationService {
       const needH = 24; // default 12h-rule; refined per actual prior duration if known
       // use restRules from rotation
       const rules = resolveRestRules(rot);
-      // approximate prior duration as 12h when unknown — check with duration if we have interval
+      // approximate prior duration as 12h when unknown â€” check with duration if we have interval
       let prevStart: Date | null = null;
       for (const d of targetDuties) {
         if (d.end === prevEnd) { prevStart = d.start; break; }
@@ -1255,7 +1310,7 @@ export class RotationService {
     return this.generate(id, days, userId, _auditCtx);
   }
 
-  // ── leave coverage (legacy) ─────────────────────────────────────────────
+  // â”€â”€ leave coverage (legacy) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   static async suggestLeaveCoverA(id: string, guardId: string, date: Date) {
     const rot = await Rotation.findById(id);

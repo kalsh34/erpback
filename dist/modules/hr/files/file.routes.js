@@ -43,18 +43,34 @@ router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_CREATE, type
             return;
         }
         const { entityType, entityId, title, description } = req.body;
-        const attachment = await FileAttachment_1.FileAttachment.create({
+        const fileData = {
             filename: req.file.filename,
             originalName: req.file.originalname,
             mimeType: req.file.mimetype,
             size: req.file.size,
             path: `/uploads/${req.file.filename}`,
-            uploadedBy: req.user.userId,
-            entityType: entityType || 'employee',
-            entityId,
-            description: title || description,
-            tags: title ? [title] : [],
-        });
+            title: title || req.file.originalname,
+        };
+        // A file can be uploaded BEFORE the record it belongs to exists (e.g. the
+        // documents of a guarantor that is still being created). In that case we
+        // only store the file on disk and hand back its metadata, so the caller can
+        // keep the returned path in its own documents array. A FileAttachment row
+        // is persisted only when an entityId is supplied.
+        let attachment = null;
+        if (entityId) {
+            attachment = await FileAttachment_1.FileAttachment.create({
+                filename: fileData.filename,
+                originalName: fileData.originalName,
+                mimeType: fileData.mimeType,
+                size: fileData.size,
+                path: fileData.path,
+                uploadedBy: req.user.userId,
+                entityType: entityType || 'employee',
+                entityId,
+                description: title || description,
+                tags: title ? [title] : [],
+            });
+        }
         if (entityType === 'employee' && entityId) {
             await Employee_1.Employee.findByIdAndUpdate(entityId, {
                 $push: {
@@ -67,7 +83,10 @@ router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_CREATE, type
                 },
             });
         }
-        res.status(201).json({ success: true, data: { ...attachment.toJSON(), title: title || req.file.originalname } });
+        res.status(201).json({
+            success: true,
+            data: attachment ? { ...attachment.toJSON(), title: fileData.title } : fileData,
+        });
     }
     catch (err) {
         next(err);

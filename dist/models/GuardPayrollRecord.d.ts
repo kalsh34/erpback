@@ -1,5 +1,32 @@
 import mongoose, { Document } from 'mongoose';
 import { PayrollRecordStatus } from '../types';
+/**
+ * Per-site earnings breakdown for one guard in one payroll period.
+ * Preserves site identity end-to-end: hours and rates are never merged
+ * across sites, and each site is priced with its own rate.
+ */
+export interface IGuardSiteEarning {
+    siteId: mongoose.Types.ObjectId | null;
+    siteName?: string;
+    isPrimary: boolean;
+    normalHours: number;
+    holidayHours: number;
+    normalRate: number;
+    holidayRate: number;
+    normalEarnings: number;
+    holidayEarnings: number;
+    /** True when this is an additional site and no GuardSiteRate exists yet. */
+    rateMissing: boolean;
+}
+/** A manual payroll override with full audit trail (spec §21). */
+export interface IPayrollOverride {
+    field: 'grossPay' | 'netPay';
+    originalValue: number;
+    overrideValue: number;
+    reason: string;
+    by: mongoose.Types.ObjectId;
+    at: Date;
+}
 export interface IGuardPayrollRecord extends Document {
     payrollPeriodId: mongoose.Types.ObjectId;
     guardId: mongoose.Types.ObjectId;
@@ -22,6 +49,27 @@ export interface IGuardPayrollRecord extends Document {
     holidayOtPay: number;
     holidayPay: number;
     grossPay: number;
+    contractSalary: number;
+    expectedMonthlyHours: number;
+    primaryHourlyRate: number;
+    siteEarnings: IGuardSiteEarning[];
+    primaryEarnings: number;
+    additionalEarnings: number;
+    allowances: {
+        label: string;
+        amount: number;
+        taxable: boolean;
+    }[];
+    allowanceTotal: number;
+    nonTaxableAllowances: number;
+    grossEarnings: number;
+    rateMissing: boolean;
+    validationErrors: string[];
+    /** Input echo at calculation time — historical records stay reproducible. */
+    snapshot?: Record<string, unknown>;
+    calculatedGrossPay?: number;
+    calculatedNetPay?: number;
+    overrides: IPayrollOverride[];
     baseComponent: number;
     employeePension: number;
     employerPension: number;

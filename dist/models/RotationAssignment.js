@@ -40,8 +40,13 @@ const rotationAssignmentSchema = new mongoose_1.Schema({
     guardId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Employee', required: true },
     siteId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Site', required: true },
     date: { type: Date, required: true },
-    shiftType: { type: String, enum: ['DAY', 'NIGHT'], required: true },
+    // Not an enum: custom shift definitions use their own keys. Legacy data and
+    // standard rotations keep using 'DAY' / 'NIGHT'.
+    shiftType: { type: String, required: true },
+    shiftName: { type: String },
     shiftTime: { type: String, required: true },
+    startAt: { type: Date },
+    endAt: { type: Date },
     assignedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
     notes: { type: String },
 }, { timestamps: true });

@@ -7,11 +7,10 @@ const rbac_1 = require("../../../middleware/rbac");
 const types_1 = require("../../../types");
 const Site_1 = require("../../../models/Site");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
-const ShiftTemplate_1 = require("../../../models/ShiftTemplate");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
-const AttendanceRecord_1 = require("../../../models/AttendanceRecord");
 const SiteNote_1 = require("../../../models/SiteNote");
 const RotationAssignment_1 = require("../../../models/RotationAssignment");
+const Rotation_1 = require("../../../models/Rotation");
 const ApiError_1 = require("../../../common/ApiError");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
@@ -25,57 +24,42 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
         const site = await Site_1.Site.findById(req.params.id);
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
-        const [activeAssignments, currentAssignments, recentAttendance, recentNotes, rotationAssignments, shiftTemplates] = await Promise.all([
-            ShiftAssignment_1.ShiftAssignment.find({ siteId: req.params.id, status: 'ACTIVE' })
-                .populate('guardId', 'firstName lastName employeeCode status'),
-            PrimarySiteAssignment_1.PrimarySiteAssignment.find({ siteId: req.params.id, isCurrent: true })
-                .populate('guardId', 'firstName lastName employeeCode status'),
-            AttendanceRecord_1.AttendanceRecord.find({ siteId: req.params.id })
-                .populate('guardId', 'firstName lastName employeeCode')
-                .sort({ date: -1 })
-                .limit(50),
-            SiteNote_1.SiteNote.find({ siteId: req.params.id })
+        const siteId = req.params.id;
+        const isInactive = site.status === 'INACTIVE';
+        // Guards: current when active; full history (incl. past) when inactive
+        const primaryFilter = isInactive
+            ? { siteId }
+            : { siteId, isCurrent: true };
+        const [activeAssignments, primaryAssignments, recentNotes, rotationAssignments, rotations] = await Promise.all([
+            ShiftAssignment_1.ShiftAssignment.find({ siteId, status: isInactive ? { $in: ['ACTIVE', 'INACTIVE'] } : 'ACTIVE' })
+                .populate('guardId', 'firstName lastName employeeCode status')
+                .populate('shiftTemplateId', 'name startTime endTime color'),
+            PrimarySiteAssignment_1.PrimarySiteAssignment.find(primaryFilter)
+                .populate('guardId', 'firstName lastName employeeCode status')
+                .sort({ effectiveFrom: -1 }),
+            SiteNote_1.SiteNote.find({ siteId })
                 .populate('recordedById', 'firstName lastName')
                 .sort({ date: -1 })
                 .limit(20),
-            RotationAssignment_1.RotationAssignment.find({ siteId: req.params.id })
+            RotationAssignment_1.RotationAssignment.find({ siteId })
                 .populate('guardId', 'firstName lastName employeeCode')
                 .sort({ date: -1 })
-                .limit(60),
-            ShiftTemplate_1.ShiftTemplate.find({}).sort({ name: 1 }),
+                .limit(90),
+            Rotation_1.Rotation.find({ siteId }).select('name title status startDate endDate').sort({ createdAt: -1 }).limit(5),
         ]);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const todayAttendance = await AttendanceRecord_1.AttendanceRecord.find({
-            siteId: req.params.id,
-            date: { $gte: today, $lt: tomorrow },
-        }).populate('guardId', 'firstName lastName employeeCode');
-        const onDuty = todayAttendance.filter((a) => a.clockIn && !a.clockOut);
-        const clockedOut = todayAttendance.filter((a) => a.clockIn && a.clockOut);
+        // Split primary assignments for UI
+        const currentAssignments = isInactive ? [] : primaryAssignments.filter((a) => a.isCurrent);
+        const pastAssignments = primaryAssignments.filter((a) => !a.isCurrent);
         res.json({
             success: true,
             data: {
                 site,
-                shiftTemplates,
                 activeAssignments,
                 currentAssignments,
-                recentAttendance,
+                pastAssignments,
                 recentNotes,
                 rotationAssignments,
-                todaySummary: {
-                    onDuty: onDuty.length,
-                    clockedOut: clockedOut.length,
-                    totalFiled: todayAttendance.length,
-                    onDutyGuards: onDuty.map((a) => ({
-                        guardId: a.guardId?._id,
-                        name: `${a.guardId?.firstName} ${a.guardId?.lastName}`,
-                        code: a.guardId?.employeeCode,
-                        clockIn: a.clockIn,
-                        totalHours: a.totalHours,
-                    })),
-                },
+                rotations,
             },
         });
     }

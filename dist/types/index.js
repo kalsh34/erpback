@@ -3,7 +3,7 @@
 // Vital Security PLC — Payroll System — Shared Types
 // ============================================================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ROLE_PERMISSIONS = exports.PERMISSIONS = exports.PensionTaxBase = exports.LoanStatus = exports.PaymentMethod = exports.StaffAttendanceStatus = exports.RotationGuardStatus = exports.RotationStatus = exports.ShiftAssignmentSource = exports.AttendanceSource = exports.AttendanceStatus = exports.PayrollRecordStatus = exports.PayrollPeriodStatus = exports.SiteStatus = exports.SiteType = exports.EmploymentType = exports.GuardPosition = exports.Gender = exports.EmployeeStatus = exports.EmployeeCategory = exports.UserRole = void 0;
+exports.ROLE_PERMISSIONS = exports.PERMISSIONS = exports.PensionTaxBase = exports.LoanStatus = exports.PaymentMethod = exports.StaffAttendanceStatus = exports.RotationGuardStatus = exports.RotationLifecycle = exports.RotationStatus = exports.ShiftAssignmentSource = exports.GuardAttendanceStatus = exports.AttendanceSource = exports.PayrollRecordStatus = exports.PayrollPeriodStatus = exports.SiteStatus = exports.SiteType = exports.EmploymentType = exports.GuardPosition = exports.Gender = exports.EmployeeStatus = exports.EmployeeCategory = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["SUPER_ADMIN"] = "SUPER_ADMIN";
@@ -76,11 +76,6 @@ var PayrollRecordStatus;
     PayrollRecordStatus["RETURNED"] = "RETURNED";
     PayrollRecordStatus["CANCELLED"] = "CANCELLED";
 })(PayrollRecordStatus || (exports.PayrollRecordStatus = PayrollRecordStatus = {}));
-var AttendanceStatus;
-(function (AttendanceStatus) {
-    AttendanceStatus["CLOCKED_IN"] = "CLOCKED_IN";
-    AttendanceStatus["CLOCKED_OUT"] = "CLOCKED_OUT";
-})(AttendanceStatus || (exports.AttendanceStatus = AttendanceStatus = {}));
 var AttendanceSource;
 (function (AttendanceSource) {
     AttendanceSource["SYSTEM"] = "SYSTEM";
@@ -90,6 +85,12 @@ var AttendanceSource;
     AttendanceSource["MANUAL_ENTRY"] = "MANUAL_ENTRY";
     AttendanceSource["ROTATION"] = "ROTATION";
 })(AttendanceSource || (exports.AttendanceSource = AttendanceSource = {}));
+/** Lifecycle of a guard attendance row: VOID is a controlled correction, never a hard delete. */
+var GuardAttendanceStatus;
+(function (GuardAttendanceStatus) {
+    GuardAttendanceStatus["ACTIVE"] = "ACTIVE";
+    GuardAttendanceStatus["VOID"] = "VOID";
+})(GuardAttendanceStatus || (exports.GuardAttendanceStatus = GuardAttendanceStatus = {}));
 var ShiftAssignmentSource;
 (function (ShiftAssignmentSource) {
     ShiftAssignmentSource["MANUAL"] = "MANUAL";
@@ -102,6 +103,20 @@ var RotationStatus;
     RotationStatus["PAUSED"] = "PAUSED";
     RotationStatus["ARCHIVED"] = "ARCHIVED";
 })(RotationStatus || (exports.RotationStatus = RotationStatus = {}));
+// --- Guard Rotation & Scheduling lifecycle (constraint engine) ---
+var RotationLifecycle;
+(function (RotationLifecycle) {
+    RotationLifecycle["DRAFT"] = "DRAFT";
+    RotationLifecycle["GENERATING"] = "GENERATING";
+    RotationLifecycle["GENERATED"] = "GENERATED";
+    RotationLifecycle["REVIEW"] = "REVIEW";
+    RotationLifecycle["APPROVED"] = "APPROVED";
+    RotationLifecycle["PUBLISHED"] = "PUBLISHED";
+    RotationLifecycle["ACTIVE"] = "ACTIVE";
+    RotationLifecycle["COMPLETED"] = "COMPLETED";
+    RotationLifecycle["CANCELLED"] = "CANCELLED";
+    RotationLifecycle["ARCHIVED"] = "ARCHIVED";
+})(RotationLifecycle || (exports.RotationLifecycle = RotationLifecycle = {}));
 var RotationGuardStatus;
 (function (RotationGuardStatus) {
     RotationGuardStatus["ACTIVE"] = "ACTIVE";
@@ -151,10 +166,9 @@ exports.PERMISSIONS = {
     GUARD_REGISTER: 'guard.register',
     GUARD_ASSIGN_SITE: 'guard.assign-site',
     GUARD_MODIFY_HOURS: 'guard.modify-hours',
-    ATTENDANCE_READ: 'attendance.read',
-    ATTENDANCE_CLOCK: 'attendance.clock',
-    ATTENDANCE_MANAGE: 'attendance.manage',
-    ATTENDANCE_FILE: 'attendance.file',
+    GUARD_ATTENDANCE_READ: 'guard-attendance.read',
+    GUARD_ATTENDANCE_MANAGE: 'guard-attendance.manage',
+    GUARD_ATTENDANCE_FUTURE: 'guard-attendance.future',
     STAFF_ATTENDANCE_MANAGE: 'staff-attendance.manage',
     GUARD_PAYROLL_READ: 'guard-payroll.read',
     GUARD_PAYROLL_RATES: 'guard-payroll.rates',
@@ -178,6 +192,8 @@ exports.PERMISSIONS = {
     SETTINGS_UPDATE: 'settings.update',
     PAYROLL_PERIOD_READ: 'payroll-period.read',
     PAYROLL_CONFIG_MANAGE: 'payroll-config.manage',
+    ORGANIZATION_READ: 'organization.read',
+    ORGANIZATION_MANAGE: 'organization.manage',
     CANDIDATE_READ: 'candidate.read',
     CANDIDATE_MANAGE: 'candidate.manage',
     PERFORMANCE_READ: 'performance.read',
@@ -185,13 +201,16 @@ exports.PERMISSIONS = {
     ROTATION_READ: 'rotation.read',
     ROTATION_MANAGE: 'rotation.manage',
     ROTATION_GENERATE: 'rotation.generate',
+    ROTATION_APPROVE: 'rotation.approve',
+    ROTATION_PUBLISH: 'rotation.publish',
+    ROTATION_OVERRIDE: 'rotation.override',
 };
 // --- Role -> Permission Mapping ---
 // SUPER_ADMIN: can view everything, cannot modify
-// HR_ADMIN: register employees (staff + guards), manage attendance, view everything
+// HR_ADMIN: register employees (staff + guards), manage staff attendance, view everything
 // FINANCE_OFFICER: full access, payroll inputs + calculations
-// OPERATIONS: assign sites to guards, modify guard hours (fraud correction)
-// GUARD: clock in/out, view own hours
+// OPERATIONS: assign sites to guards, manage rotations
+// GUARD: view own site/payroll info
 exports.ROLE_PERMISSIONS = {
     [UserRole.SUPER_ADMIN]: [
         exports.PERMISSIONS.USER_READ,
@@ -207,10 +226,9 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.GUARD_REGISTER,
         exports.PERMISSIONS.GUARD_ASSIGN_SITE,
         exports.PERMISSIONS.GUARD_MODIFY_HOURS,
-        exports.PERMISSIONS.ATTENDANCE_READ,
-        exports.PERMISSIONS.ATTENDANCE_CLOCK,
-        exports.PERMISSIONS.ATTENDANCE_MANAGE,
-        exports.PERMISSIONS.ATTENDANCE_FILE,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_MANAGE,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_FUTURE,
         exports.PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_RATES,
@@ -234,6 +252,8 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.SETTINGS_UPDATE,
         exports.PERMISSIONS.PAYROLL_PERIOD_READ,
         exports.PERMISSIONS.PAYROLL_CONFIG_MANAGE,
+        exports.PERMISSIONS.ORGANIZATION_READ,
+        exports.PERMISSIONS.ORGANIZATION_MANAGE,
         exports.PERMISSIONS.CANDIDATE_READ,
         exports.PERMISSIONS.CANDIDATE_MANAGE,
         exports.PERMISSIONS.PERFORMANCE_READ,
@@ -241,6 +261,9 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.ROTATION_READ,
         exports.PERMISSIONS.ROTATION_MANAGE,
         exports.PERMISSIONS.ROTATION_GENERATE,
+        exports.PERMISSIONS.ROTATION_APPROVE,
+        exports.PERMISSIONS.ROTATION_PUBLISH,
+        exports.PERMISSIONS.ROTATION_OVERRIDE,
     ],
     [UserRole.SYSTEM_ADMIN]: [
         exports.PERMISSIONS.USER_CREATE,
@@ -252,6 +275,9 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.EMPLOYEE_DELETE,
         exports.PERMISSIONS.SETTINGS_READ,
         exports.PERMISSIONS.SETTINGS_UPDATE,
+        exports.PERMISSIONS.ORGANIZATION_READ,
+        exports.PERMISSIONS.ORGANIZATION_MANAGE,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
         exports.PERMISSIONS.AUDIT_READ,
     ],
     [UserRole.HR_ADMIN]: [
@@ -265,24 +291,32 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.SITE_UPDATE,
         exports.PERMISSIONS.GUARD_REGISTER,
         exports.PERMISSIONS.GUARD_ASSIGN_SITE,
-        exports.PERMISSIONS.ATTENDANCE_CLOCK,
-        exports.PERMISSIONS.ATTENDANCE_READ,
-        exports.PERMISSIONS.ATTENDANCE_MANAGE,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_MANAGE,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_FUTURE,
         exports.PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
         exports.PERMISSIONS.OFFICE_PAYROLL_CREATE,
         exports.PERMISSIONS.REPORT_READ,
         exports.PERMISSIONS.SETTINGS_READ,
+        exports.PERMISSIONS.ORGANIZATION_READ,
+        exports.PERMISSIONS.ORGANIZATION_MANAGE,
         exports.PERMISSIONS.CANDIDATE_READ,
         exports.PERMISSIONS.CANDIDATE_MANAGE,
         exports.PERMISSIONS.PERFORMANCE_READ,
         exports.PERMISSIONS.PERFORMANCE_MANAGE,
+        exports.PERMISSIONS.ROTATION_READ,
+        exports.PERMISSIONS.ROTATION_MANAGE,
+        exports.PERMISSIONS.ROTATION_GENERATE,
+        exports.PERMISSIONS.ROTATION_APPROVE,
+        exports.PERMISSIONS.ROTATION_PUBLISH,
+        exports.PERMISSIONS.ROTATION_OVERRIDE,
     ],
     [UserRole.FINANCE_OFFICER]: [
         exports.PERMISSIONS.USER_READ,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
-        exports.PERMISSIONS.ATTENDANCE_READ,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_RATES,
         exports.PERMISSIONS.GUARD_PAYROLL_CALCULATE,
@@ -310,8 +344,8 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.SITE_UPDATE,
         exports.PERMISSIONS.GUARD_ASSIGN_SITE,
         exports.PERMISSIONS.GUARD_MODIFY_HOURS,
-        exports.PERMISSIONS.ATTENDANCE_READ,
-        exports.PERMISSIONS.ATTENDANCE_FILE,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_MANAGE,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
         exports.PERMISSIONS.PAYROLL_PERIOD_READ,
         exports.PERMISSIONS.REPORT_READ,
@@ -319,9 +353,9 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.ROTATION_READ,
         exports.PERMISSIONS.ROTATION_MANAGE,
         exports.PERMISSIONS.ROTATION_GENERATE,
+        exports.PERMISSIONS.ROTATION_OVERRIDE,
     ],
     [UserRole.GUARD]: [
-        exports.PERMISSIONS.ATTENDANCE_CLOCK,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
@@ -330,7 +364,6 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.USER_READ,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
-        exports.PERMISSIONS.ATTENDANCE_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_APPROVE,
         exports.PERMISSIONS.GUARD_PAYROLL_RETURN,
@@ -339,14 +372,14 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.REPORT_READ,
         exports.PERMISSIONS.AUDIT_READ,
         exports.PERMISSIONS.SETTINGS_READ,
+        exports.PERMISSIONS.ROTATION_READ,
+        exports.PERMISSIONS.ROTATION_APPROVE,
     ],
     [UserRole.CEO]: [
         exports.PERMISSIONS.USER_READ,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
-        exports.PERMISSIONS.ATTENDANCE_READ,
-        exports.PERMISSIONS.ATTENDANCE_MANAGE,
-        exports.PERMISSIONS.ATTENDANCE_FILE,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
         exports.PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
         exports.PERMISSIONS.REPORT_READ,
@@ -356,6 +389,7 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.CANDIDATE_READ,
         exports.PERMISSIONS.PERFORMANCE_READ,
         exports.PERMISSIONS.ROTATION_READ,
+        exports.PERMISSIONS.ROTATION_APPROVE,
     ],
 };
 //# sourceMappingURL=index.js.map

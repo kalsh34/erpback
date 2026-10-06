@@ -43,7 +43,7 @@ const fileAttachmentSchema = new mongoose_1.Schema({
     path: { type: String, required: true },
     uploadedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
     entityType: { type: String, required: true, trim: true, lowercase: true },
-    entityId: { type: mongoose_1.Schema.Types.ObjectId, required: true },
+    entityId: { type: mongoose_1.Schema.Types.ObjectId, required: false, default: null },
     description: { type: String, trim: true },
     tags: [{ type: String, trim: true }],
 }, { timestamps: true });

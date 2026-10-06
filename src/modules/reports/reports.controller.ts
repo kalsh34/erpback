@@ -18,14 +18,13 @@ export class ReportsController {
 
   static async getPaymentHistory(req: Request, res: Response, next: NextFunction) {
     try {
-      const { startDate, endDate, page, limit } = req.query;
+      const { page, limit, guardId } = req.query;
       const result = await ReportsService.getPaymentHistory({
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
         page: parseInt(page as string) || 1,
         limit: parseInt(limit as string) || 20,
+        guardId: guardId as string | undefined,
       });
-      res.json({ success: true, ...result });
+      res.json({ success: true, data: result });
     } catch (error) { next(error); }
   }
 }

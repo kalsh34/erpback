@@ -9,6 +9,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/roles', UserController.getRoles);
+router.get('/module-access', UserController.getModuleAccess);
 router.get('/', authorize(PERMISSIONS.USER_READ), UserController.getAll);
 router.get('/:id', authorize(PERMISSIONS.USER_READ), UserController.getById);
 router.post('/', authorize(PERMISSIONS.USER_CREATE), UserController.create);

@@ -11,4 +11,15 @@ export const config = {
   // CORS_ORIGIN=https://my-frontend.onrender.com,http://localhost:3000
   // "*" (the default) allows any origin so deployments keep working out of the box.
   corsOrigin: process.env.CORS_ORIGIN || '*',
+  // Guard attendance limits.
+  //  - attendanceMaxDailyHours: HARD cap per calendar day across all sites (default 24).
+  //  - attendanceExpectedDailyHours: soft warning threshold only (never rejects).
+  attendanceMaxDailyHours: (() => {
+    const v = parseFloat(process.env.ATTENDANCE_MAX_DAILY_HOURS || '');
+    return Number.isFinite(v) && v > 0 ? v : 24;
+  })(),
+  attendanceExpectedDailyHours: (() => {
+    const v = parseFloat(process.env.ATTENDANCE_EXPECTED_DAILY_HOURS || '');
+    return Number.isFinite(v) && v > 0 ? v : 12;
+  })(),
 };

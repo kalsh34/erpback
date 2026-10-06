@@ -39,6 +39,7 @@ const primarySiteAssignmentSchema = new mongoose_1.Schema({
     guardId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Employee', required: true },
     siteId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Site', required: true },
     role: { type: String, enum: ['GUARD', 'SUPERVISOR'], default: 'GUARD' },
+    isPrimary: { type: Boolean, default: false },
     standardMonthlyHours: { type: Number, required: true },
     hourlyRate: { type: Number, required: true },
     transportAllowance: { type: Number, default: 0 },
@@ -47,6 +48,7 @@ const primarySiteAssignmentSchema = new mongoose_1.Schema({
     isCurrent: { type: Boolean, default: true },
 }, { timestamps: true });
 primarySiteAssignmentSchema.index({ guardId: 1, isCurrent: 1 });
+primarySiteAssignmentSchema.index({ guardId: 1, isPrimary: 1 });
 primarySiteAssignmentSchema.index({ siteId: 1 });
 exports.PrimarySiteAssignment = mongoose_1.default.model('PrimarySiteAssignment', primarySiteAssignmentSchema);
 //# sourceMappingURL=PrimarySiteAssignment.js.map

@@ -10,7 +10,7 @@ import { ApiError } from '../../../common/ApiError';
 const router = Router();
 router.use(authenticate);
 
-router.get('/templates', authorize(PERMISSIONS.ATTENDANCE_READ), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/templates', authorize(PERMISSIONS.SITE_READ), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const filter: any = { active: { $ne: false } };
     if (req.query.siteId) filter.siteId = req.query.siteId;
@@ -19,7 +19,7 @@ router.get('/templates', authorize(PERMISSIONS.ATTENDANCE_READ), async (req: Req
   } catch (error) { next(error); }
 });
 
-router.get('/templates/:id', authorize(PERMISSIONS.ATTENDANCE_READ), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/templates/:id', authorize(PERMISSIONS.SITE_READ), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const template = await ShiftTemplate.findById(req.params.id).populate('siteId', 'siteName siteCode');
     if (!template) throw ApiError.notFound('Shift template not found');
@@ -73,7 +73,7 @@ router.delete('/templates/:id', authorize(PERMISSIONS.SITE_UPDATE), async (req: 
   } catch (error) { next(error); }
 });
 
-router.get('/assignments', authorize(PERMISSIONS.ATTENDANCE_READ), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/assignments', authorize(PERMISSIONS.SITE_READ), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const filter: any = {};
     if (req.query.siteId) filter.siteId = req.query.siteId;

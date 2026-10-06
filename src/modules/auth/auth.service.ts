@@ -4,7 +4,8 @@ import { User, IUser } from '../../models/User';
 import { Employee } from '../../models/Employee';
 import { config } from '../../config/env';
 import { ApiError } from '../../common/ApiError';
-import { UserRole } from '../../types';
+import { UserRole, Permission } from '../../types';
+import { computeEffectivePermissions } from '../../middleware/rbac';
 
 interface LoginResult {
   user: Omit<IUser, 'password'>;
@@ -59,15 +60,21 @@ export class AuthService {
 
     const userObj = user.toObject();
     const { password: _, ...userWithoutPassword } = userObj as any;
-    return { user: userWithoutPassword as IUser, token };
+    return {
+      user: { ...userWithoutPassword, permissions: computeEffectivePermissions(user) } as unknown as IUser,
+      token,
+    };
   }
 
-  static async getMe(userId: string): Promise<IUser> {
+  static async getMe(userId: string): Promise<IUser & { permissions: Permission[] }> {
     const user = await User.findById(userId);
     if (!user) {
       throw ApiError.notFound('User not found');
     }
-    return user;
+    return {
+      ...(user.toObject() as unknown as IUser & { permissions: Permission[] }),
+      permissions: computeEffectivePermissions(user),
+    };
   }
 
   static async changePassword(

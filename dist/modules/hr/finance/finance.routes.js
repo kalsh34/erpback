@@ -14,5 +14,9 @@ router.put('/periods/:id/status', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETT
 router.put('/periods/:id/lock', (0, rbac_1.authorize)(types_1.PERMISSIONS.SETTINGS_UPDATE), finance_controller_1.FinanceController.lockPeriod);
 router.put('/rates/:periodId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_RATES), finance_controller_1.FinanceController.setRates);
 router.get('/rates/:periodId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_READ), finance_controller_1.FinanceController.getRates);
+// Per Guard + Site + Period rates for additional-site earnings (spec §3)
+router.get('/site-rates/:periodId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_READ), finance_controller_1.FinanceController.getSiteRates);
+router.put('/site-rates/:periodId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_RATES), finance_controller_1.FinanceController.upsertSiteRates);
+router.delete('/site-rates/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_RATES), finance_controller_1.FinanceController.deleteSiteRate);
 exports.default = router;
 //# sourceMappingURL=finance.routes.js.map

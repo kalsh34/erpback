@@ -7,7 +7,7 @@ export interface IFileAttachment extends Document {
     path: string;
     uploadedBy: mongoose.Types.ObjectId;
     entityType: string;
-    entityId: mongoose.Types.ObjectId;
+    entityId?: mongoose.Types.ObjectId | null;
     description?: string;
     tags: string[];
     createdAt: Date;

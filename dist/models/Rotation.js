@@ -53,20 +53,74 @@ const leaveCoverageSchema = new mongoose_1.Schema({
     appliedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
     appliedAt: { type: Date, default: Date.now },
 }, { _id: false });
+const shiftDefinitionSchema = new mongoose_1.Schema({
+    key: { type: String, required: true },
+    name: { type: String, required: true },
+    startTime: { type: String, required: true },
+    endTime: { type: String, required: true },
+    requiredCount: { type: Number, required: true, min: 0 },
+}, { _id: false });
+const restRuleSchema = new mongoose_1.Schema({
+    maxShiftHours: { type: Number, required: true, min: 1 },
+    minRestHours: { type: Number, required: true, min: 0 },
+}, { _id: false });
+const changeLogSchema = new mongoose_1.Schema({
+    at: { type: Date, default: Date.now },
+    by: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
+    action: { type: String, required: true },
+    details: { type: String },
+}, { _id: false });
+const ROTATION_STATUSES = [
+    'DRAFT', 'GENERATING', 'GENERATED', 'REVIEW', 'APPROVED',
+    'PUBLISHED', 'ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED', 'ARCHIVED',
+];
 const rotationSchema = new mongoose_1.Schema({
     name: { type: String, required: true },
     description: { type: String },
     siteId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Site', required: true },
     guardPool: [rotationGuardSchema],
     floaterPool: [rotationFloaterSchema],
-    dayShiftCount: { type: Number, required: true, min: 1 },
-    nightShiftCount: { type: Number, required: true, min: 1 },
+    shiftMode: { type: String, enum: ['STANDARD_12H', 'SINGLE_24H', 'CUSTOM'], default: 'STANDARD_12H' },
+    shiftDefinitions: { type: [shiftDefinitionSchema], default: [] },
+    // Legacy fields kept for backward compatibility. Counts may be 0 (e.g. 24-hour
+    // single-shift mode has nightShiftCount = 0). New rotations persist explicit
+    // shiftDefinitions; resolveShifts() synthesizes definitions for old documents.
+    dayShiftCount: { type: Number, required: true, min: 0, default: 1 },
+    nightShiftCount: { type: Number, min: 0, default: 1 },
     dayStartTime: { type: String, required: true, default: '06:00' },
-    nightEndTime: { type: String, required: true, default: '18:00' },
+    dayEndTime: { type: String, default: '18:00' },
+    nightStartTime: { type: String, default: '18:00' },
+    // NOTE: legacy documents stored the night START under this name ('18:00').
+    // New documents store the real night end ('06:00'). resolveShifts() detects
+    // legacy documents by the absence of nightStartTime and handles both.
+    nightEndTime: { type: String, default: '06:00' },
+    restRules: {
+        type: [restRuleSchema],
+        default: () => [
+            { maxShiftHours: 12, minRestHours: 24 },
+            { maxShiftHours: 24, minRestHours: 48 },
+        ],
+    },
     startDate: { type: Date, required: true },
     endDate: { type: Date },
-    status: { type: String, enum: ['DRAFT', 'ACTIVE', 'PAUSED', 'ARCHIVED'], default: 'DRAFT' },
+    status: { type: String, enum: ROTATION_STATUSES, default: 'DRAFT' },
     lastGeneratedDate: { type: Date },
+    generation: {
+        type: new mongoose_1.Schema({
+            generatedAt: Date,
+            generatedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
+            days: Number,
+            algorithmVersion: String,
+            rulesFingerprint: String,
+            conflictCount: Number,
+            feasibility: { type: String, enum: ['FULLY_COMPLIANT', 'BEST_POSSIBLE'] },
+            stale: { type: Boolean, default: false },
+            stats: mongoose_1.Schema.Types.Mixed,
+            conflicts: mongoose_1.Schema.Types.Mixed,
+        }, { _id: false }),
+        default: undefined,
+    },
+    changeLog: { type: [changeLogSchema], default: [] },
     leaveCoverages: [leaveCoverageSchema],
     createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });

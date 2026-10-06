@@ -4,6 +4,9 @@ export interface IPrimarySiteAssignment extends Document {
   guardId: mongoose.Types.ObjectId;
   siteId: mongoose.Types.ObjectId;
   role: 'GUARD' | 'SUPERVISOR';
+  /** Explicit primary-site flag — never inferred from array order. Exactly one
+   *  current assignment per guard carries true (kept in sync with homeSiteId). */
+  isPrimary: boolean;
   standardMonthlyHours: number;
   hourlyRate: number;
   transportAllowance: number;
@@ -19,6 +22,7 @@ const primarySiteAssignmentSchema = new Schema<IPrimarySiteAssignment>(
     guardId: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
     siteId: { type: Schema.Types.ObjectId, ref: 'Site', required: true },
     role: { type: String, enum: ['GUARD', 'SUPERVISOR'], default: 'GUARD' },
+    isPrimary: { type: Boolean, default: false },
     standardMonthlyHours: { type: Number, required: true },
     hourlyRate: { type: Number, required: true },
     transportAllowance: { type: Number, default: 0 },
@@ -30,6 +34,7 @@ const primarySiteAssignmentSchema = new Schema<IPrimarySiteAssignment>(
 );
 
 primarySiteAssignmentSchema.index({ guardId: 1, isCurrent: 1 });
+primarySiteAssignmentSchema.index({ guardId: 1, isPrimary: 1 });
 primarySiteAssignmentSchema.index({ siteId: 1 });
 
 export const PrimarySiteAssignment = mongoose.model<IPrimarySiteAssignment>(

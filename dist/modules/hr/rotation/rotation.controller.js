@@ -2,6 +2,18 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RotationController = void 0;
 const rotation_service_1 = require("./rotation.service");
+function errPayload(error) {
+    const status = error?.statusCode || 500;
+    const body = {
+        success: false,
+        message: error?.message || 'Internal server error',
+    };
+    if (error?.violations)
+        body.violations = error.violations;
+    if (error?.data)
+        body.data = error.data;
+    return { status, body };
+}
 class RotationController {
     static async create(req, res, next) {
         try {
@@ -106,8 +118,9 @@ class RotationController {
     }
     static async preview(req, res, next) {
         try {
-            const days = parseInt(req.query.days) || 14;
-            const result = await rotation_service_1.RotationService.preview(req.params.id, days);
+            const days = parseInt(req.query.days) || undefined;
+            const startDate = req.query.startDate;
+            const result = await rotation_service_1.RotationService.preview(req.params.id, days, startDate);
             res.json({ success: true, data: result });
         }
         catch (error) {
@@ -116,8 +129,57 @@ class RotationController {
     }
     static async generate(req, res, next) {
         try {
-            const days = parseInt(req.body.days) || 14;
-            const result = await rotation_service_1.RotationService.generate(req.params.id, days, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            const days = parseInt(req.body.days) || undefined;
+            const result = await rotation_service_1.RotationService.generate(req.params.id, days, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') }, req.body.startDate);
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async validate(req, res, next) {
+        try {
+            const days = parseInt((req.body.days || req.query.days)) || undefined;
+            const startDate = (req.body.startDate || req.query.startDate);
+            const result = await rotation_service_1.RotationService.validate(req.params.id, days, startDate);
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async getStats(req, res, next) {
+        try {
+            const days = parseInt(req.query.days) || undefined;
+            const startDate = req.query.startDate;
+            const result = await rotation_service_1.RotationService.getStats(req.params.id, days, startDate);
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async getConflicts(req, res, next) {
+        try {
+            const result = await rotation_service_1.RotationService.getConflicts(req.params.id);
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async approve(req, res, next) {
+        try {
+            const result = await rotation_service_1.RotationService.approve(req.params.id, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async publish(req, res, next) {
+        try {
+            const result = await rotation_service_1.RotationService.publish(req.params.id, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
             res.json({ success: true, data: result });
         }
         catch (error) {
@@ -155,6 +217,76 @@ class RotationController {
     static async archive(req, res, next) {
         try {
             const result = await rotation_service_1.RotationService.archive(req.params.id, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async complete(req, res, next) {
+        try {
+            const result = await rotation_service_1.RotationService.complete(req.params.id, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async cancel(req, res, next) {
+        try {
+            const result = await rotation_service_1.RotationService.cancel(req.params.id, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async move(req, res, next) {
+        try {
+            const result = await rotation_service_1.RotationService.move(req.params.id, req.body, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            const e = error;
+            if (e?.statusCode === 409 && e?.violations) {
+                res.status(409).json({ success: false, message: e.message, violations: e.violations });
+                return;
+            }
+            next(error);
+        }
+    }
+    static async moveOverride(req, res, next) {
+        try {
+            const result = await rotation_service_1.RotationService.move(req.params.id, { ...req.body, override: true }, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            const e = error;
+            if (e?.statusCode === 409 && e?.violations) {
+                res.status(409).json({ success: false, message: e.message, violations: e.violations });
+                return;
+            }
+            next(error);
+        }
+    }
+    static async rotate(req, res, next) {
+        try {
+            const result = await rotation_service_1.RotationService.rotate(req.params.id, req.body || {}, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
+            res.json({ success: true, data: result });
+        }
+        catch (error) {
+            const e = error;
+            if (e?.statusCode === 409 && e?.violations) {
+                res.status(409).json({ success: false, message: e.message, violations: e.violations });
+                return;
+            }
+            next(error);
+        }
+    }
+    static async recalculate(req, res, next) {
+        try {
+            const days = parseInt(req.body.days) || undefined;
+            const result = await rotation_service_1.RotationService.recalculate(req.params.id, days, req.user?.userId || '', { ip: req.ip, ua: req.get('user-agent') });
             res.json({ success: true, data: result });
         }
         catch (error) {

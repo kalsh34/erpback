@@ -13,6 +13,7 @@ export declare class GuardController {
     static updateGuard(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static updatePayRate(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static setHomeSite(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
+    static setPrimarySite(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
 }
 export {};
 //# sourceMappingURL=guard.controller.d.ts.map

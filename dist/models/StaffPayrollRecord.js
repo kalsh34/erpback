@@ -79,6 +79,23 @@ const staffPayrollRecordSchema = new mongoose_1.Schema({
     paymentMethod: { type: String },
     bankReference: { type: String },
     attendanceDataMissing: { type: Boolean, default: false },
+    expectedPayableDays: { type: Number, default: 0 },
+    actualPayableDays: { type: Number, default: 0 },
+    calculatedGrossSalary: { type: Number },
+    calculatedNetPay: { type: Number },
+    overrides: {
+        type: [
+            {
+                field: { type: String, enum: ['grossSalary', 'netPay'], required: true },
+                originalValue: { type: Number, required: true },
+                overrideValue: { type: Number, required: true },
+                reason: { type: String, required: true },
+                by: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+                at: { type: Date, required: true },
+            },
+        ],
+        default: [],
+    },
 }, { timestamps: true });
 staffPayrollRecordSchema.index({ payrollPeriodId: 1, employeeId: 1 }, { unique: true });
 staffPayrollRecordSchema.index({ status: 1 });

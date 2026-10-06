@@ -42,31 +42,4 @@ export class StaffAttendanceController {
       res.json({ success: true, data: result });
     } catch (error) { next(error); }
   }
-
-  static async getAllPeriods(req: Request, res: Response, next: NextFunction) {
-    try {
-      const periods = await StaffAttendanceService.getAllPeriods();
-      res.json({ success: true, data: periods });
-    } catch (error) { next(error); }
-  }
-
-  static async lockPeriod(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    try {
-      const { year, month, reason } = req.body;
-      const period = await StaffAttendanceService.lockPeriod(year, month, req.user?.userId || '', reason, {
-        ip: req.ip, ua: req.get('user-agent'),
-      });
-      res.json({ success: true, data: period });
-    } catch (error) { next(error); }
-  }
-
-  static async unlockPeriod(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    try {
-      const { year, month, reason } = req.body;
-      const period = await StaffAttendanceService.unlockPeriod(year, month, req.user?.userId || '', reason, {
-        ip: req.ip, ua: req.get('user-agent'),
-      });
-      res.json({ success: true, data: period });
-    } catch (error) { next(error); }
-  }
 }

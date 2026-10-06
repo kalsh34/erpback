@@ -108,6 +108,19 @@ class GuardController {
             next(error);
         }
     }
+    static async setPrimarySite(req, res, next) {
+        try {
+            const assignment = await guard_service_1.GuardService.setPrimarySite(req.params.guardId, req.body.siteId, {
+                userId: req.user?.userId || '',
+                ip: req.ip,
+                ua: req.get('user-agent'),
+            });
+            res.json({ success: true, data: assignment });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
 }
 exports.GuardController = GuardController;
 //# sourceMappingURL=guard.controller.js.map
