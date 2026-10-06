@@ -27,6 +27,8 @@ router.post('/compensations', authorize(RATES), GuardPayrollController.createCom
 router.delete('/compensations/:id', authorize(RATES), GuardPayrollController.deleteCompensation);
 
 // Runs: calculate, lifecycle, history.
+router.get('/', authorize(READ), GuardPayrollController.list);
+router.post('/generate/:periodKey', authorize(CALCULATE), GuardPayrollController.createRun);
 router.post('/runs', authorize(CALCULATE), GuardPayrollController.createRun);
 router.get('/runs', authorize(READ), GuardPayrollController.listRuns);
 router.get('/runs/:id', authorize(READ), GuardPayrollController.getRun);
@@ -37,7 +39,12 @@ router.post('/runs/:id/approve', authorize(APPROVE), GuardPayrollController.appr
 router.post('/runs/:id/return', authorize(RETURN), GuardPayrollController.returnRun);
 router.post('/runs/:id/pay', authorize(PAY), GuardPayrollController.payRun);
 
+router.get('/runs/:id/export/bank', authorize(READ), GuardPayrollController.exportBank);
+router.get('/runs/:id/export/tax', authorize(READ), GuardPayrollController.exportTax);
+router.get('/runs/:id/export/pension', authorize(READ), GuardPayrollController.exportPension);
+
 router.get('/records/:id', authorize(READ), GuardPayrollController.getRecord);
+router.get('/records/:id/payslip', authorize(READ), GuardPayrollController.getPayslip);
 router.get('/my', authorize(READ), GuardPayrollController.myPayroll);
 
 // Attendance lock state for the attendance pages (read-level so Operations can see it).

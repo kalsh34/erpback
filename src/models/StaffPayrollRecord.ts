@@ -35,6 +35,8 @@ export interface IStaffPayrollRecord extends Document {
     taxableTransport: number;
     nonTaxableTransport: number; // Contract.nonTaxableAllowance
     pensionEnrolled: boolean;
+    bankName?: string;
+    accountNumber?: string;
   };
   overtimeAmount: number;
   bonusAmount: number;
@@ -71,6 +73,8 @@ const staffPayrollRecordSchema = new Schema<IStaffPayrollRecord>(
       taxableTransport: { type: Number, required: true, min: 0 },
       nonTaxableTransport: { type: Number, required: true, min: 0 },
       pensionEnrolled: { type: Boolean, required: true },
+      bankName: { type: String },
+      accountNumber: { type: String },
     },
     overtimeAmount: { type: Number, required: true, min: 0 },
     bonusAmount: { type: Number, required: true, min: 0 },

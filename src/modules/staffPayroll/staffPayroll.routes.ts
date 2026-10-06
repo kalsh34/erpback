@@ -20,6 +20,8 @@ const RATES = PERMISSIONS.OFFICE_PAYROLL_RATES;
 router.get('/status', authorize(READ), StaffPayrollController.status);
 
 // Runs: calculate, lifecycle, history.
+router.get('/', authorize(READ), StaffPayrollController.list);
+router.post('/generate/:periodKey', authorize(CALCULATE), StaffPayrollController.createRun);
 router.post('/runs', authorize(CALCULATE), StaffPayrollController.createRun);
 router.get('/runs', authorize(READ), StaffPayrollController.listRuns);
 router.get('/runs/:id', authorize(READ), StaffPayrollController.getRun);
@@ -30,7 +32,12 @@ router.post('/runs/:id/approve', authorize(APPROVE), StaffPayrollController.appr
 router.post('/runs/:id/return', authorize(RETURN), StaffPayrollController.returnRun);
 router.post('/runs/:id/pay', authorize(PAY), StaffPayrollController.payRun);
 
+router.get('/runs/:id/export/bank', authorize(READ), StaffPayrollController.exportBank);
+router.get('/runs/:id/export/tax', authorize(READ), StaffPayrollController.exportTax);
+router.get('/runs/:id/export/pension', authorize(READ), StaffPayrollController.exportPension);
+
 router.get('/records/:id', authorize(READ), StaffPayrollController.getRecord);
+router.get('/records/:id/payslip', authorize(READ), StaffPayrollController.getPayslip);
 
 // Overtime (enters Gross and Taxable earnings) and bonus (outside the formula).
 router.get('/overtime', authorize(READ), StaffPayrollController.listOvertime);
