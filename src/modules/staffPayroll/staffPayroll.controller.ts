@@ -32,7 +32,9 @@ export class StaffPayrollController {
       const { periodKey, payrollPeriodId, runId } = req.query;
       let run: any = null;
       if (runId) {
-        run = await StaffPayrollRun.findById(runId);
+        if (mongoose.Types.ObjectId.isValid(runId as string)) {
+          run = await StaffPayrollRun.findById(runId);
+        }
       } else if (periodKey) {
         run = await StaffPayrollRun.findOne({ periodKey: periodKey as string });
       } else if (payrollPeriodId) {

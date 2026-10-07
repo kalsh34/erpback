@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { StaffPayrollRun, IStaffPayrollRun } from '../../models/StaffPayrollRun';
 import { StaffPayrollRecord } from '../../models/StaffPayrollRecord';
 import { Employee } from '../../models/Employee';
@@ -260,6 +261,9 @@ export class StaffPayrollRunService {
   }
 
   static async getRecord(recordId: string) {
+    if (!recordId || !mongoose.Types.ObjectId.isValid(recordId)) {
+      throw ApiError.badRequest(`Invalid record ID: "${recordId}"`);
+    }
     const record = await StaffPayrollRecord.findById(recordId);
     if (!record) throw ApiError.notFound('Staff payroll record not found');
     return record;
@@ -270,6 +274,9 @@ export class StaffPayrollRunService {
   // ───────────────────────────────────────────────────────────────────
 
   private static async loadRun(runId: string): Promise<IStaffPayrollRun> {
+    if (!runId || !mongoose.Types.ObjectId.isValid(runId)) {
+      throw ApiError.badRequest(`Invalid run ID: "${runId}"`);
+    }
     const run = await StaffPayrollRun.findById(runId);
     if (!run) throw ApiError.notFound('Staff payroll run not found');
     return run;

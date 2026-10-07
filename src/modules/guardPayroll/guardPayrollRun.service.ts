@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { GuardPayrollRun, IGuardPayrollRun } from '../../models/GuardPayrollRun';
 import { GuardPayrollRecord } from '../../models/GuardPayrollRecord';
 import { Employee } from '../../models/Employee';
@@ -342,6 +343,9 @@ export class GuardPayrollRunService {
   }
 
   static async getRecord(recordId: string) {
+    if (!recordId || !mongoose.Types.ObjectId.isValid(recordId)) {
+      throw ApiError.badRequest(`Invalid record ID: "${recordId}"`);
+    }
     const record = await GuardPayrollRecord.findById(recordId)
       .populate('primarySite.siteId', 'siteName siteCode')
       .populate('additionalSites.siteId', 'siteName siteCode');
@@ -369,6 +373,9 @@ export class GuardPayrollRunService {
   // ───────────────────────────────────────────────────────────────────
 
   private static async loadRun(runId: string): Promise<IGuardPayrollRun> {
+    if (!runId || !mongoose.Types.ObjectId.isValid(runId)) {
+      throw ApiError.badRequest(`Invalid run ID: "${runId}"`);
+    }
     const run = await GuardPayrollRun.findById(runId);
     if (!run) throw ApiError.notFound('Guard payroll run not found');
     return run;

@@ -73,7 +73,9 @@ export class GuardPayrollController {
       const { periodKey, payrollPeriodId, runId } = req.query;
       let run: any = null;
       if (runId) {
-        run = await GuardPayrollRun.findById(runId);
+        if (mongoose.Types.ObjectId.isValid(runId as string)) {
+          run = await GuardPayrollRun.findById(runId);
+        }
       } else if (periodKey) {
         run = await GuardPayrollRun.findOne({ periodKey: periodKey as string });
       } else if (payrollPeriodId) {
