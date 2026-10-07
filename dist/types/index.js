@@ -3,7 +3,7 @@
 // Vital Security PLC — Payroll System — Shared Types
 // ============================================================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ROLE_PERMISSIONS = exports.PERMISSIONS = exports.PensionTaxBase = exports.LoanStatus = exports.PaymentMethod = exports.StaffAttendanceStatus = exports.RotationGuardStatus = exports.RotationLifecycle = exports.RotationStatus = exports.ShiftAssignmentSource = exports.GuardAttendanceStatus = exports.AttendanceSource = exports.PayrollRecordStatus = exports.PayrollPeriodStatus = exports.SiteStatus = exports.SiteType = exports.EmploymentType = exports.GuardPosition = exports.Gender = exports.EmployeeStatus = exports.EmployeeCategory = exports.UserRole = void 0;
+exports.ROLE_PERMISSIONS = exports.MODULE_ACCESS_KEYS = exports.MODULE_ACCESS = exports.PERMISSIONS = exports.PensionTaxBase = exports.DeductionStatus = exports.EmployeeDeductionType = exports.PaymentMethod = exports.StaffAttendanceStatus = exports.RotationGuardStatus = exports.RotationLifecycle = exports.RotationStatus = exports.ShiftAssignmentSource = exports.GuardAttendanceStatus = exports.AttendanceSource = exports.PayrollRecordStatus = exports.CompanyStatus = exports.SiteStatus = exports.SiteType = exports.EmploymentType = exports.GuardPosition = exports.Gender = exports.EmployeeStatus = exports.EmployeeCategory = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["SUPER_ADMIN"] = "SUPER_ADMIN";
@@ -57,13 +57,11 @@ var SiteStatus;
     SiteStatus["INACTIVE"] = "INACTIVE";
     SiteStatus["SUSPENDED"] = "SUSPENDED";
 })(SiteStatus || (exports.SiteStatus = SiteStatus = {}));
-var PayrollPeriodStatus;
-(function (PayrollPeriodStatus) {
-    PayrollPeriodStatus["DRAFT"] = "DRAFT";
-    PayrollPeriodStatus["OPEN"] = "OPEN";
-    PayrollPeriodStatus["CLOSED"] = "CLOSED";
-    PayrollPeriodStatus["LOCKED"] = "LOCKED";
-})(PayrollPeriodStatus || (exports.PayrollPeriodStatus = PayrollPeriodStatus = {}));
+var CompanyStatus;
+(function (CompanyStatus) {
+    CompanyStatus["ACTIVE"] = "ACTIVE";
+    CompanyStatus["INACTIVE"] = "INACTIVE";
+})(CompanyStatus || (exports.CompanyStatus = CompanyStatus = {}));
 var PayrollRecordStatus;
 (function (PayrollRecordStatus) {
     PayrollRecordStatus["DRAFT"] = "DRAFT";
@@ -139,12 +137,19 @@ var PaymentMethod;
     PaymentMethod["BANK_TRANSFER"] = "BANK_TRANSFER";
     PaymentMethod["CASH"] = "CASH";
 })(PaymentMethod || (exports.PaymentMethod = PaymentMethod = {}));
-var LoanStatus;
-(function (LoanStatus) {
-    LoanStatus["ACTIVE"] = "ACTIVE";
-    LoanStatus["PAID_OFF"] = "PAID_OFF";
-    LoanStatus["WRITTEN_OFF"] = "WRITTEN_OFF";
-})(LoanStatus || (exports.LoanStatus = LoanStatus = {}));
+var EmployeeDeductionType;
+(function (EmployeeDeductionType) {
+    EmployeeDeductionType["LOAN"] = "LOAN";
+    EmployeeDeductionType["ADVANCE"] = "ADVANCE";
+    EmployeeDeductionType["PENALTY"] = "PENALTY";
+    EmployeeDeductionType["OTHER"] = "OTHER";
+})(EmployeeDeductionType || (exports.EmployeeDeductionType = EmployeeDeductionType = {}));
+var DeductionStatus;
+(function (DeductionStatus) {
+    DeductionStatus["ACTIVE"] = "ACTIVE";
+    DeductionStatus["COMPLETED"] = "COMPLETED";
+    DeductionStatus["CANCELLED"] = "CANCELLED";
+})(DeductionStatus || (exports.DeductionStatus = DeductionStatus = {}));
 var PensionTaxBase;
 (function (PensionTaxBase) {
     PensionTaxBase["NORMAL_SALARY_ONLY"] = "NORMAL_SALARY_ONLY";
@@ -163,12 +168,16 @@ exports.PERMISSIONS = {
     SITE_CREATE: 'site.create',
     SITE_READ: 'site.read',
     SITE_UPDATE: 'site.update',
+    COMPANY_CREATE: 'company.create',
+    COMPANY_READ: 'company.read',
+    COMPANY_UPDATE: 'company.update',
     GUARD_REGISTER: 'guard.register',
     GUARD_ASSIGN_SITE: 'guard.assign-site',
     GUARD_MODIFY_HOURS: 'guard.modify-hours',
     GUARD_ATTENDANCE_READ: 'guard-attendance.read',
     GUARD_ATTENDANCE_MANAGE: 'guard-attendance.manage',
     GUARD_ATTENDANCE_FUTURE: 'guard-attendance.future',
+    GUARD_ATTENDANCE_SELF: 'guard-attendance.self',
     STAFF_ATTENDANCE_MANAGE: 'staff-attendance.manage',
     GUARD_PAYROLL_READ: 'guard-payroll.read',
     GUARD_PAYROLL_RATES: 'guard-payroll.rates',
@@ -177,6 +186,7 @@ exports.PERMISSIONS = {
     GUARD_PAYROLL_APPROVE: 'guard-payroll.approve',
     GUARD_PAYROLL_PAY: 'guard-payroll.pay',
     GUARD_PAYROLL_RETURN: 'guard-payroll.return',
+    OFFICE_PAYROLL_READ: 'office-payroll.read',
     OFFICE_PAYROLL_CREATE: 'office-payroll.create',
     OFFICE_PAYROLL_CALCULATE: 'office-payroll.calculate',
     OFFICE_PAYROLL_SUBMIT: 'office-payroll.submit',
@@ -204,7 +214,102 @@ exports.PERMISSIONS = {
     ROTATION_APPROVE: 'rotation.approve',
     ROTATION_PUBLISH: 'rotation.publish',
     ROTATION_OVERRIDE: 'rotation.override',
+    CONTRACT_READ: 'contract.read',
+    CONTRACT_CREATE: 'contract.create',
+    CONTRACT_UPDATE: 'contract.update',
+    GUARANTOR_READ: 'guarantor.read',
+    GUARANTOR_MANAGE: 'guarantor.manage',
 };
+/**
+ * MODULE ACCESS REGISTRY — the modules an admin can grant or deny per user.
+ * Each module groups the permissions that belong to it; effective user
+ * permissions = role defaults + granted modules − denied modules.
+ */
+exports.MODULE_ACCESS = [
+    {
+        key: 'hr',
+        label: 'HR & People',
+        permissions: [
+            exports.PERMISSIONS.EMPLOYEE_READ,
+            exports.PERMISSIONS.EMPLOYEE_CREATE,
+            exports.PERMISSIONS.EMPLOYEE_UPDATE,
+            exports.PERMISSIONS.EMPLOYEE_DELETE,
+            exports.PERMISSIONS.GUARANTOR_READ,
+            exports.PERMISSIONS.GUARANTOR_MANAGE,
+            exports.PERMISSIONS.CONTRACT_READ,
+            exports.PERMISSIONS.CONTRACT_CREATE,
+            exports.PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
+            exports.PERMISSIONS.GUARD_REGISTER,
+        ],
+    },
+    {
+        key: 'company',
+        label: 'Companies & Sites',
+        permissions: [exports.PERMISSIONS.COMPANY_READ, exports.PERMISSIONS.COMPANY_CREATE, exports.PERMISSIONS.COMPANY_UPDATE, exports.PERMISSIONS.SITE_READ, exports.PERMISSIONS.SITE_CREATE, exports.PERMISSIONS.SITE_UPDATE],
+    },
+    {
+        key: 'operations',
+        label: 'Operations & Attendance',
+        permissions: [
+            exports.PERMISSIONS.GUARD_ASSIGN_SITE,
+            exports.PERMISSIONS.GUARD_MODIFY_HOURS,
+            exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
+            exports.PERMISSIONS.GUARD_ATTENDANCE_MANAGE,
+            exports.PERMISSIONS.GUARD_ATTENDANCE_FUTURE,
+            exports.PERMISSIONS.GUARD_ATTENDANCE_SELF,
+            exports.PERMISSIONS.ROTATION_READ,
+            exports.PERMISSIONS.ROTATION_MANAGE,
+            exports.PERMISSIONS.ROTATION_GENERATE,
+            exports.PERMISSIONS.ROTATION_APPROVE,
+            exports.PERMISSIONS.ROTATION_PUBLISH,
+            exports.PERMISSIONS.ROTATION_OVERRIDE,
+        ],
+    },
+    {
+        key: 'payroll',
+        label: 'Payroll',
+        permissions: [
+            exports.PERMISSIONS.GUARD_PAYROLL_READ,
+            exports.PERMISSIONS.GUARD_PAYROLL_RATES,
+            exports.PERMISSIONS.GUARD_PAYROLL_CALCULATE,
+            exports.PERMISSIONS.GUARD_PAYROLL_CHECK,
+            exports.PERMISSIONS.GUARD_PAYROLL_APPROVE,
+            exports.PERMISSIONS.GUARD_PAYROLL_PAY,
+            exports.PERMISSIONS.GUARD_PAYROLL_RETURN,
+            exports.PERMISSIONS.OFFICE_PAYROLL_READ,
+            exports.PERMISSIONS.OFFICE_PAYROLL_CREATE,
+            exports.PERMISSIONS.OFFICE_PAYROLL_CALCULATE,
+            exports.PERMISSIONS.OFFICE_PAYROLL_SUBMIT,
+            exports.PERMISSIONS.OFFICE_PAYROLL_CHECK,
+            exports.PERMISSIONS.OFFICE_PAYROLL_ENTER_OT,
+            exports.PERMISSIONS.OFFICE_PAYROLL_RETURN,
+            exports.PERMISSIONS.OFFICE_PAYROLL_RATES,
+            exports.PERMISSIONS.OFFICE_PAYROLL_APPROVE,
+            exports.PERMISSIONS.OFFICE_PAYROLL_PAY,
+            exports.PERMISSIONS.PAYROLL_PERIOD_READ,
+            exports.PERMISSIONS.PAYROLL_CONFIG_MANAGE,
+        ],
+    },
+    { key: 'reports', label: 'Reports', permissions: [exports.PERMISSIONS.REPORT_READ] },
+    {
+        key: 'administration',
+        label: 'Administration',
+        permissions: [
+            exports.PERMISSIONS.USER_READ,
+            exports.PERMISSIONS.USER_CREATE,
+            exports.PERMISSIONS.USER_UPDATE,
+            exports.PERMISSIONS.USER_DELETE,
+            exports.PERMISSIONS.AUDIT_READ,
+            exports.PERMISSIONS.SETTINGS_READ,
+            exports.PERMISSIONS.SETTINGS_UPDATE,
+            exports.PERMISSIONS.ORGANIZATION_READ,
+            exports.PERMISSIONS.ORGANIZATION_MANAGE,
+        ],
+    },
+    { key: 'recruitment', label: 'Recruitment', permissions: [exports.PERMISSIONS.CANDIDATE_READ, exports.PERMISSIONS.CANDIDATE_MANAGE] },
+    { key: 'performance', label: 'Performance', permissions: [exports.PERMISSIONS.PERFORMANCE_READ, exports.PERMISSIONS.PERFORMANCE_MANAGE] },
+];
+exports.MODULE_ACCESS_KEYS = exports.MODULE_ACCESS.map((m) => m.key);
 // --- Role -> Permission Mapping ---
 // SUPER_ADMIN: can view everything, cannot modify
 // HR_ADMIN: register employees (staff + guards), manage staff attendance, view everything
@@ -216,13 +321,18 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.USER_READ,
         exports.PERMISSIONS.USER_CREATE,
         exports.PERMISSIONS.USER_UPDATE,
+        exports.PERMISSIONS.USER_DELETE,
         exports.PERMISSIONS.EMPLOYEE_CREATE,
+        exports.PERMISSIONS.CONTRACT_CREATE,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.EMPLOYEE_UPDATE,
         exports.PERMISSIONS.EMPLOYEE_DELETE,
         exports.PERMISSIONS.SITE_CREATE,
         exports.PERMISSIONS.SITE_READ,
         exports.PERMISSIONS.SITE_UPDATE,
+        exports.PERMISSIONS.COMPANY_CREATE,
+        exports.PERMISSIONS.COMPANY_READ,
+        exports.PERMISSIONS.COMPANY_UPDATE,
         exports.PERMISSIONS.GUARD_REGISTER,
         exports.PERMISSIONS.GUARD_ASSIGN_SITE,
         exports.PERMISSIONS.GUARD_MODIFY_HOURS,
@@ -237,6 +347,7 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.GUARD_PAYROLL_APPROVE,
         exports.PERMISSIONS.GUARD_PAYROLL_PAY,
         exports.PERMISSIONS.GUARD_PAYROLL_RETURN,
+        exports.PERMISSIONS.OFFICE_PAYROLL_READ,
         exports.PERMISSIONS.OFFICE_PAYROLL_CREATE,
         exports.PERMISSIONS.OFFICE_PAYROLL_CALCULATE,
         exports.PERMISSIONS.OFFICE_PAYROLL_SUBMIT,
@@ -263,12 +374,19 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.ROTATION_GENERATE,
         exports.PERMISSIONS.ROTATION_APPROVE,
         exports.PERMISSIONS.ROTATION_PUBLISH,
+        exports.PERMISSIONS.CONTRACT_READ,
+        exports.PERMISSIONS.CONTRACT_UPDATE,
+        exports.PERMISSIONS.GUARANTOR_READ,
+        exports.PERMISSIONS.GUARANTOR_MANAGE,
         exports.PERMISSIONS.ROTATION_OVERRIDE,
     ],
     [UserRole.SYSTEM_ADMIN]: [
         exports.PERMISSIONS.USER_CREATE,
         exports.PERMISSIONS.USER_UPDATE,
         exports.PERMISSIONS.USER_READ,
+        exports.PERMISSIONS.COMPANY_CREATE,
+        exports.PERMISSIONS.COMPANY_READ,
+        exports.PERMISSIONS.COMPANY_UPDATE,
         exports.PERMISSIONS.EMPLOYEE_CREATE,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.EMPLOYEE_UPDATE,
@@ -278,6 +396,11 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.ORGANIZATION_READ,
         exports.PERMISSIONS.ORGANIZATION_MANAGE,
         exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
+        exports.PERMISSIONS.CONTRACT_READ,
+        exports.PERMISSIONS.CONTRACT_CREATE,
+        exports.PERMISSIONS.CONTRACT_UPDATE,
+        exports.PERMISSIONS.GUARANTOR_READ,
+        exports.PERMISSIONS.GUARANTOR_MANAGE,
         exports.PERMISSIONS.AUDIT_READ,
     ],
     [UserRole.HR_ADMIN]: [
@@ -289,6 +412,9 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.SITE_CREATE,
         exports.PERMISSIONS.SITE_READ,
         exports.PERMISSIONS.SITE_UPDATE,
+        exports.PERMISSIONS.COMPANY_CREATE,
+        exports.PERMISSIONS.COMPANY_READ,
+        exports.PERMISSIONS.COMPANY_UPDATE,
         exports.PERMISSIONS.GUARD_REGISTER,
         exports.PERMISSIONS.GUARD_ASSIGN_SITE,
         exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
@@ -296,6 +422,7 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.GUARD_ATTENDANCE_FUTURE,
         exports.PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
+        exports.PERMISSIONS.OFFICE_PAYROLL_READ,
         exports.PERMISSIONS.OFFICE_PAYROLL_CREATE,
         exports.PERMISSIONS.REPORT_READ,
         exports.PERMISSIONS.SETTINGS_READ,
@@ -310,12 +437,19 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.ROTATION_GENERATE,
         exports.PERMISSIONS.ROTATION_APPROVE,
         exports.PERMISSIONS.ROTATION_PUBLISH,
+        exports.PERMISSIONS.CONTRACT_READ,
+        exports.PERMISSIONS.CONTRACT_CREATE,
+        exports.PERMISSIONS.CONTRACT_UPDATE,
+        exports.PERMISSIONS.GUARANTOR_READ,
+        exports.PERMISSIONS.GUARANTOR_MANAGE,
         exports.PERMISSIONS.ROTATION_OVERRIDE,
     ],
     [UserRole.FINANCE_OFFICER]: [
         exports.PERMISSIONS.USER_READ,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
+        exports.PERMISSIONS.COMPANY_READ,
+        exports.PERMISSIONS.COMPANY_UPDATE,
         exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_RATES,
@@ -323,6 +457,7 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.GUARD_PAYROLL_CHECK,
         exports.PERMISSIONS.GUARD_PAYROLL_PAY,
         exports.PERMISSIONS.GUARD_PAYROLL_RETURN,
+        exports.PERMISSIONS.OFFICE_PAYROLL_READ,
         exports.PERMISSIONS.OFFICE_PAYROLL_CREATE,
         exports.PERMISSIONS.OFFICE_PAYROLL_CALCULATE,
         exports.PERMISSIONS.OFFICE_PAYROLL_SUBMIT,
@@ -336,17 +471,26 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.SETTINGS_READ,
         exports.PERMISSIONS.SETTINGS_UPDATE,
         exports.PERMISSIONS.PAYROLL_PERIOD_READ,
+        exports.PERMISSIONS.CONTRACT_READ,
+        exports.PERMISSIONS.CONTRACT_CREATE,
+        exports.PERMISSIONS.CONTRACT_UPDATE,
+        exports.PERMISSIONS.GUARANTOR_READ,
+        exports.PERMISSIONS.GUARANTOR_MANAGE,
     ],
     [UserRole.OPERATIONS]: [
         exports.PERMISSIONS.EMPLOYEE_READ,
+        exports.PERMISSIONS.CONTRACT_READ,
+        exports.PERMISSIONS.GUARANTOR_READ,
         exports.PERMISSIONS.SITE_CREATE,
         exports.PERMISSIONS.SITE_READ,
         exports.PERMISSIONS.SITE_UPDATE,
+        exports.PERMISSIONS.COMPANY_READ,
         exports.PERMISSIONS.GUARD_ASSIGN_SITE,
         exports.PERMISSIONS.GUARD_MODIFY_HOURS,
         exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
         exports.PERMISSIONS.GUARD_ATTENDANCE_MANAGE,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
+        exports.PERMISSIONS.OFFICE_PAYROLL_READ,
         exports.PERMISSIONS.PAYROLL_PERIOD_READ,
         exports.PERMISSIONS.REPORT_READ,
         exports.PERMISSIONS.CANDIDATE_READ,
@@ -359,12 +503,14 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
+        exports.PERMISSIONS.GUARD_ATTENDANCE_SELF,
     ],
     [UserRole.HEAD]: [
         exports.PERMISSIONS.USER_READ,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
+        exports.PERMISSIONS.OFFICE_PAYROLL_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_APPROVE,
         exports.PERMISSIONS.GUARD_PAYROLL_RETURN,
         exports.PERMISSIONS.OFFICE_PAYROLL_APPROVE,
@@ -373,15 +519,21 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.AUDIT_READ,
         exports.PERMISSIONS.SETTINGS_READ,
         exports.PERMISSIONS.ROTATION_READ,
+        exports.PERMISSIONS.CONTRACT_READ,
+        exports.PERMISSIONS.CONTRACT_UPDATE,
+        exports.PERMISSIONS.GUARANTOR_READ,
+        exports.PERMISSIONS.GUARANTOR_MANAGE,
         exports.PERMISSIONS.ROTATION_APPROVE,
     ],
     [UserRole.CEO]: [
         exports.PERMISSIONS.USER_READ,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
+        exports.PERMISSIONS.COMPANY_READ,
         exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
         exports.PERMISSIONS.STAFF_ATTENDANCE_MANAGE,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
+        exports.PERMISSIONS.OFFICE_PAYROLL_READ,
         exports.PERMISSIONS.REPORT_READ,
         exports.PERMISSIONS.AUDIT_READ,
         exports.PERMISSIONS.SETTINGS_READ,
@@ -389,6 +541,8 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.CANDIDATE_READ,
         exports.PERMISSIONS.PERFORMANCE_READ,
         exports.PERMISSIONS.ROTATION_READ,
+        exports.PERMISSIONS.CONTRACT_READ,
+        exports.PERMISSIONS.GUARANTOR_READ,
         exports.PERMISSIONS.ROTATION_APPROVE,
     ],
 };

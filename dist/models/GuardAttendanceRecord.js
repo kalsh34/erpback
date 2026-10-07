@@ -43,7 +43,7 @@ const guardAttendanceSchema = new mongoose_1.Schema({
     dayOfMonth: { type: Number, required: true },
     hoursWorked: { type: Number, required: true, min: 0.01 },
     isHoliday: { type: Boolean, default: false },
-    payrollPeriodId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'PayrollPeriod', required: true },
+    periodKey: { type: String, required: true, match: /^\d{4}-\d{2}$/ },
     status: { type: String, enum: Object.values(types_1.GuardAttendanceStatus), default: types_1.GuardAttendanceStatus.ACTIVE },
     source: { type: String, enum: Object.values(types_1.AttendanceSource), default: types_1.AttendanceSource.OPERATIONS_EDIT },
     notes: { type: String, trim: true },
@@ -62,7 +62,7 @@ const guardAttendanceSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 // Hard rule: one ACTIVE row per guard + site + date. VOID rows stay for audit.
 guardAttendanceSchema.index({ guardId: 1, siteId: 1, date: 1 }, { unique: true, partialFilterExpression: { status: types_1.GuardAttendanceStatus.ACTIVE } });
-guardAttendanceSchema.index({ payrollPeriodId: 1, guardId: 1 });
+guardAttendanceSchema.index({ periodKey: 1, guardId: 1 });
 guardAttendanceSchema.index({ siteId: 1, date: 1 });
 guardAttendanceSchema.index({ guardId: 1, date: 1 });
 exports.GuardAttendanceRecord = mongoose_1.default.model('GuardAttendanceRecord', guardAttendanceSchema);

@@ -12,7 +12,7 @@ export interface IAttendanceChange {
  *
  * Site-specific by design: Guard A at Site Alpha and Guard A at Site Beta are
  * separate rows and are never merged — monthly totals are always computed as
- * SUM(hours) grouped by guard + site + payroll month.
+ * SUM(hours) grouped by guard + site + calendar month (periodKey).
  *
  * Rows are never hard-deleted: a correction sets status = VOID (with who/why),
  * and a fresh ACTIVE row may then be recorded for the same guard+site+date.
@@ -24,7 +24,7 @@ export interface IGuardAttendanceRecord extends Document {
     dayOfMonth: number;
     hoursWorked: number;
     isHoliday: boolean;
-    payrollPeriodId: mongoose.Types.ObjectId;
+    periodKey: string;
     status: GuardAttendanceStatus;
     source: AttendanceSource;
     notes?: string;

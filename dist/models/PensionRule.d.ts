@@ -1,12 +1,21 @@
 import mongoose, { Document } from 'mongoose';
+/**
+ * PENSION RULE — date-effective employee/employer percentages with optional
+ * pensionable-salary caps. Re-created after the v1 teardown; shared by guard
+ * and staff payroll. Guard payroll applies it ONLY to the primary-site salary
+ * base (never to additional-site earnings, never to transport).
+ */
+export type PensionRuleKind = 'GUARD' | 'STAFF';
 export interface IPensionRule extends Document {
-    label: string;
-    employeeRate: number;
-    employerRate: number;
-    pensionTaxBase: 'NORMAL_SALARY_ONLY' | 'GROSS_PAY';
+    name: string;
+    kind?: PensionRuleKind;
+    employeePercent: number;
+    employerPercent: number;
+    minPensionableSalary?: number | null;
+    maxPensionableSalary?: number | null;
     effectiveFrom: Date;
-    effectiveTo?: Date;
-    isCurrent: boolean;
+    effectiveTo?: Date | null;
+    createdBy?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }

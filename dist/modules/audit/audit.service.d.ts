@@ -18,6 +18,7 @@ export declare class AuditService {
         page?: number;
         limit?: number;
         entity?: string;
+        entityId?: string;
         userId?: string;
     }): Promise<{
         data: (import("mongoose").Document<unknown, {}, import("../../models/AuditLog").IAuditLog, {}, {}> & import("../../models/AuditLog").IAuditLog & Required<{

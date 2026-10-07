@@ -1,6 +1,5 @@
-import mongoose from 'mongoose';
 import { IGuardAttendanceRecord } from '../../../models/GuardAttendanceRecord';
-import { EmployeeStatus, AttendanceSource, PayrollPeriodStatus } from '../../../types';
+import { EmployeeStatus, AttendanceSource } from '../../../types';
 export interface AttendanceEntryInput {
     guardId: string;
     hoursWorked: number;
@@ -15,9 +14,6 @@ export declare class GuardAttendanceService {
     };
     private static parseDate;
     private static startOfDay;
-    /** Payroll period that governs this calendar day (26th → 25th), plus its lock state. */
-    private static gatePeriodFor;
-    private static assertNotLocked;
     private static assertHours;
     private static assertGuardAndAssignment;
     /** A guard can never exceed the daily cap across ALL sites combined. */
@@ -69,8 +65,8 @@ export declare class GuardAttendanceService {
     static voidRecord(recordId: string, reason: string, userId: string, auditCtx?: {
         ip?: string;
         ua?: string;
-    }): Promise<mongoose.Document<unknown, {}, IGuardAttendanceRecord, {}, {}> & IGuardAttendanceRecord & Required<{
-        _id: mongoose.Types.ObjectId;
+    }): Promise<import("mongoose").Document<unknown, {}, IGuardAttendanceRecord, {}, {}> & IGuardAttendanceRecord & Required<{
+        _id: import("mongoose").Types.ObjectId;
     }> & {
         __v: number;
     }>;
@@ -79,18 +75,12 @@ export declare class GuardAttendanceService {
         allowFuture?: boolean;
     }): Promise<{
         site: {
-            _id: mongoose.Types.ObjectId;
+            _id: import("mongoose").Types.ObjectId;
             siteName: string;
             siteCode: string;
         };
         date: string;
-        period: {
-            _id: mongoose.Types.ObjectId;
-            year: number;
-            month: number;
-            monthName: string;
-            status: PayrollPeriodStatus;
-        };
+        periodKey: string;
         config: {
             maxDailyHours: number;
             expectedDailyHours: number;
@@ -99,14 +89,14 @@ export declare class GuardAttendanceService {
         editable: boolean;
         rows: ({
             guard: {
-                _id: mongoose.Types.ObjectId;
+                _id: import("mongoose").Types.ObjectId;
                 employeeCode: string;
                 firstName: string;
                 lastName: string;
                 status: EmployeeStatus;
             };
             assignment: {
-                _id: mongoose.Types.ObjectId;
+                _id: import("mongoose").Types.ObjectId;
                 role: "GUARD" | "SUPERVISOR";
                 isPrimary: boolean;
                 effectiveFrom: Date;
@@ -122,26 +112,18 @@ export declare class GuardAttendanceService {
         } | null)[];
     }>;
     /**
-     * Monthly totals: SUM(valid daily hours) grouped by GUARD + SITE + payroll
+     * Monthly totals: SUM(valid daily hours) grouped by GUARD + SITE + calendar
      * month. Sites are never merged; the primary site is flagged per guard.
      */
     static getMonthlyTotals(year: number, month: number, siteId?: string): Promise<{
-        period: {
-            _id: mongoose.Types.ObjectId;
-            year: number;
-            month: number;
-            monthName: string;
-            status: PayrollPeriodStatus;
-            startDate: Date;
-            endDate: Date;
-        };
+        periodKey: string;
         config: {
             maxDailyHours: number;
             expectedDailyHours: number;
         };
         rows: any[];
         missingAttendance: {
-            _id: mongoose.Types.ObjectId;
+            _id: import("mongoose").Types.ObjectId;
             employeeCode: string;
             firstName: string;
             lastName: string;
@@ -149,7 +131,7 @@ export declare class GuardAttendanceService {
         grandTotal: number;
     }>;
     /**
-     * Guard → Site → Month → Total Hours feed consumed by payroll.
+     * Guard → Site → Period → Total Hours feed consumed by payroll.
      * Only ACTIVE (validated, non-void) records inside the period range count.
      */
     static getSiteHoursForPeriod(periodStart: Date, periodEnd: Date, guardId?: any): Promise<{
@@ -159,24 +141,16 @@ export declare class GuardAttendanceService {
         holidayHours: number;
         dayCount: any;
     }[]>;
-    /** Pre-payroll checks: missing attendance, duplicates, assignment gaps. */
+    /** Pre-payroll checks: missing attendance and assignment gaps. */
     static getPayrollReadiness(year: number, month: number): Promise<{
-        period: {
-            _id: mongoose.Types.ObjectId;
-            year: number;
-            month: number;
-            monthName: string;
-            status: PayrollPeriodStatus;
-            startDate: Date;
-            endDate: Date;
-        };
+        periodKey: string;
         config: {
             maxDailyHours: number;
             expectedDailyHours: number;
         };
         guardsWithAttendance: number;
         missingAttendance: {
-            _id: mongoose.Types.ObjectId;
+            _id: import("mongoose").Types.ObjectId;
             employeeCode: string;
             firstName: string;
             lastName: string;
@@ -195,8 +169,8 @@ export declare class GuardAttendanceService {
         from: string;
         to: string;
         limit?: number;
-    }): Promise<(mongoose.Document<unknown, {}, IGuardAttendanceRecord, {}, {}> & IGuardAttendanceRecord & Required<{
-        _id: mongoose.Types.ObjectId;
+    }): Promise<(import("mongoose").Document<unknown, {}, IGuardAttendanceRecord, {}, {}> & IGuardAttendanceRecord & Required<{
+        _id: import("mongoose").Types.ObjectId;
     }> & {
         __v: number;
     })[]>;

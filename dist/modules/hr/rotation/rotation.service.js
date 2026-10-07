@@ -41,6 +41,7 @@ exports.resolveShifts = resolveShifts;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Rotation_1 = require("../../../models/Rotation");
 const RotationAssignment_1 = require("../../../models/RotationAssignment");
+const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
 const ShiftTemplate_1 = require("../../../models/ShiftTemplate");
 const Site_1 = require("../../../models/Site");
@@ -513,14 +514,40 @@ class RotationService {
         await Rotation_1.Rotation.findByIdAndDelete(id);
         EventBus_1.eventBus.emit('hr.rotation.deleted', { rotationId: id });
     }
+    /**
+     * A guard may only serve in a site's rotation if they are currently assigned
+     * to that site. Enforced on every pool write and re-checked before each
+     * generation so assignments that ended later cannot keep working shifts.
+     */
+    static async filterGuardsAssignedToSite(siteId, guardIds) {
+        if (guardIds.length === 0)
+            return [];
+        const ids = [...new Set(guardIds)];
+        const assigned = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({
+            guardId: { $in: ids.map((gid) => new mongoose_1.default.Types.ObjectId(gid)) },
+            siteId,
+            isCurrent: true,
+        }).select('guardId').lean();
+        const allowed = new Set(assigned.map((a) => a.guardId.toString()));
+        return ids.filter((gid) => allowed.has(gid));
+    }
     static async addGuards(id, guardIds, userId, _auditCtx) {
         const rotation = await Rotation_1.Rotation.findById(id);
         if (!rotation)
             throw ApiError_1.ApiError.notFound('Rotation not found');
         if (rotation.generation)
             rotation.generation.stale = true;
+        // Site-scoping: only guards currently assigned to the rotation's site may
+        // join the pool. Reject the whole batch atomically if any guard is not
+        // assigned — the UI only offers site-assigned guards, so a rejection means
+        // stale data and the user should refresh.
+        const allowed = await this.filterGuardsAssignedToSite(rotation.siteId.toString(), guardIds);
+        const rejected = guardIds.filter((gid) => !allowed.includes(gid));
+        if (rejected.length > 0) {
+            throw ApiError_1.ApiError.conflict(`${rejected.length} of ${guardIds.length} guard(s) are not assigned to this site — only guards appointed to the rotation's site can join the cycle. Refresh the guard list.`);
+        }
         let added = 0;
-        for (const gid of guardIds) {
+        for (const gid of allowed) {
             const exists = rotation.guardPool.find((g) => g.guardId.toString() === gid);
             if (!exists) {
                 rotation.guardPool.push({
@@ -567,6 +594,11 @@ class RotationService {
         const rotation = await Rotation_1.Rotation.findById(id);
         if (!rotation)
             throw ApiError_1.ApiError.notFound('Rotation not found');
+        // Floaters cover leave at this site — they must belong to the site too.
+        const floaterAllowed = await this.filterGuardsAssignedToSite(rotation.siteId.toString(), guardIds);
+        if (floaterAllowed.length !== guardIds.length) {
+            throw ApiError_1.ApiError.conflict('Floater guards must be assigned to the rotation\'s site');
+        }
         for (const gid of guardIds) {
             const exists = rotation.floaterPool.find((g) => g.guardId.toString() === gid);
             if (!exists) {
@@ -585,8 +617,11 @@ class RotationService {
         return rotation;
     }
     static checkFairness(poolSize, slotCountPerDay) {
-        if (poolSize <= 0 || slotCountPerDay <= 0)
-            return { isFair: true, cycleDays: 0 };
+        if (poolSize <= 0) {
+            return { isFair: false, message: slotCountPerDay > 0 ? `Need at least ${slotCountPerDay} guards` : 'Select guards first' };
+        }
+        if (slotCountPerDay <= 0)
+            return { isFair: true, cycleDays: 0, dutyPercent: 0 };
         if (poolSize < slotCountPerDay)
             return { isFair: false, message: `Need at least ${slotCountPerDay} guards, have ${poolSize}` };
         const cycleDays = poolSize / gcd(poolSize, slotCountPerDay);
@@ -675,6 +710,21 @@ class RotationService {
             throw ApiError_1.ApiError.notFound('Rotation not found');
         if (!GENERATABLE_STATUSES.has(rot.status)) {
             throw ApiError_1.ApiError.badRequest(`Cannot generate a ${rot.status} rotation (cancel or archive it first)`);
+        }
+        // Site-scoping maintenance: guards whose site assignment has ended are
+        // pruned from the pool so they cannot keep working generated shifts.
+        const poolEntries = rot.guardPool || [];
+        if (poolEntries.length > 0) {
+            const poolIds = poolEntries.map((g) => g.guardId.toString());
+            const stillAllowed = new Set(await this.filterGuardsAssignedToSite(rot.siteId.toString(), poolIds));
+            const stale = poolEntries.filter((g) => !stillAllowed.has(g.guardId.toString()));
+            if (stale.length > 0) {
+                rot.guardPool = poolEntries
+                    .filter((g) => stillAllowed.has(g.guardId.toString()))
+                    .map((g, i) => ({ ...g, order: i }));
+                appendChange(rot, 'PRUNE_POOL', userId || '', `Removed ${stale.length} guard(s) no longer assigned to this site`);
+                await rot.save();
+            }
         }
         if (rot.guardPool.filter((g) => g.status === 'ACTIVE').length === 0) {
             throw ApiError_1.ApiError.badRequest('No active guards in pool');

@@ -1,61 +1,58 @@
 import mongoose, { Document } from 'mongoose';
-import { PayrollRecordStatus } from '../types';
+/**
+ * STAFF PAYROLL RECORD — immutable snapshot of one employee's payroll for one
+ * run/period. Every input actually used is preserved (contract pay fields,
+ * overtime, bonus, deductions, statutory config), so finalized payroll never
+ * changes when the employee's contract or the statutory tables change later.
+ *
+ * FORMULA (company spreadsheet, frozen):
+ *   Gross    = Basic + Responsibility + Tele + NonTaxTransport + TaxTransport + OT
+ *   Taxable  = Basic + Responsibility + Tele + TaxTransport + OT        (no non-tax transport)
+ *   Pension  = Basic × 7% / 11%   (Basic ONLY; 0 when contract.pensionEnrolled = false)
+ *   Tax      = progressive staff table applied to Taxable
+ *   Deduct.  = Income Tax + Employee Pension + Penalty + Loan(s)
+ *   Net Pay  = Gross − Total Deduction
+ *   BONUS    = completely OUTSIDE the formula — never taxed, never pensionable,
+ *              never in gross or deductions. Final Amount Paid = Net Pay + Bonus.
+ */
 export interface IStaffPayrollRecord extends Document {
-    payrollPeriodId: mongoose.Types.ObjectId;
+    runId: mongoose.Types.ObjectId;
+    periodKey: string;
     employeeId: mongoose.Types.ObjectId;
-    formulaVersionId?: mongoose.Types.ObjectId;
-    basicSalary: number;
-    responsibilityAllowance: number;
-    teleAllowance: number;
-    taxableTransport: number;
-    nonTaxableTransport: number;
-    overtime: number;
-    regularOtHours: number;
-    holidayOtHours: number;
-    regularOtPay: number;
-    holidayOtPay: number;
-    bonus: number;
-    penalty: number;
-    grossSalary: number;
-    taxableSalary: number;
-    incomeTax: number;
+    snapshot: {
+        employeeCode: string;
+        fullName: string;
+        department?: string;
+        jobPosition?: string;
+        contractId: string;
+        contractType?: string;
+        basic: number;
+        responsibilityAllowance: number;
+        teleAllowance: number;
+        taxableTransport: number;
+        nonTaxableTransport: number;
+        pensionEnrolled: boolean;
+        bankName?: string;
+        accountNumber?: string;
+    };
+    overtimeAmount: number;
+    bonusAmount: number;
+    grossEarnings: number;
+    taxableEarnings: number;
     employeePension: number;
     employerPension: number;
-    loanDeduction: number;
-    otherDeductions: number;
+    incomeTax: number;
+    deductions: {
+        deductionId: mongoose.Types.ObjectId;
+        type: string;
+        label: string;
+        amount: number;
+    }[];
     totalDeductions: number;
     netPay: number;
-    status: PayrollRecordStatus;
-    submittedBy?: mongoose.Types.ObjectId;
-    submittedAt?: Date;
-    calculatedBy?: mongoose.Types.ObjectId;
-    calculatedAt?: Date;
-    checkedBy?: mongoose.Types.ObjectId;
-    checkedAt?: Date;
-    approvedBy?: mongoose.Types.ObjectId;
-    approvedAt?: Date;
-    paidBy?: mongoose.Types.ObjectId;
-    paidAt?: Date;
-    returnedBy?: mongoose.Types.ObjectId;
-    returnedAt?: Date;
-    returnReason?: string;
-    paymentDate?: Date;
-    paymentMethod?: string;
-    bankReference?: string;
-    attendanceDataMissing: boolean;
-    /** Payable-day calendar (spec §5): expected over the period, actual earned. */
-    expectedPayableDays: number;
-    actualPayableDays: number;
-    calculatedGrossSalary?: number;
-    calculatedNetPay?: number;
-    overrides: {
-        field: 'grossSalary' | 'netPay';
-        originalValue: number;
-        overrideValue: number;
-        reason: string;
-        by: mongoose.Types.ObjectId;
-        at: Date;
-    }[];
+    bonus: number;
+    finalAmountPaid: number;
+    warnings: string[];
     createdAt: Date;
     updatedAt: Date;
 }

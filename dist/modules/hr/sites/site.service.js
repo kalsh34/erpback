@@ -8,9 +8,24 @@ const ApiError_1 = require("../../../common/ApiError");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
 const types_1 = require("../../../types");
+/** Server-side sortable columns (the ⇅ headers in the site table). */
+const SORTABLE = {
+    siteName: 'siteName',
+    siteCode: 'siteCode',
+    branch: 'branch',
+    city: 'city',
+    subCity: 'subCity',
+    wereda: 'wereda',
+    numberOfEmployees: 'numberOfEmployees',
+    paymentPrice: 'paymentPrice',
+    agreementStartDate: 'agreementStartDate',
+    agreementEndDate: 'agreementEndDate',
+    status: 'status',
+    createdAt: 'createdAt',
+};
 class SiteService {
     static async getAll(query) {
-        const { page = 1, limit = 20, status, search } = query;
+        const { page = 1, limit = 20, status, search, sort = 'createdAt', dir = 'desc' } = query;
         const skip = (page - 1) * limit;
         const filter = {};
         if (status)
@@ -20,10 +35,15 @@ class SiteService {
                 { siteName: { $regex: search, $options: 'i' } },
                 { siteCode: { $regex: search, $options: 'i' } },
                 { client: { $regex: search, $options: 'i' } },
+                { branch: { $regex: search, $options: 'i' } },
+                { city: { $regex: search, $options: 'i' } },
+                { subCity: { $regex: search, $options: 'i' } },
             ];
         }
+        const sortField = SORTABLE[sort] || 'createdAt';
+        const sortDir = dir === 'desc' ? -1 : 1;
         const [sites, total] = await Promise.all([
-            Site_1.Site.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+            Site_1.Site.find(filter).populate('companyId', 'name code').sort({ [sortField]: sortDir }).skip(skip).limit(limit),
             Site_1.Site.countDocuments(filter),
         ]);
         return { data: sites, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };

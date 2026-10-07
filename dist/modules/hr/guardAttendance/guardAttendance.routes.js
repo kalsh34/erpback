@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const guardAttendance_controller_1 = require("./guardAttendance.controller");
+const monthlyHours_controller_1 = require("./monthlyHours.controller");
 const auth_1 = require("../../../middleware/auth");
 const rbac_1 = require("../../../middleware/rbac");
 const types_1 = require("../../../types");
@@ -12,6 +13,9 @@ router.get('/day', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_RE
 router.post('/day', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_MANAGE), guardAttendance_controller_1.GuardAttendanceController.saveDay);
 router.post('/:id/void', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_MANAGE), guardAttendance_controller_1.GuardAttendanceController.voidRecord);
 router.get('/monthly', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_READ), guardAttendance_controller_1.GuardAttendanceController.getMonthly);
+router.get('/monthly-sheet', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_READ), monthlyHours_controller_1.GuardMonthlyHoursController.getSheet);
+router.post('/monthly-sheet', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_MANAGE), monthlyHours_controller_1.GuardMonthlyHoursController.saveSheet);
+router.get('/monthly-sheet/payroll-hours', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_READ), monthlyHours_controller_1.GuardMonthlyHoursController.getPayrollHours);
 router.get('/payroll-readiness', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_READ), guardAttendance_controller_1.GuardAttendanceController.getPayrollReadiness);
 router.get('/records', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_READ), guardAttendance_controller_1.GuardAttendanceController.listRecords);
 exports.default = router;

@@ -1,8 +1,13 @@
 import mongoose, { Document } from 'mongoose';
-import { StaffAttendanceStatus, AttendanceSource } from '../types';
+import { AttendanceSource, StaffAttendanceStatus } from '../types';
+/**
+ * One staff member's attendance status for ONE calendar day of ONE month.
+ * Periods are plain calendar months ("YYYY-MM" in periodKey) — the old
+ * 26th→25th payroll-period model was removed with the legacy payroll.
+ */
 export interface IStaffAttendance extends Document {
     employeeId: mongoose.Types.ObjectId;
-    payrollPeriodId: mongoose.Types.ObjectId;
+    periodKey: string;
     date: string;
     dayOfMonth: number;
     status: StaffAttendanceStatus;

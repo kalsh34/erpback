@@ -44,6 +44,7 @@ const payGradeSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true, trim: true },
     description: { type: String, trim: true },
     basicSalary: { type: Number, default: 0, min: 0 },
+    salaryMax: { type: Number, default: 0, min: 0 },
     active: { type: Boolean, default: true },
 }, { timestamps: true });
 exports.PayGrade = mongoose_1.default.model('PayGrade', payGradeSchema);

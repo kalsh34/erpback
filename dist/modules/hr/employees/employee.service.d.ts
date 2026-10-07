@@ -8,11 +8,7 @@ export declare class EmployeeService {
         status?: EmployeeStatus;
         search?: string;
     }): Promise<{
-        data: (import("mongoose").Document<unknown, {}, IEmployee, {}, {}> & IEmployee & Required<{
-            _id: import("mongoose").Types.ObjectId;
-        }> & {
-            __v: number;
-        })[];
+        data: any;
         pagination: {
             page: number;
             limit: number;
@@ -41,11 +37,7 @@ export declare class EmployeeService {
         limit?: number;
         search?: string;
     }): Promise<{
-        data: (import("mongoose").Document<unknown, {}, IEmployee, {}, {}> & IEmployee & Required<{
-            _id: import("mongoose").Types.ObjectId;
-        }> & {
-            __v: number;
-        })[];
+        data: any;
         pagination: {
             page: number;
             limit: number;
@@ -58,11 +50,7 @@ export declare class EmployeeService {
         limit?: number;
         search?: string;
     }): Promise<{
-        data: (import("mongoose").Document<unknown, {}, IEmployee, {}, {}> & IEmployee & Required<{
-            _id: import("mongoose").Types.ObjectId;
-        }> & {
-            __v: number;
-        })[];
+        data: any;
         pagination: {
             page: number;
             limit: number;

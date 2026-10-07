@@ -184,13 +184,42 @@ class GuardService {
         EventBus_1.eventBus.emit('hr.guard.siteRemoved', { guardId: assignment.guardId, siteId: assignment.siteId, assignmentId });
         return assignment;
     }
-    static async getAllGuards() {
-        const employees = await Employee_1.Employee.find({ category: types_1.EmployeeCategory.GUARD }).sort({ employeeCode: 1 });
-        return Promise.all(employees.map(async (emp) => {
+    /**
+     * Guard roster with profiles + current site assignments.
+     * Optional filters:
+     *  - siteId      → only guards currently assigned to that site (isCurrent: true)
+     *  - assignment  → 'assigned' | 'unassigned' — whether the guard holds any current site assignment
+     *  - status      → employee status (ACTIVE, CONTRACTED, …); 'active' short-cut = ACTIVE or CONTRACTED
+     *  - search      → matches name or employee code
+     */
+    static async getAllGuards(filters = {}) {
+        const employeeQuery = { category: types_1.EmployeeCategory.GUARD };
+        if (filters.status && filters.status !== 'active')
+            employeeQuery.status = filters.status;
+        else if (filters.status === 'active')
+            employeeQuery.status = { $in: [types_1.EmployeeStatus.ACTIVE, types_1.EmployeeStatus.CONTRACTED] };
+        if (filters.search) {
+            const rx = new RegExp(filters.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            employeeQuery.$or = [{ firstName: rx }, { lastName: rx }, { employeeCode: rx }];
+        }
+        const employees = await Employee_1.Employee.find(employeeQuery).sort({ employeeCode: 1 });
+        const rows = await Promise.all(employees.map(async (emp) => {
             const profile = await GuardProfile_1.GuardProfile.findOne({ employeeId: emp._id });
             const currentAssignments = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: emp._id, isCurrent: true }).populate('siteId');
             return { employee: emp, profile, currentAssignments };
         }));
+        return rows.filter((row) => {
+            if (filters.siteId) {
+                const match = row.currentAssignments.some((a) => (a.siteId?._id || a.siteId)?.toString() === filters.siteId);
+                if (!match)
+                    return false;
+            }
+            if (filters.assignment === 'assigned' && row.currentAssignments.length === 0)
+                return false;
+            if (filters.assignment === 'unassigned' && row.currentAssignments.length > 0)
+                return false;
+            return true;
+        });
     }
     static async getGuardDetail(employeeId) {
         const employee = await Employee_1.Employee.findById(employeeId);

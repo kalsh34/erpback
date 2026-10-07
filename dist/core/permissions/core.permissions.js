@@ -22,9 +22,11 @@ function registerCorePermissions() {
                 types_1.PERMISSIONS.USER_CREATE,
                 types_1.PERMISSIONS.USER_UPDATE,
                 types_1.PERMISSIONS.USER_READ,
+                types_1.PERMISSIONS.USER_DELETE,
                 types_1.PERMISSIONS.SETTINGS_READ,
                 types_1.PERMISSIONS.SETTINGS_UPDATE,
                 types_1.PERMISSIONS.AUDIT_READ,
+                types_1.PERMISSIONS.REPORT_READ,
             ],
             [types_1.UserRole.HR_ADMIN]: [
                 types_1.PERMISSIONS.USER_READ,

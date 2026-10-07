@@ -16,6 +16,16 @@ export interface ISite extends Document {
     /** Optional gender split of actual manpower */
     maleCount?: number;
     femaleCount?: number;
+    branch?: string;
+    city?: string;
+    subCity?: string;
+    wereda?: string;
+    taxCenter?: string;
+    pensionSite?: string;
+    agreementStartDate?: Date;
+    agreementEndDate?: Date;
+    numberOfEmployees?: number;
+    paymentPrice?: number;
     contactPerson?: string;
     contactPhone?: string;
     address?: string;

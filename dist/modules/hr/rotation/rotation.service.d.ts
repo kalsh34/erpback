@@ -67,6 +67,12 @@ export declare class RotationService {
         ip?: string;
         ua?: string;
     }): Promise<void>;
+    /**
+     * A guard may only serve in a site's rotation if they are currently assigned
+     * to that site. Enforced on every pool write and re-checked before each
+     * generation so assignments that ended later cannot keep working shifts.
+     */
+    private static filterGuardsAssignedToSite;
     static addGuards(id: string, guardIds: string[], userId: string, _auditCtx?: {
         ip?: string;
         ua?: string;
@@ -100,16 +106,16 @@ export declare class RotationService {
     }>;
     static checkFairness(poolSize: number, slotCountPerDay: number): {
         isFair: boolean;
-        cycleDays: number;
-        message?: undefined;
-        workDaysPerCycle?: undefined;
-        dutyPercent?: undefined;
-    } | {
-        isFair: boolean;
         message: string;
         cycleDays?: undefined;
-        workDaysPerCycle?: undefined;
         dutyPercent?: undefined;
+        workDaysPerCycle?: undefined;
+    } | {
+        isFair: boolean;
+        cycleDays: number;
+        dutyPercent: number;
+        message?: undefined;
+        workDaysPerCycle?: undefined;
     } | {
         isFair: boolean;
         cycleDays: number;
