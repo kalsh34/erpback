@@ -61,6 +61,25 @@ class AuthController {
             next(error);
         }
     }
+    /** POST /api/auth/avatar — multipart upload, sets the caller's profile picture. */
+    static async uploadAvatar(req, res, next) {
+        try {
+            if (!req.user)
+                return next(ApiError_1.ApiError.unauthorized());
+            if (!req.file) {
+                res.status(400).json({ success: false, message: 'No image provided' });
+                return;
+            }
+            const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+            const user = await auth_service_1.AuthService.updateProfile(req.user.userId, { avatarUrl });
+            const userObj = user.toObject();
+            const { password: _, ...userWithoutPassword } = userObj;
+            res.status(201).json({ success: true, data: userWithoutPassword });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
 }
 exports.AuthController = AuthController;
 //# sourceMappingURL=auth.controller.js.map

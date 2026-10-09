@@ -43,6 +43,10 @@ const userSchema = new mongoose_1.Schema({
     lastName: { type: String, required: true, trim: true },
     role: { type: String, enum: Object.values(types_1.UserRole), required: true },
     employeeId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    phone: { type: String, trim: true },
+    avatarUrl: { type: String, trim: true },
+    moduleGrants: { type: [String], default: [] },
+    moduleDenies: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
     lastLogin: { type: Date },
 }, { timestamps: true });

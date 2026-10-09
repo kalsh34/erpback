@@ -1,23 +1,20 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GuardAttendanceService = void 0;
-const mongoose_1 = __importDefault(require("mongoose"));
 const GuardAttendanceRecord_1 = require("../../../models/GuardAttendanceRecord");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
 const Employee_1 = require("../../../models/Employee");
 const Site_1 = require("../../../models/Site");
-const staffAttendance_service_1 = require("../staffAttendance/staffAttendance.service");
 const ApiError_1 = require("../../../common/ApiError");
 const env_1 = require("../../../config/env");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
+const guardPayrollLock_service_1 = require("../../guardPayroll/guardPayrollLock.service");
 const types_1 = require("../../../types");
 const dateUtils_1 = require("../../../common/dateUtils");
-/** Statuses that count as an employed guard for attendance purposes (matches payroll). */
+/** Statuses that count as an employed guard for attendance purposes. */
 const ATTENDABLE_STATUSES = [types_1.EmployeeStatus.ACTIVE, types_1.EmployeeStatus.CONTRACTED];
+const periodKeyOfDate = (dateStr) => dateStr.slice(0, 7); // "YYYY-MM" from "YYYY-MM-DD"
 class GuardAttendanceService {
     /** Hard cap (rejects) vs expected-hours warning (never rejects). */
     static getConfig() {
@@ -39,18 +36,6 @@ class GuardAttendanceService {
         const x = new Date(d);
         x.setHours(0, 0, 0, 0);
         return x;
-    }
-    /** Payroll period that governs this calendar day (26th → 25th), plus its lock state. */
-    static async gatePeriodFor(dateStr) {
-        const key = (0, dateUtils_1.payrollPeriodKeyForDate)(this.parseDate(dateStr));
-        return staffAttendance_service_1.StaffAttendanceService.getOrCreatePeriod(key.year, key.month);
-    }
-    static async assertNotLocked(dateStr) {
-        const period = await this.gatePeriodFor(dateStr);
-        if (period.status === types_1.PayrollPeriodStatus.LOCKED) {
-            throw ApiError_1.ApiError.forbidden(`Payroll period ${period.monthName} ${period.year} is locked — attendance for ${dateStr} cannot be changed until Finance unlocks it.`);
-        }
-        return period;
     }
     static assertHours(hours) {
         const { maxDailyHours } = this.getConfig();
@@ -135,10 +120,12 @@ class GuardAttendanceService {
      */
     static async saveEntry(params, auditCtx) {
         const { siteId, date, entry, userId } = params;
-        const period = await this.assertNotLocked(date);
         this.assertFuture(date, !!params.allowFuture);
         const hours = this.assertHours(entry.hoursWorked);
         await this.assertGuardAndAssignment(entry.guardId, siteId, date);
+        const periodKey = periodKeyOfDate(date);
+        // Payroll lock: a submitted/approved guard payroll run freezes the month.
+        await guardPayrollLock_service_1.GuardPayrollLockService.assertGuardAttendanceEditable(periodKey, 'save guard attendance');
         const existing = await GuardAttendanceRecord_1.GuardAttendanceRecord.findOne({
             guardId: entry.guardId,
             siteId,
@@ -151,10 +138,10 @@ class GuardAttendanceService {
                 await this.assertDayTotal(entry.guardId, date, hours, existing._id);
                 existing.hoursWorked = hours;
                 existing.isHoliday = !!entry.isHoliday;
+                existing.periodKey = periodKey;
                 if (entry.notes !== undefined)
                     existing.notes = entry.notes;
                 existing.updatedBy = userId;
-                existing.payrollPeriodId = period._id;
                 existing.changeHistory.push({
                     previousHours,
                     newHours: hours,
@@ -184,7 +171,7 @@ class GuardAttendanceService {
             dayOfMonth: this.parseDate(date).getDate(),
             hoursWorked: hours,
             isHoliday: !!entry.isHoliday,
-            payrollPeriodId: period._id,
+            periodKey,
             status: types_1.GuardAttendanceStatus.ACTIVE,
             source: params.source || types_1.AttendanceSource.OPERATIONS_EDIT,
             notes: entry.notes,
@@ -211,8 +198,6 @@ class GuardAttendanceService {
         if (!Array.isArray(params.entries) || params.entries.length === 0) {
             throw ApiError_1.ApiError.badRequest('No entries supplied');
         }
-        // One lock/future check up-front — the whole sheet shares the same date.
-        await this.assertNotLocked(params.date);
         this.assertFuture(params.date, !!params.allowFuture);
         const saved = [];
         const failed = [];
@@ -251,8 +236,9 @@ class GuardAttendanceService {
             throw ApiError_1.ApiError.badRequest('Record is already voided');
         if (!reason || !reason.trim())
             throw ApiError_1.ApiError.badRequest('A reason is required to void an attendance record');
+        // Payroll lock: corrections to a locked month need a RETURN of the payroll first.
+        await guardPayrollLock_service_1.GuardPayrollLockService.assertGuardAttendanceEditable(record.periodKey, 'void this attendance record');
         const dateStr = record.date;
-        await this.assertNotLocked(dateStr);
         const previousHours = record.hoursWorked;
         record.status = types_1.GuardAttendanceStatus.VOID;
         record.voidedBy = userId;
@@ -283,7 +269,7 @@ class GuardAttendanceService {
         const site = await Site_1.Site.findById(siteId);
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
-        const period = await this.gatePeriodFor(date);
+        const periodKey = periodKeyOfDate(date);
         const assignments = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ siteId, isCurrent: true }).sort({ isPrimary: -1, effectiveFrom: -1 });
         const guardIds = assignments.map((a) => a.guardId);
         const [guards, dayRecords] = await Promise.all([
@@ -341,20 +327,20 @@ class GuardAttendanceService {
         return {
             site: { _id: site._id, siteName: site.siteName, siteCode: site.siteCode },
             date,
-            period: { _id: period._id, year: period.year, month: period.month, monthName: period.monthName, status: period.status },
+            periodKey,
             config: this.getConfig(),
             futureDate: this.parseDate(date).getTime() > today.getTime(),
-            editable: period.status !== types_1.PayrollPeriodStatus.LOCKED,
+            editable: true,
             rows,
         };
     }
     /**
-     * Monthly totals: SUM(valid daily hours) grouped by GUARD + SITE + payroll
+     * Monthly totals: SUM(valid daily hours) grouped by GUARD + SITE + calendar
      * month. Sites are never merged; the primary site is flagged per guard.
      */
     static async getMonthlyTotals(year, month, siteId) {
-        const period = await staffAttendance_service_1.StaffAttendanceService.getOrCreatePeriod(year, month);
-        const match = { payrollPeriodId: period._id, status: types_1.GuardAttendanceStatus.ACTIVE };
+        const periodKey = `${year}-${String(month).padStart(2, '0')}`;
+        const match = { periodKey, status: types_1.GuardAttendanceStatus.ACTIVE };
         if (siteId)
             match.siteId = siteId;
         const [records, siteDocs] = await Promise.all([
@@ -419,7 +405,7 @@ class GuardAttendanceService {
             });
         });
         rows.sort((a, b) => a.guard.employeeCode.localeCompare(b.guard.employeeCode));
-        // Guards with assignments but no attendance this period — payroll gaps.
+        // Guards with assignments but no attendance this month — payroll gaps.
         const assignedGuardIds = await PrimarySiteAssignment_1.PrimarySiteAssignment.distinct('guardId', { isCurrent: true });
         const missing = assignedGuardIds
             .map((id) => id.toString())
@@ -428,7 +414,7 @@ class GuardAttendanceService {
             ? await Employee_1.Employee.find({ _id: { $in: missing }, category: types_1.EmployeeCategory.GUARD, status: { $in: ATTENDABLE_STATUSES } }).sort({ employeeCode: 1 })
             : [];
         return {
-            period: { _id: period._id, year: period.year, month: period.month, monthName: period.monthName, status: period.status, startDate: period.startDate, endDate: period.endDate },
+            periodKey,
             config: this.getConfig(),
             rows,
             missingAttendance: missingGuards.map((g) => ({ _id: g._id, employeeCode: g.employeeCode, firstName: g.firstName, lastName: g.lastName })),
@@ -436,7 +422,7 @@ class GuardAttendanceService {
         };
     }
     /**
-     * Guard → Site → Month → Total Hours feed consumed by payroll.
+     * Guard → Site → Period → Total Hours feed consumed by payroll.
      * Only ACTIVE (validated, non-void) records inside the period range count.
      */
     static async getSiteHoursForPeriod(periodStart, periodEnd, guardId) {
@@ -465,7 +451,7 @@ class GuardAttendanceService {
             dayCount: r.dayCount,
         }));
     }
-    /** Pre-payroll checks: missing attendance, duplicates, assignment gaps. */
+    /** Pre-payroll checks: missing attendance and assignment gaps. */
     static async getPayrollReadiness(year, month) {
         const totals = await this.getMonthlyTotals(year, month);
         const issues = [];
@@ -484,18 +470,8 @@ class GuardAttendanceService {
         for (const gap of totals.missingAttendance) {
             issues.push({ guard: gap, type: 'MISSING_ATTENDANCE', message: 'Assigned to a site but no attendance recorded for this period' });
         }
-        // Duplicate guard+site+date rows can only exist if the unique index is missing.
-        const period = totals.period;
-        const dupes = await GuardAttendanceRecord_1.GuardAttendanceRecord.aggregate([
-            { $match: { payrollPeriodId: new mongoose_1.default.Types.ObjectId(period._id), status: types_1.GuardAttendanceStatus.ACTIVE } },
-            { $group: { _id: { g: '$guardId', s: '$siteId', d: '$date' }, n: { $sum: 1 } } },
-            { $match: { n: { $gt: 1 } } },
-        ]);
-        for (const d of dupes) {
-            issues.push({ guard: { employeeCode: '', firstName: '', lastName: '' }, type: 'DUPLICATE', message: `${d._id.d}: ${d.n} records for the same guard+site+date` });
-        }
         return {
-            period: totals.period,
+            periodKey: totals.periodKey,
             config: totals.config,
             guardsWithAttendance: totals.rows.length,
             missingAttendance: totals.missingAttendance,

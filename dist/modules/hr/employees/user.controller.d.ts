@@ -12,6 +12,11 @@ export declare class UserController {
     static activate(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static deactivate(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static getRoles(_req: Request, res: Response): Promise<void>;
+    /**
+     * The module-access catalog for grant/deny UIs: every module with its
+     * permissions, so the admin sees exactly what a module switch toggles.
+     */
+    static getModuleAccess(_req: Request, res: Response): Promise<void>;
 }
 export {};
 //# sourceMappingURL=user.controller.d.ts.map

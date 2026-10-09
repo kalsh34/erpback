@@ -10,6 +10,7 @@ const User_1 = require("../../models/User");
 const Employee_1 = require("../../models/Employee");
 const env_1 = require("../../config/env");
 const ApiError_1 = require("../../common/ApiError");
+const rbac_1 = require("../../middleware/rbac");
 class AuthService {
     static async register(data) {
         const existing = await User_1.User.findOne({ email: data.email });
@@ -44,14 +45,20 @@ class AuthService {
         await user.save();
         const userObj = user.toObject();
         const { password: _, ...userWithoutPassword } = userObj;
-        return { user: userWithoutPassword, token };
+        return {
+            user: { ...userWithoutPassword, permissions: (0, rbac_1.computeEffectivePermissions)(user) },
+            token,
+        };
     }
     static async getMe(userId) {
         const user = await User_1.User.findById(userId);
         if (!user) {
             throw ApiError_1.ApiError.notFound('User not found');
         }
-        return user;
+        return {
+            ...user.toObject(),
+            permissions: (0, rbac_1.computeEffectivePermissions)(user),
+        };
     }
     static async changePassword(userId, currentPassword, newPassword) {
         const user = await User_1.User.findById(userId).select('+password');
@@ -69,13 +76,18 @@ class AuthService {
         const user = await User_1.User.findById(userId);
         if (!user)
             throw ApiError_1.ApiError.notFound('User not found');
-        if (data.firstName)
-            user.firstName = data.firstName;
-        if (data.lastName)
-            user.lastName = data.lastName;
+        if (data.firstName !== undefined)
+            user.firstName = data.firstName.trim();
+        if (data.lastName !== undefined)
+            user.lastName = data.lastName.trim();
+        if (data.phone !== undefined)
+            user.phone = data.phone.trim();
+        if (data.avatarUrl !== undefined)
+            user.avatarUrl = data.avatarUrl;
         await user.save();
+        // Keep the linked employee record's phone in sync (HR views read from there).
         if (data.phone !== undefined && user.employeeId) {
-            await Employee_1.Employee.findByIdAndUpdate(user.employeeId, { phone: data.phone });
+            await Employee_1.Employee.findByIdAndUpdate(user.employeeId, { phone: data.phone.trim() });
         }
         return user;
     }

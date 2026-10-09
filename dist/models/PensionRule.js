@@ -36,14 +36,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PensionRule = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const pensionRuleSchema = new mongoose_1.Schema({
-    label: { type: String, required: true },
-    employeeRate: { type: Number, required: true },
-    employerRate: { type: Number, required: true },
-    pensionTaxBase: { type: String, enum: ['NORMAL_SALARY_ONLY', 'GROSS_PAY'], default: 'NORMAL_SALARY_ONLY' },
+    name: { type: String, required: true, trim: true },
+    kind: { type: String, enum: ['GUARD', 'STAFF'], default: 'GUARD' },
+    employeePercent: { type: Number, required: true, min: 0, max: 100 },
+    employerPercent: { type: Number, required: true, min: 0, max: 100 },
+    minPensionableSalary: { type: Number, default: null },
+    maxPensionableSalary: { type: Number, default: null },
     effectiveFrom: { type: Date, required: true },
-    effectiveTo: { type: Date },
-    isCurrent: { type: Boolean, default: true },
+    effectiveTo: { type: Date, default: null },
+    createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
-pensionRuleSchema.index({ isCurrent: 1 });
+pensionRuleSchema.index({ effectiveFrom: -1 });
 exports.PensionRule = mongoose_1.default.model('PensionRule', pensionRuleSchema);
 //# sourceMappingURL=PensionRule.js.map

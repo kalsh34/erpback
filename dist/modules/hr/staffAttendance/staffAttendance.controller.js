@@ -41,39 +41,6 @@ class StaffAttendanceController {
             next(error);
         }
     }
-    static async getAllPeriods(req, res, next) {
-        try {
-            const periods = await staffAttendance_service_1.StaffAttendanceService.getAllPeriods();
-            res.json({ success: true, data: periods });
-        }
-        catch (error) {
-            next(error);
-        }
-    }
-    static async lockPeriod(req, res, next) {
-        try {
-            const { year, month, reason } = req.body;
-            const period = await staffAttendance_service_1.StaffAttendanceService.lockPeriod(year, month, req.user?.userId || '', reason, {
-                ip: req.ip, ua: req.get('user-agent'),
-            });
-            res.json({ success: true, data: period });
-        }
-        catch (error) {
-            next(error);
-        }
-    }
-    static async unlockPeriod(req, res, next) {
-        try {
-            const { year, month, reason } = req.body;
-            const period = await staffAttendance_service_1.StaffAttendanceService.unlockPeriod(year, month, req.user?.userId || '', reason, {
-                ip: req.ip, ua: req.get('user-agent'),
-            });
-            res.json({ success: true, data: period });
-        }
-        catch (error) {
-            next(error);
-        }
-    }
 }
 exports.StaffAttendanceController = StaffAttendanceController;
 //# sourceMappingURL=staffAttendance.controller.js.map

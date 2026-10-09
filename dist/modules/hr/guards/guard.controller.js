@@ -53,7 +53,12 @@ class GuardController {
     }
     static async getAllGuards(req, res, next) {
         try {
-            const guards = await guard_service_1.GuardService.getAllGuards();
+            const guards = await guard_service_1.GuardService.getAllGuards({
+                siteId: typeof req.query.siteId === 'string' ? req.query.siteId : undefined,
+                assignment: typeof req.query.assignment === 'string' ? req.query.assignment : undefined,
+                status: typeof req.query.status === 'string' ? req.query.status : undefined,
+                search: typeof req.query.search === 'string' ? req.query.search : undefined,
+            });
             res.json({ success: true, data: guards });
         }
         catch (error) {

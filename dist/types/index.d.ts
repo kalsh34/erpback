@@ -43,11 +43,9 @@ export declare enum SiteStatus {
     INACTIVE = "INACTIVE",
     SUSPENDED = "SUSPENDED"
 }
-export declare enum PayrollPeriodStatus {
-    DRAFT = "DRAFT",
-    OPEN = "OPEN",
-    CLOSED = "CLOSED",
-    LOCKED = "LOCKED"
+export declare enum CompanyStatus {
+    ACTIVE = "ACTIVE",
+    INACTIVE = "INACTIVE"
 }
 export declare enum PayrollRecordStatus {
     DRAFT = "DRAFT",
@@ -114,10 +112,16 @@ export declare enum PaymentMethod {
     BANK_TRANSFER = "BANK_TRANSFER",
     CASH = "CASH"
 }
-export declare enum LoanStatus {
+export declare enum EmployeeDeductionType {
+    LOAN = "LOAN",
+    ADVANCE = "ADVANCE",
+    PENALTY = "PENALTY",
+    OTHER = "OTHER"
+}
+export declare enum DeductionStatus {
     ACTIVE = "ACTIVE",
-    PAID_OFF = "PAID_OFF",
-    WRITTEN_OFF = "WRITTEN_OFF"
+    COMPLETED = "COMPLETED",
+    CANCELLED = "CANCELLED"
 }
 export declare enum PensionTaxBase {
     NORMAL_SALARY_ONLY = "NORMAL_SALARY_ONLY",
@@ -135,12 +139,16 @@ export declare const PERMISSIONS: {
     readonly SITE_CREATE: "site.create";
     readonly SITE_READ: "site.read";
     readonly SITE_UPDATE: "site.update";
+    readonly COMPANY_CREATE: "company.create";
+    readonly COMPANY_READ: "company.read";
+    readonly COMPANY_UPDATE: "company.update";
     readonly GUARD_REGISTER: "guard.register";
     readonly GUARD_ASSIGN_SITE: "guard.assign-site";
     readonly GUARD_MODIFY_HOURS: "guard.modify-hours";
     readonly GUARD_ATTENDANCE_READ: "guard-attendance.read";
     readonly GUARD_ATTENDANCE_MANAGE: "guard-attendance.manage";
     readonly GUARD_ATTENDANCE_FUTURE: "guard-attendance.future";
+    readonly GUARD_ATTENDANCE_SELF: "guard-attendance.self";
     readonly STAFF_ATTENDANCE_MANAGE: "staff-attendance.manage";
     readonly GUARD_PAYROLL_READ: "guard-payroll.read";
     readonly GUARD_PAYROLL_RATES: "guard-payroll.rates";
@@ -149,6 +157,7 @@ export declare const PERMISSIONS: {
     readonly GUARD_PAYROLL_APPROVE: "guard-payroll.approve";
     readonly GUARD_PAYROLL_PAY: "guard-payroll.pay";
     readonly GUARD_PAYROLL_RETURN: "guard-payroll.return";
+    readonly OFFICE_PAYROLL_READ: "office-payroll.read";
     readonly OFFICE_PAYROLL_CREATE: "office-payroll.create";
     readonly OFFICE_PAYROLL_CALCULATE: "office-payroll.calculate";
     readonly OFFICE_PAYROLL_SUBMIT: "office-payroll.submit";
@@ -176,8 +185,24 @@ export declare const PERMISSIONS: {
     readonly ROTATION_APPROVE: "rotation.approve";
     readonly ROTATION_PUBLISH: "rotation.publish";
     readonly ROTATION_OVERRIDE: "rotation.override";
+    readonly CONTRACT_READ: "contract.read";
+    readonly CONTRACT_CREATE: "contract.create";
+    readonly CONTRACT_UPDATE: "contract.update";
+    readonly GUARANTOR_READ: "guarantor.read";
+    readonly GUARANTOR_MANAGE: "guarantor.manage";
 };
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
+/**
+ * MODULE ACCESS REGISTRY — the modules an admin can grant or deny per user.
+ * Each module groups the permissions that belong to it; effective user
+ * permissions = role defaults + granted modules − denied modules.
+ */
+export declare const MODULE_ACCESS: {
+    key: string;
+    label: string;
+    permissions: Permission[];
+}[];
+export declare const MODULE_ACCESS_KEYS: string[];
 export declare const ROLE_PERMISSIONS: Record<UserRole, Permission[]>;
 export interface TaxBracketEntry {
     min: number;

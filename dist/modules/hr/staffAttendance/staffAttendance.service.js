@@ -2,27 +2,22 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StaffAttendanceService = void 0;
 const StaffAttendance_1 = require("../../../models/StaffAttendance");
-const PayrollPeriod_1 = require("../../../models/PayrollPeriod");
 const Employee_1 = require("../../../models/Employee");
 const ApiError_1 = require("../../../common/ApiError");
 const types_1 = require("../../../types");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
-const dateUtils_1 = require("../../../common/dateUtils");
+const ymKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
 class StaffAttendanceService {
     static async saveDayStatus(data, auditCtx) {
-        const period = await this.getOrCreatePeriod(data.year, data.month);
-        // Date-aware lock gate (spec §6): days 26–31 belong to the payroll period
-        // that ends on the 25th of the NEXT month, so they are gated by THAT
-        // period's lock — not the calendar month's.
-        const gatePeriod = await this.getGatePeriod(data.year, data.month, data.dayOfMonth);
-        if (gatePeriod.status === types_1.PayrollPeriodStatus.LOCKED) {
-            throw ApiError_1.ApiError.forbidden(`Payroll period ${gatePeriod.monthName} ${gatePeriod.year} is locked. Finance must unlock it before changes can be made.`);
+        const daysInMonth = new Date(data.year, data.month, 0).getDate();
+        if (data.dayOfMonth < 1 || data.dayOfMonth > daysInMonth) {
+            throw ApiError_1.ApiError.badRequest(`dayOfMonth must be between 1 and ${daysInMonth} for ${ymKey(data.year, data.month)}`);
         }
         const dateStr = `${data.year}-${String(data.month).padStart(2, '0')}-${String(data.dayOfMonth).padStart(2, '0')}`;
         const existing = await StaffAttendance_1.StaffAttendance.findOne({
             employeeId: data.employeeId,
-            payrollPeriodId: period._id,
+            periodKey: ymKey(data.year, data.month),
             dayOfMonth: data.dayOfMonth,
         });
         let record;
@@ -49,7 +44,7 @@ class StaffAttendanceService {
         else {
             record = await StaffAttendance_1.StaffAttendance.create({
                 employeeId: data.employeeId,
-                payrollPeriodId: period._id,
+                periodKey: ymKey(data.year, data.month),
                 date: dateStr,
                 dayOfMonth: data.dayOfMonth,
                 status: data.status,
@@ -71,10 +66,6 @@ class StaffAttendanceService {
         return record;
     }
     static async bulkMarkDay(data, auditCtx) {
-        const gatePeriod = await this.getGatePeriod(data.year, data.month, data.dayOfMonth);
-        if (gatePeriod.status === types_1.PayrollPeriodStatus.LOCKED) {
-            throw ApiError_1.ApiError.forbidden(`Payroll period ${gatePeriod.monthName} ${gatePeriod.year} is locked.`);
-        }
         const staff = await Employee_1.Employee.find({ category: types_1.EmployeeCategory.OFFICE_STAFF, status: { $in: ['ACTIVE', 'CONTRACTED'] } });
         const results = [];
         for (const emp of staff) {
@@ -100,10 +91,9 @@ class StaffAttendanceService {
         return results;
     }
     static async getGrid(year, month) {
-        const period = await this.getOrCreatePeriod(year, month);
         const daysInMonth = new Date(year, month, 0).getDate();
         const staff = await Employee_1.Employee.find({ category: types_1.EmployeeCategory.OFFICE_STAFF, status: { $in: ['ACTIVE', 'CONTRACTED'] } }).sort({ employeeCode: 1 });
-        const records = await StaffAttendance_1.StaffAttendance.find({ payrollPeriodId: period._id });
+        const records = await StaffAttendance_1.StaffAttendance.find({ periodKey: ymKey(year, month) });
         const recordMap = new Map();
         records.forEach((r) => {
             const key = `${r.employeeId}_${r.dayOfMonth}`;
@@ -120,13 +110,12 @@ class StaffAttendanceService {
             }
             return { employee: emp, days };
         });
-        return { period, daysInMonth, grid };
+        return { periodKey: ymKey(year, month), daysInMonth, grid };
     }
     static async getMonthlySummary(year, month) {
-        const period = await this.getOrCreatePeriod(year, month);
         const daysInMonth = new Date(year, month, 0).getDate();
         const staff = await Employee_1.Employee.find({ category: types_1.EmployeeCategory.OFFICE_STAFF, status: { $in: ['ACTIVE', 'CONTRACTED'] } }).sort({ employeeCode: 1 });
-        const records = await StaffAttendance_1.StaffAttendance.find({ payrollPeriodId: period._id });
+        const records = await StaffAttendance_1.StaffAttendance.find({ periodKey: ymKey(year, month) });
         const summaryMap = new Map();
         staff.forEach((emp) => {
             summaryMap.set(emp._id.toString(), {
@@ -150,74 +139,7 @@ class StaffAttendanceService {
                 totalDaysInMonth: daysInMonth,
             };
         });
-        return { period, daysInMonth, summaries };
-    }
-    static async lockPeriod(year, month, userId, reason, auditCtx) {
-        const period = await this.getOrCreatePeriod(year, month);
-        if (period.status === types_1.PayrollPeriodStatus.LOCKED) {
-            throw ApiError_1.ApiError.badRequest('Period is already locked');
-        }
-        const oldStatus = period.status;
-        period.status = types_1.PayrollPeriodStatus.LOCKED;
-        await period.save();
-        AuditService_1.AuditService.log({
-            userId,
-            action: 'PERIOD_LOCKED',
-            entity: 'PayrollPeriod',
-            entityId: period._id.toString(),
-            oldValues: { status: oldStatus },
-            newValues: { status: 'LOCKED', reason },
-            ipAddress: auditCtx?.ip,
-            userAgent: auditCtx?.ua,
-        });
-        EventBus_1.eventBus.emit('hr.staffAttendance.periodLocked', { periodId: period._id, year, month });
-        return period;
-    }
-    static async unlockPeriod(year, month, userId, reason, auditCtx) {
-        const period = await this.getOrCreatePeriod(year, month);
-        if (period.status !== types_1.PayrollPeriodStatus.LOCKED) {
-            throw ApiError_1.ApiError.badRequest('Period is not locked');
-        }
-        const oldStatus = period.status;
-        period.status = types_1.PayrollPeriodStatus.OPEN;
-        await period.save();
-        AuditService_1.AuditService.log({
-            userId,
-            action: 'PERIOD_UNLOCKED',
-            entity: 'PayrollPeriod',
-            entityId: period._id.toString(),
-            oldValues: { status: oldStatus },
-            newValues: { status: 'OPEN', reason },
-            ipAddress: auditCtx?.ip,
-            userAgent: auditCtx?.ua,
-        });
-        EventBus_1.eventBus.emit('hr.staffAttendance.periodUnlocked', { periodId: period._id, year, month });
-        return period;
-    }
-    static async getAllPeriods() {
-        return PayrollPeriod_1.PayrollPeriod.find().sort({ year: -1, month: -1 });
-    }
-    /**
-     * The payroll period that governs edits to this calendar day (spec §6):
-     * days 1–25 → (year, month); days 26–31 → the NEXT month (year rollover).
-     */
-    static async getGatePeriod(year, month, dayOfMonth) {
-        const key = (0, dateUtils_1.payrollPeriodKeyForDate)(new Date(year, month - 1, dayOfMonth));
-        return this.getOrCreatePeriod(key.year, key.month);
-    }
-    static async getOrCreatePeriod(year, month) {
-        let period = await PayrollPeriod_1.PayrollPeriod.findOne({ year, month });
-        if (!period) {
-            // Spec §6: payroll periods run the 26th → 25th (label = ENDING month).
-            const { startDate, endDate } = (0, dateUtils_1.payrollPeriodRange)(year, month);
-            period = await PayrollPeriod_1.PayrollPeriod.create({
-                year, month, monthName: dateUtils_1.MONTH_NAMES[month - 1],
-                startDate,
-                endDate,
-                status: types_1.PayrollPeriodStatus.OPEN,
-            });
-        }
-        return period;
+        return { periodKey: ymKey(year, month), daysInMonth, summaries };
     }
 }
 exports.StaffAttendanceService = StaffAttendanceService;

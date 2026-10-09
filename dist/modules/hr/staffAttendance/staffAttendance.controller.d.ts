@@ -8,9 +8,6 @@ export declare class StaffAttendanceController {
     static bulkMarkDay(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static getGrid(req: Request, res: Response, next: NextFunction): Promise<void>;
     static getMonthlySummary(req: Request, res: Response, next: NextFunction): Promise<void>;
-    static getAllPeriods(req: Request, res: Response, next: NextFunction): Promise<void>;
-    static lockPeriod(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
-    static unlockPeriod(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
 }
 export {};
 //# sourceMappingURL=staffAttendance.controller.d.ts.map

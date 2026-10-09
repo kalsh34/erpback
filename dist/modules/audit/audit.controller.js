@@ -5,11 +5,13 @@ const audit_service_1 = require("./audit.service");
 class AuditController {
     static async getAll(req, res, next) {
         try {
-            const { page, limit, entity, userId } = req.query;
+            const { page, limit, entity, entityId, userId } = req.query;
             const result = await audit_service_1.AuditService.getAll({
                 page: parseInt(page) || 1,
                 limit: parseInt(limit) || 20,
-                entity, userId,
+                entity,
+                entityId: entityId || undefined,
+                userId,
             });
             res.json({ success: true, ...result });
         }

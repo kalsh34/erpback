@@ -43,7 +43,7 @@ const employeeSchema = new mongoose_1.Schema({
     lastName: { type: String, required: true, trim: true },
     category: { type: String, enum: Object.values(types_1.EmployeeCategory), required: true },
     status: { type: String, enum: Object.values(types_1.EmployeeStatus), default: types_1.EmployeeStatus.INACTIVE },
-    companyId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', default: null },
+    companyId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Company', default: null },
     partyId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Party', default: null },
     homeSiteId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Site', default: null },
     dateOfBirth: { type: Date },

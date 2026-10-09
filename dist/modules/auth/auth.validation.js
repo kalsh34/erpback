@@ -20,6 +20,7 @@ exports.changePasswordValidation = [
 exports.updateProfileValidation = [
     (0, express_validator_1.body)('firstName').optional().notEmpty().withMessage('First name cannot be empty'),
     (0, express_validator_1.body)('lastName').optional().notEmpty().withMessage('Last name cannot be empty'),
-    (0, express_validator_1.body)('phone').optional().isString(),
+    (0, express_validator_1.body)('phone').optional({ nullable: true }).isString(),
+    (0, express_validator_1.body)('avatarUrl').optional({ nullable: true }).isString(),
 ];
 //# sourceMappingURL=auth.validation.js.map

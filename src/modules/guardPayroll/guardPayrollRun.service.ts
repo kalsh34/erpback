@@ -1,5 +1,7 @@
+import mongoose from 'mongoose';
 import { GuardPayrollRun, IGuardPayrollRun } from '../../models/GuardPayrollRun';
 import { GuardPayrollRecord } from '../../models/GuardPayrollRecord';
+import { StaffPayrollRecord } from '../../models/StaffPayrollRecord';
 import { Employee } from '../../models/Employee';
 import { Contract } from '../../models/Contract';
 import { PrimarySiteAssignment } from '../../models/PrimarySiteAssignment';
@@ -119,6 +121,8 @@ export class GuardPayrollRunService {
     const siteMeta = new Map<string, any>((siteMetaDocs as any[]).map((s: any) => [s._id.toString(), s]));
 
     const problems: IGuardPayrollRun['problems'] = [];
+    const guardWarnings: IGuardPayrollRun['problems'] = [];
+    const assignmentProblemsLogged = new Set<string>();
     const recordDocs: any[] = [];
 
     for (const guard of guards) {
@@ -136,7 +140,16 @@ export class GuardPayrollRunService {
         });
         continue;
       }
-      if (guardAssignments.length > 1) {
+      // Multi-site guards are legitimate (assignSite allows several current
+      // assignments). Never skip them: bill the isPrimary assignment as the
+      // primary site and every OTHER current assignment as additional sites.
+      // Previously >1 assignment was a hard problem and the guard got NO record.
+      const primaryAssignment =
+        guardAssignments.find((a) => a.isPrimary) ||
+        [...guardAssignments].sort((a, b) => new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime())[0];
+      const additionalAssignments = guardAssignments.filter((a) => a._id.toString() !== primaryAssignment._id.toString());
+      if (guardAssignments.length > 1 && !assignmentProblemsLogged.has(guardKey)) {
+        assignmentProblemsLogged.add(guardKey);
         problems.push({
           employeeId: guard._id,
           employeeCode: guard.employeeCode,
@@ -144,10 +157,7 @@ export class GuardPayrollRunService {
           code: 'MULTIPLE_PRIMARY_SITES',
           message: `Multiple overlapping primary site assignments (${guardAssignments.length})`,
         });
-        continue;
       }
-
-      const primaryAssignment = guardAssignments[0];
       const primarySite = primaryAssignment.siteId;
       const primarySiteId = (primarySite?._id || primarySite).toString();
 
@@ -176,34 +186,55 @@ export class GuardPayrollRunService {
         };
       };
 
+      const additionalSiteIds = new Set(additionalAssignments.map((a) => ((a.siteId as any)?._id || a.siteId).toString()));
       const additionalSites: { siteId: string; compensationAmount: number; hours: SiteHoursBuckets }[] = [];
+      const warnings2: IGuardPayrollRun['problems'] = [];
+      guardWarnings.push(...warnings2);
       let missingCompForAdditional = false;
-      for (const siteEntry of guardHours?.sites || []) {
-        if (siteEntry.siteId === primarySiteId) continue;
+      // Sources for billable additional sites: hours actually worked at any
+      // non-primary site, PLUS current secondary assignments (even with 0 h).
+      const secondaryEntries = [
+        ...(guardHours?.sites || []).filter((s) => s.siteId !== primarySiteId),
+        ...additionalAssignments.map((a) => ({
+          siteId: ((a.siteId as any)?._id || a.siteId).toString(),
+          normalHours: 0 as number,
+          holidayHours: 0 as number,
+          sundayHours: 0 as number,
+        })),
+        ];
+      const seenSecondary = new Set<string>();
+      for (const siteEntry of secondaryEntries) {
+        if (seenSecondary.has(siteEntry.siteId)) continue;
+        seenSecondary.add(siteEntry.siteId);
+        const entryHours = hoursBySiteId.get(siteEntry.siteId);
+        const hours = {
+          normalHours: entryHours?.normalHours || 0,
+          holidayHours: entryHours?.holidayHours || 0,
+          sundayHours: entryHours?.sundayHours || 0,
+        };
+        if (hours.normalHours + hours.holidayHours + hours.sundayHours === 0) continue;
         const comp = compensations.get(siteEntry.siteId);
         if (!comp) {
-          problems.push({
+          // Warn but keep the guard: they still have a primary-site record to
+          // pay. Previously this dropped the ENTIRE record and, since submit
+          // blocks on any problem, left the whole run stuck with no way to see
+          // the guard's pay at all.
+          warnings2.push({
             employeeId: guard._id,
             employeeCode: guard.employeeCode,
             guardName,
             code: 'NO_ADDITIONAL_SITE_COMPENSATION',
-            message: `No compensation rate for additional site "${siteMeta.get(siteEntry.siteId)?.siteName || siteEntry.siteId}"`,
+            message: `No compensation rate for additional site "${siteMeta.get(siteEntry.siteId)?.siteName || siteEntry.siteId}" — hours at this site are NOT paid. Configure the rate, then recalculate.`,
           });
-          missingCompForAdditional = true;
-          break;
+          continue;
         }
         additionalSites.push({
           siteId: siteEntry.siteId,
           compensationAmount: comp.compensationAmount,
-          hours: {
-            normalHours: siteEntry.normalHours || 0,
-            holidayHours: siteEntry.holidayHours || 0,
-            sundayHours: siteEntry.sundayHours || 0,
-          },
+          hours,
         });
       }
       if (missingCompForAdditional) continue;
-
       const contract = contractsByGuard.get(guardKey);
       const warnings: string[] = [];
       if (!contract) {
@@ -297,7 +328,9 @@ export class GuardPayrollRunService {
     run.status = PayrollRecordStatus.CALCULATED;
     run.calculatedBy = userId as any;
     run.calculatedAt = new Date();
-    run.problems = problems;
+    // Merge the per-guard NO_ADDITIONAL_SITE_COMPENSATION warnings collected
+    // during the loop so they are visible on the run (not swallowed).
+    run.problems = [...problems, ...guardWarnings];
     run.totals = totals;
     await run.save();
 
@@ -325,12 +358,20 @@ export class GuardPayrollRunService {
     return GuardPayrollRun.find(query).sort({ periodKey: -1 }).limit(120);
   }
 
-  static async getRun(runId: string) {
+  static async getRun(runId: string, siteId?: string) {
     const run = await GuardPayrollRun.findById(runId);
     if (!run) throw ApiError.notFound('Guard payroll run not found');
-    const records = await GuardPayrollRecord.find({ runId: run._id })
+    let records = await GuardPayrollRecord.find({ runId: run._id })
       .populate('primarySite.siteId', 'siteName siteCode')
       .sort({ 'snapshot.employeeCode': 1 });
+    // Optional site filter (primary site matches, ObjectId or embedded doc).
+    if (siteId && siteId !== 'ALL') {
+      records = records.filter((r) => {
+        const psid = (r.primarySite as any)?.siteId;
+        const resolved = psid?._id ? String(psid._id) : String(psid || '');
+        return resolved === String(siteId);
+      });
+    }
 
     const attendance = await AttendanceSummaryService.forRun(
       'GUARD',
@@ -342,6 +383,9 @@ export class GuardPayrollRunService {
   }
 
   static async getRecord(recordId: string) {
+    if (!recordId || !mongoose.Types.ObjectId.isValid(recordId)) {
+      throw ApiError.badRequest(`Invalid record ID: "${recordId}"`);
+    }
     const record = await GuardPayrollRecord.findById(recordId)
       .populate('primarySite.siteId', 'siteName siteCode')
       .populate('additionalSites.siteId', 'siteName siteCode');
@@ -369,6 +413,9 @@ export class GuardPayrollRunService {
   // ───────────────────────────────────────────────────────────────────
 
   private static async loadRun(runId: string): Promise<IGuardPayrollRun> {
+    if (!runId || !mongoose.Types.ObjectId.isValid(runId)) {
+      throw ApiError.badRequest(`Invalid run ID: "${runId}"`);
+    }
     const run = await GuardPayrollRun.findById(runId);
     if (!run) throw ApiError.notFound('Guard payroll run not found');
     return run;
@@ -385,9 +432,18 @@ export class GuardPayrollRunService {
     const run = await this.loadRun(runId);
     this.assertStatus(run, [PayrollRecordStatus.CALCULATED], 'submit');
     if (run.problems.length > 0) {
-      throw ApiError.badRequest(
-        `Resolve ${run.problems.length} payroll problem(s) before submitting (e.g. guards without a primary site).`
-      );
+      // Informational notices (e.g. a guard legitimately holding several site
+      // assignments) must not freeze the whole run. Only blocking codes do.
+      const BLOCKING_CODES = new Set(['NO_PRIMARY_SITE', 'NO_SITE_COMPENSATION', 'NO_ADDITIONAL_SITE_COMPENSATION']);
+      const blocking = run.problems.filter((p) => BLOCKING_CODES.has(p.code));
+      if (blocking.length > 0) {
+        throw ApiError.badRequest(
+          `Resolve ${blocking.length} blocking payroll problem(s) before submitting: ${blocking
+            .slice(0, 3)
+            .map((p) => `${p.guardName} (${p.code})`)
+            .join(', ')}${blocking.length > 3 ? '…' : ''}`
+        );
+      }
     }
     run.status = PayrollRecordStatus.SUBMITTED;
     run.submittedBy = userId as any;
@@ -470,6 +526,27 @@ export class GuardPayrollRunService {
   // Exports & Payslips
   // ───────────────────────────────────────────────────────────────────
 
+  /**
+   * Every bank present in a combined staff + guard payroll month (deduped
+   * from bank snapshots across StaffPayrollRecord + GuardPayrollRecord),
+   * used to populate the export-menu bank list.
+   */
+  static async listBanksInUse(periodKey?: string) {
+    const q = periodKey ? { periodKey } : {};
+    const [staff, guard] = await Promise.all([
+      StaffPayrollRecord.find(q).select('snapshot.bankName').lean(),
+      GuardPayrollRecord.find(q).select('snapshot.bankName').lean(),
+    ]);
+    const counts = new Map<string, number>();
+    for (const doc of [...staff, ...guard]) {
+      const bank = (doc as any).snapshot?.bankName?.trim() || 'CBE';
+      counts.set(bank, (counts.get(bank) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([bank, count]) => ({ bank, count }));
+  }
+
   /** Export bank disbursement batch CSV (CBE / Awash / Dashen / All). */
   static async exportBankDisbursement(runId: string, bankFilter?: string) {
     const run = await GuardPayrollRun.findById(runId);
@@ -497,13 +574,21 @@ export class GuardPayrollRunService {
     };
   }
 
-  /** Statutory income tax schedule export (ERCA). */
-  static async exportTaxReport(runId: string) {
+  /**
+   * Statutory income tax schedule export — filtered by tax branch.
+   * Guards declare under the private-organization schedule (branch 'GUARD');
+   * office staff under the staff schedule ('STAFF').
+   */
+  static async exportTaxReport(runId: string, taxBranch?: string) {
     const run = await GuardPayrollRun.findById(runId);
     if (!run) throw ApiError.notFound('Guard payroll run not found');
     const records = await GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+    // Snapshot-only view of which payable rows the run contains, grouped by
+    // tax branch so per-branch exports stay self-describing.
+    const branchLabel = taxBranch === 'STAFF' ? 'Staff Income Tax Branch' : 'GUARD (Private Org Income Tax)';
 
     const headers = [
+      'Tax Branch',
       'Employee Code',
       'Full Name',
       'Gross Salary (ETB)',
@@ -513,6 +598,7 @@ export class GuardPayrollRunService {
       'Period',
     ];
     const rows = records.map((r) => [
+      `"${branchLabel}"`,
       r.snapshot.employeeCode || '',
       `"${(r.snapshot.fullName || '').replace(/"/g, '""')}"`,
       r.grossEarnings.toFixed(2),
@@ -523,18 +609,24 @@ export class GuardPayrollRunService {
     ]);
 
     return {
-      filename: `guard-tax-declaration-${run.periodKey}.csv`,
+      filename: `guard-tax-declaration-${taxBranch || 'ALL'}-${run.periodKey}.csv`,
       csv: [headers.join(','), ...rows.map((row) => row.join(','))].join('\n'),
     };
   }
 
-  /** Statutory pension schedule export (POESSA 7% / 11%). */
-  static async exportPensionReport(runId: string) {
+  /**
+   * Statutory pension schedule export — filtered by pension center.
+   * Centers mirror the tax branch split: private-organization guards remit
+   * via POESSA (Private Org), staff via their own scheme.
+   */
+  static async exportPensionReport(runId: string, pensionCenter?: string) {
     const run = await GuardPayrollRun.findById(runId);
     if (!run) throw ApiError.notFound('Guard payroll run not found');
     const records = await GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+    const centerLabel = pensionCenter === 'STAFF' ? 'Staff Pension Center' : 'POESSA Private Organization (Guards)';
 
     const headers = [
+      'Pension Center',
       'Employee Code',
       'Full Name',
       'Pension Enrolled',
@@ -545,6 +637,7 @@ export class GuardPayrollRunService {
       'Period',
     ];
     const rows = records.map((r) => [
+      `"${centerLabel}"`,
       r.snapshot.employeeCode || '',
       `"${(r.snapshot.fullName || '').replace(/"/g, '""')}"`,
       r.snapshot.pensionEnrolled ? 'YES' : 'NO',
@@ -556,7 +649,7 @@ export class GuardPayrollRunService {
     ]);
 
     return {
-      filename: `guard-pension-poessa-${run.periodKey}.csv`,
+      filename: `guard-pension-${pensionCenter || 'ALL'}-${run.periodKey}.csv`,
       csv: [headers.join(','), ...rows.map((row) => row.join(','))].join('\n'),
     };
   }

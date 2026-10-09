@@ -95,13 +95,8 @@ class GuardPayrollService {
         const record = await GuardPayrollRecord_1.GuardPayrollRecord.findById(recordId);
         if (!record)
             throw ApiError_1.ApiError.notFound('Record not found');
-        // CALCULATED is re-runnable: fixing a missing site rate (or overriding then
-        // changing course) must reach the engine without a return-trip. Records
-        // past CHECKED still require the RETURNED workflow first.
-        if (record.status !== types_1.PayrollRecordStatus.DRAFT &&
-            record.status !== types_1.PayrollRecordStatus.RETURNED &&
-            record.status !== types_1.PayrollRecordStatus.CALCULATED) {
-            throw ApiError_1.ApiError.badRequest('Record must be DRAFT, CALCULATED, or RETURNED');
+        if (record.status !== types_1.PayrollRecordStatus.DRAFT && record.status !== types_1.PayrollRecordStatus.RETURNED) {
+            throw ApiError_1.ApiError.badRequest('Record must be DRAFT or RETURNED');
         }
         const calculated = await payrollCalculation_service_1.PayrollCalculationService.calculateGuardPayroll(recordId);
         if (auditCtx) {
@@ -124,21 +119,6 @@ class GuardPayrollService {
             throw ApiError_1.ApiError.notFound('Record not found');
         if (record.status !== types_1.PayrollRecordStatus.CALCULATED && record.status !== types_1.PayrollRecordStatus.RETURNED) {
             throw ApiError_1.ApiError.badRequest('Record must be CALCULATED or RETURNED');
-        }
-        // Spec §10: finalize is BLOCKED while any additional site has no rate or
-        // any data-integrity validation error is open. Fix the rate / hours data,
-        // recalculate, then submit.
-        const issues = [];
-        if (record.rateMissing) {
-            const missingSites = (record.siteEarnings || [])
-                .filter((e) => e.rateMissing)
-                .map((e) => e.siteName || 'unknown site');
-            issues.push(`Missing rate for: ${missingSites.join(', ')}. Finance must enter the site rate first.`);
-        }
-        for (const err of record.validationErrors || [])
-            issues.push(err);
-        if (issues.length > 0) {
-            throw ApiError_1.ApiError.badRequest(`Cannot submit — ${issues.join(' ')}`);
         }
         record.status = types_1.PayrollRecordStatus.SUBMITTED;
         record.submittedBy = userId;
@@ -352,33 +332,12 @@ class GuardPayrollService {
             throw ApiError_1.ApiError.badRequest('Record must be DRAFT or RETURNED to edit');
         }
         const oldHours = { normalHours: record.normalHours, otHours: record.otHours, holidayHours: record.holidayHours };
-        // Site-aware records: a total-hours edit is distributed onto the PRIMARY
-        // site entry (other sites' hours stay untouched). Recalculation reads
-        // siteEarnings, so the totals and the breakdown must move together.
-        const hasBreakdown = (record.siteEarnings || []).length > 0;
-        const primary = hasBreakdown ? record.siteEarnings.find((e) => e.isPrimary) : undefined;
-        if (data.normalHours !== undefined) {
-            if (hasBreakdown && primary) {
-                const otherNormal = record.siteEarnings
-                    .filter((e) => !e.isPrimary)
-                    .reduce((s, e) => s + e.normalHours, 0);
-                primary.normalHours = Math.round(Math.max(0, data.normalHours - otherNormal) * 100) / 100;
-                primary.normalEarnings = Math.round(primary.normalHours * primary.normalRate * 100) / 100;
-            }
+        if (data.normalHours !== undefined)
             record.normalHours = data.normalHours;
-        }
-        if (data.holidayHours !== undefined) {
-            if (hasBreakdown && primary) {
-                const otherHoliday = record.siteEarnings
-                    .filter((e) => !e.isPrimary)
-                    .reduce((s, e) => s + e.holidayHours, 0);
-                primary.holidayHours = Math.round(Math.max(0, data.holidayHours - otherHoliday) * 100) / 100;
-                primary.holidayEarnings = Math.round(primary.holidayHours * primary.holidayRate * 100) / 100;
-            }
-            record.holidayHours = data.holidayHours;
-        }
         if (data.otHours !== undefined)
             record.otHours = data.otHours;
+        if (data.holidayHours !== undefined)
+            record.holidayHours = data.holidayHours;
         await record.save();
         AuditService_1.AuditService.log({
             userId,
@@ -391,108 +350,6 @@ class GuardPayrollService {
             userAgent: auditCtx?.ua,
         });
         return record;
-    }
-    /**
-     * Manual payroll override with full audit trail (spec §21): stores the
-     * engine-calculated original (calculatedGrossPay/calculatedNetPay, set once),
-     * the override value, the reason, the user, and the timestamp. The effective
-     * pay lives in grossPay/netPay; a netPay override adjusts grossPay by the
-     * same delta so the journal entry stays balanced.
-     */
-    static async override(recordId, data, userId, auditCtx) {
-        const record = await GuardPayrollRecord_1.GuardPayrollRecord.findById(recordId);
-        if (!record)
-            throw ApiError_1.ApiError.notFound('Record not found');
-        const allowedStatuses = [
-            types_1.PayrollRecordStatus.CALCULATED,
-            types_1.PayrollRecordStatus.SUBMITTED,
-            types_1.PayrollRecordStatus.CHECKED,
-            types_1.PayrollRecordStatus.APPROVED,
-        ];
-        if (!allowedStatuses.includes(record.status)) {
-            throw ApiError_1.ApiError.badRequest('Overrides are allowed only after calculation and before payment.');
-        }
-        if (data.field !== 'grossPay' && data.field !== 'netPay') {
-            throw ApiError_1.ApiError.badRequest('field must be grossPay or netPay');
-        }
-        if (typeof data.value !== 'number' || !Number.isFinite(data.value) || data.value < 0) {
-            throw ApiError_1.ApiError.badRequest('Override value must be a non-negative number.');
-        }
-        if (!data.reason || !data.reason.trim()) {
-            throw ApiError_1.ApiError.badRequest('An override reason is required.');
-        }
-        // Preserve the engine-calculated values once, before the first override.
-        if (record.calculatedGrossPay === undefined || record.calculatedGrossPay === null) {
-            record.calculatedGrossPay = record.grossPay;
-        }
-        if (record.calculatedNetPay === undefined || record.calculatedNetPay === null) {
-            record.calculatedNetPay = record.netPay;
-        }
-        const r2 = (n) => Math.round(n * 100) / 100;
-        const originalValue = data.field === 'grossPay' ? record.grossPay : record.netPay;
-        if (data.field === 'grossPay') {
-            record.grossPay = r2(data.value);
-            record.netPay = r2(record.grossPay - record.totalDeductions);
-        }
-        else {
-            record.netPay = r2(data.value);
-            record.grossPay = r2(record.netPay + record.totalDeductions);
-        }
-        record.overrides.push({
-            field: data.field,
-            originalValue: r2(originalValue),
-            overrideValue: r2(data.value),
-            reason: data.reason.trim(),
-            by: userId,
-            at: new Date(),
-        });
-        await record.save();
-        AuditService_1.AuditService.log({
-            userId,
-            action: 'GUARD_PAYROLL_OVERRIDE',
-            entity: 'GuardPayrollRecord',
-            entityId: recordId,
-            oldValues: { [data.field]: r2(originalValue) },
-            newValues: { [data.field]: r2(data.value), reason: data.reason.trim() },
-            ipAddress: auditCtx?.ip,
-            userAgent: auditCtx?.ua,
-        });
-        EventBus_1.eventBus.emit('hr.guardPayroll.overridden', { recordId, field: data.field });
-        return record;
-    }
-    /**
-     * Validation-engine report for a period (spec §12): every record with a
-     * missing rate or an open data-integrity error, so Finance sees exactly
-     * what blocks finalization.
-     */
-    static async validatePeriod(payrollPeriodId) {
-        const records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ payrollPeriodId })
-            .populate('guardId', 'firstName lastName employeeCode')
-            .populate('primarySiteId', 'siteName');
-        const issues = records
-            .filter((r) => r.rateMissing || (r.validationErrors || []).length > 0)
-            .map((r) => ({
-            recordId: r._id,
-            guard: r.guardId,
-            primarySite: r.primarySiteId,
-            status: r.status,
-            rateMissing: r.rateMissing,
-            missingRateSites: (r.siteEarnings || [])
-                .filter((e) => e.rateMissing)
-                .map((e) => ({
-                siteId: e.siteId,
-                siteName: e.siteName,
-                normalHours: e.normalHours,
-                holidayHours: e.holidayHours,
-            })),
-            validationErrors: r.validationErrors || [],
-        }));
-        return {
-            total: records.length,
-            issueCount: issues.length,
-            readyCount: records.length - issues.length,
-            issues,
-        };
     }
 }
 exports.GuardPayrollService = GuardPayrollService;

@@ -5,6 +5,8 @@ export declare class SiteService {
         limit?: number;
         status?: string;
         search?: string;
+        sort?: string;
+        dir?: string;
     }): Promise<{
         data: (import("mongoose").Document<unknown, {}, ISite, {}, {}> & ISite & Required<{
             _id: import("mongoose").Types.ObjectId;

@@ -16,8 +16,6 @@ export declare class GuardPayrollController {
     static confirmPaid(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static returnForCorrection(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static updateHours(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
-    static override(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
-    static validatePeriod(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 export {};
 //# sourceMappingURL=guardPayroll.controller.d.ts.map

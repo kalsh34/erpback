@@ -11,16 +11,9 @@ const Employee_1 = require("./models/Employee");
 const GuardProfile_1 = require("./models/GuardProfile");
 const PrimarySiteAssignment_1 = require("./models/PrimarySiteAssignment");
 const Site_1 = require("./models/Site");
-const TaxBracket_1 = require("./models/TaxBracket");
-const PensionRule_1 = require("./models/PensionRule");
-const PayrollPeriod_1 = require("./models/PayrollPeriod");
 const ShiftTemplate_1 = require("./models/ShiftTemplate");
 const ShiftAssignment_1 = require("./models/ShiftAssignment");
-const SalaryComponent_1 = require("./models/SalaryComponent");
-const PayrollFormulaVersion_1 = require("./models/PayrollFormulaVersion");
-const SalaryStructure_1 = require("./models/SalaryStructure");
 const types_1 = require("./types");
-const dateUtils_1 = require("./common/dateUtils");
 dotenv_1.default.config();
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/vitalpayroll';
 async function seed() {
@@ -135,139 +128,6 @@ async function seed() {
                 }
             }
         }
-        // --- Tax Brackets ---
-        if (!(await TaxBracket_1.TaxBracket.findOne({ isCurrent: true }))) {
-            await TaxBracket_1.TaxBracket.create({
-                label: 'Ethiopian Income Tax - Current',
-                brackets: [
-                    { min: 0, max: 2000, rate: 0, deduction: 0 },
-                    { min: 2001, max: 4000, rate: 0.15, deduction: 300 },
-                    { min: 4001, max: 7000, rate: 0.20, deduction: 500 },
-                    { min: 7001, max: 10000, rate: 0.25, deduction: 850 },
-                    { min: 10001, max: 14000, rate: 0.30, deduction: 1350 },
-                    { min: 14001, max: null, rate: 0.35, deduction: 2050 },
-                ],
-                effectiveFrom: new Date('2024-01-01'), isCurrent: true,
-            });
-            console.log('[SEED] Tax brackets created');
-        }
-        // --- Pension Rule ---
-        if (!(await PensionRule_1.PensionRule.findOne({ isCurrent: true }))) {
-            await PensionRule_1.PensionRule.create({ label: 'Ethiopian Pension - Current', employeeRate: 0.07, employerRate: 0.11, effectiveFrom: new Date('2024-01-01'), isCurrent: true });
-            console.log('[SEED] Pension rule (7%/11%)');
-        }
-        // --- Salary Components ---
-        const defaultComponents = [
-            { code: 'BASIC', label: 'Basic Salary', sourceType: 'CONTRACT' },
-            { code: 'RESPONSIBILITY_ALLOWANCE', label: 'Responsibility Allowance', sourceType: 'CONTRACT' },
-            { code: 'TELE_ALLOWANCE', label: 'Tele Allowance', sourceType: 'CONTRACT' },
-            { code: 'NON_TAXABLE_ALLOWANCE', label: 'Non-Taxable Allowance', sourceType: 'CONTRACT' },
-            { code: 'TAXABLE_TRANSPORT', label: 'Taxable Transport', sourceType: 'CONTRACT' },
-            { code: 'OT', label: 'Overtime', sourceType: 'HR_MONTHLY_INPUT' },
-            { code: 'BONUS', label: 'Bonus', sourceType: 'CONTRACT' },
-            { code: 'PENALTY', label: 'Penalty', sourceType: 'HR_MONTHLY_INPUT' },
-            { code: 'LOAN', label: 'Loan Deduction', sourceType: 'HR_MONTHLY_INPUT' },
-            { code: 'OTHER_DEDUCTIONS', label: 'Other Deductions', sourceType: 'HR_MONTHLY_INPUT' },
-        ];
-        for (const comp of defaultComponents) {
-            await SalaryComponent_1.SalaryComponent.findOneAndUpdate({ code: comp.code }, { $setOnInsert: comp }, { upsert: true, new: true });
-        }
-        console.log('[SEED] Salary components seeded');
-        // --- Default Payroll Formula (v2 — BONUS removed from gross/taxable) ---
-        const existingFormula = await PayrollFormulaVersion_1.PayrollFormulaVersion.findOne({ isCurrent: true });
-        if (existingFormula) {
-            // Mark old formula as no longer current
-            existingFormula.isCurrent = false;
-            await existingFormula.save();
-            console.log(`[SEED] Marked formula v${existingFormula.version} as not current`);
-        }
-        // Remove stale non-current v2 docs so reruns don't hit the unique version index
-        await PayrollFormulaVersion_1.PayrollFormulaVersion.deleteMany({ version: 2, isCurrent: false });
-        {
-            const admin = await User_1.User.findOne({ role: types_1.UserRole.SUPER_ADMIN });
-            await PayrollFormulaVersion_1.PayrollFormulaVersion.create({
-                version: 2,
-                isCurrent: true,
-                effectiveFrom: new Date('2024-01-01'),
-                grossComponentCodes: ['BASIC', 'RESPONSIBILITY_ALLOWANCE', 'TELE_ALLOWANCE', 'NON_TAXABLE_ALLOWANCE', 'OT'],
-                taxableComponentCodes: ['BASIC', 'RESPONSIBILITY_ALLOWANCE', 'TELE_ALLOWANCE', 'TAXABLE_TRANSPORT', 'OT'],
-                pensionBaseComponentCodes: ['BASIC'],
-                deductionComponentCodes: ['INCOME_TAX', 'EMPLOYEE_PENSION', 'PENALTY', 'LOAN', 'OTHER_DEDUCTIONS'],
-                createdById: admin?._id || new mongoose_1.default.Types.ObjectId(),
-            });
-            console.log('[SEED] Default payroll formula v2 created (BONUS removed from gross/taxable)');
-        }
-        // --- Default Salary Structures ---
-        const existingStaffStructure = await SalaryStructure_1.SalaryStructure.findOne({ employeeType: 'STAFF', isCurrent: true });
-        if (!existingStaffStructure) {
-            const admin = await User_1.User.findOne({ role: types_1.UserRole.SUPER_ADMIN });
-            await SalaryStructure_1.SalaryStructure.create({
-                name: 'Office Staff Standard',
-                employeeType: 'STAFF',
-                payBasis: 'MONTHLY',
-                version: 1,
-                isCurrent: true,
-                effectiveFrom: new Date('2024-01-01'),
-                otMultiplier: 1.5,
-                holidayMultiplier: 2.0,
-                earnings: [
-                    { componentCode: 'BASIC', label: 'Basic Salary', calculationType: 'FIXED_AMOUNT', defaultRate: 0, taxable: true, required: true },
-                    { componentCode: 'RESPONSIBILITY_ALLOWANCE', label: 'Responsibility Allowance', calculationType: 'FIXED_AMOUNT', defaultRate: 0, taxable: true, required: false },
-                    { componentCode: 'TELE_ALLOWANCE', label: 'Tele Allowance', calculationType: 'FIXED_AMOUNT', defaultRate: 0, taxable: true, required: false },
-                    { componentCode: 'TAXABLE_TRANSPORT', label: 'Taxable Transport', calculationType: 'FIXED_AMOUNT', defaultRate: 0, taxable: true, required: false },
-                    { componentCode: 'NON_TAXABLE_ALLOWANCE', label: 'Non-Taxable Allowance', calculationType: 'FIXED_AMOUNT', defaultRate: 0, taxable: false, required: false },
-                    { componentCode: 'OT', label: 'Overtime', calculationType: 'HOURLY_RATE', defaultRate: 0, taxable: true, required: false },
-                ],
-                deductions: [
-                    { componentCode: 'INCOME_TAX', label: 'Income Tax', calculationType: 'FORMULA', defaultValue: 0, enabled: true },
-                    { componentCode: 'EMPLOYEE_PENSION', label: 'Employee Pension (7%)', calculationType: 'FORMULA', defaultValue: 0, enabled: true },
-                    { componentCode: 'LOAN', label: 'Loan Deduction', calculationType: 'FIXED_AMOUNT', defaultValue: 0, enabled: true },
-                    { componentCode: 'PENALTY', label: 'Penalty', calculationType: 'FIXED_AMOUNT', defaultValue: 0, enabled: true },
-                    { componentCode: 'OTHER_DEDUCTIONS', label: 'Other Deductions', calculationType: 'FIXED_AMOUNT', defaultRate: 0, enabled: true },
-                ],
-                createdById: admin?._id || new mongoose_1.default.Types.ObjectId(),
-            });
-            console.log('[SEED] Default staff salary structure created');
-        }
-        const existingGuardStructure = await SalaryStructure_1.SalaryStructure.findOne({ employeeType: 'GUARD', isCurrent: true });
-        if (!existingGuardStructure) {
-            const admin = await User_1.User.findOne({ role: types_1.UserRole.SUPER_ADMIN });
-            await SalaryStructure_1.SalaryStructure.create({
-                name: 'Guard Standard',
-                employeeType: 'GUARD',
-                payBasis: 'HOURLY',
-                version: 1,
-                isCurrent: true,
-                effectiveFrom: new Date('2024-01-01'),
-                otMultiplier: 1.5,
-                holidayMultiplier: 2.0,
-                earnings: [
-                    { componentCode: 'BASIC', label: 'Basic Salary (Monthly)', calculationType: 'FIXED_AMOUNT', defaultRate: 10800, taxable: true, required: true },
-                    { componentCode: 'RESPONSIBILITY_ALLOWANCE', label: 'Responsibility Allowance', calculationType: 'FIXED_AMOUNT', defaultRate: 0, taxable: true, required: false },
-                    { componentCode: 'TRANSPORT_ALLOWANCE', label: 'Transport Allowance', calculationType: 'FIXED_AMOUNT', defaultRate: 0, taxable: false, required: false },
-                ],
-                deductions: [
-                    { componentCode: 'INCOME_TAX', label: 'Income Tax', calculationType: 'FORMULA', defaultValue: 0, enabled: true },
-                    { componentCode: 'EMPLOYEE_PENSION', label: 'Employee Pension (7%)', calculationType: 'FORMULA', defaultValue: 0, enabled: true },
-                    { componentCode: 'LOAN', label: 'Loan Deduction', calculationType: 'FIXED_AMOUNT', defaultValue: 0, enabled: true },
-                ],
-                createdById: admin?._id || new mongoose_1.default.Types.ObjectId(),
-            });
-            console.log('[SEED] Default guard salary structure created');
-        }
-        // --- Payroll Period (spec §6: 26th → 25th, label = ending month) ---
-        const now = new Date();
-        if (!(await PayrollPeriod_1.PayrollPeriod.findOne({ year: now.getFullYear(), month: now.getMonth() + 1 }))) {
-            const { startDate, endDate } = (0, dateUtils_1.payrollPeriodRange)(now.getFullYear(), now.getMonth() + 1);
-            await PayrollPeriod_1.PayrollPeriod.create({
-                year: now.getFullYear(), month: now.getMonth() + 1, monthName: dateUtils_1.MONTH_NAMES[now.getMonth()],
-                startDate,
-                endDate,
-                status: types_1.PayrollPeriodStatus.OPEN,
-            });
-            console.log(`[SEED] Period: ${dateUtils_1.MONTH_NAMES[now.getMonth()]} ${now.getFullYear()} (OPEN, ${startDate.toDateString()} → ${endDate.toDateString()})`);
-        }
-        console.log('\n========================================');
         console.log('ALL USERS (password: password123)');
         console.log('========================================');
         console.log('Super Admin (read):  admin@vitalpayroll.com');

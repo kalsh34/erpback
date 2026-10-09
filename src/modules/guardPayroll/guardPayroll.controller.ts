@@ -73,7 +73,9 @@ export class GuardPayrollController {
       const { periodKey, payrollPeriodId, runId } = req.query;
       let run: any = null;
       if (runId) {
-        run = await GuardPayrollRun.findById(runId);
+        if (mongoose.Types.ObjectId.isValid(runId as string)) {
+          run = await GuardPayrollRun.findById(runId);
+        }
       } else if (periodKey) {
         run = await GuardPayrollRun.findOne({ periodKey: periodKey as string });
       } else if (payrollPeriodId) {
@@ -96,7 +98,16 @@ export class GuardPayrollController {
         .populate('primarySite.siteId', 'siteName siteCode')
         .sort({ 'snapshot.employeeCode': 1 });
 
-      const mapped = records.map((r) => ({
+      // Optional site filter: filter by primary-site _id (ObjectId or string form).
+      const { siteId } = req.query;
+      const filtered = siteId && siteId !== 'ALL'
+        ? records.filter((r) => {
+            const psid = (r.primarySite as any)?.siteId;
+            const resolved = psid?._id ? String(psid._id) : String(psid || '');
+            return resolved === String(siteId);
+          })
+        : records;
+      const mapped = filtered.map((r) => ({
         ...r.toObject(),
         guardId: {
           _id: r.employeeId,
@@ -152,7 +163,7 @@ export class GuardPayrollController {
 
   static async getRun(req: Request, res: Response, next: NextFunction) {
     try {
-      res.json({ success: true, data: await GuardPayrollRunService.getRun(req.params.id) });
+      res.json({ success: true, data: await GuardPayrollRunService.getRun(req.params.id, req.query.siteId as string | undefined) });
     } catch (error) { next(error); }
   }
 
@@ -218,6 +229,14 @@ export class GuardPayrollController {
   }
 
   // ── Exports & Payslip ──────────────────────────────────────────────
+  /** Banks actually in use for a payroll month (staff + guard combined). */
+  static async banksInUse(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { periodKey } = req.query;
+      res.json({ success: true, data: await GuardPayrollRunService.listBanksInUse(periodKey as string | undefined) });
+    } catch (error) { next(error); }
+  }
+
   static async exportBank(req: Request, res: Response, next: NextFunction) {
     try {
       const { bank } = req.query;
@@ -230,7 +249,7 @@ export class GuardPayrollController {
 
   static async exportTax(req: Request, res: Response, next: NextFunction) {
     try {
-      const file = await GuardPayrollRunService.exportTaxReport(req.params.id);
+      const file = await GuardPayrollRunService.exportTaxReport(req.params.id, req.query.taxBranch as string | undefined);
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
       res.send(file.csv);
@@ -239,7 +258,7 @@ export class GuardPayrollController {
 
   static async exportPension(req: Request, res: Response, next: NextFunction) {
     try {
-      const file = await GuardPayrollRunService.exportPensionReport(req.params.id);
+      const file = await GuardPayrollRunService.exportPensionReport(req.params.id, req.query.pensionCenter as string | undefined);
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
       res.send(file.csv);

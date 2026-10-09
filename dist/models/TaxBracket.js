@@ -36,19 +36,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TaxBracket = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const taxBracketSchema = new mongoose_1.Schema({
-    label: { type: String, required: true },
+    name: { type: String, required: true, trim: true },
+    kind: { type: String, enum: ['GUARD', 'STAFF'], default: 'GUARD' },
+    effectiveFrom: { type: Date, required: true },
+    effectiveTo: { type: Date, default: null },
     brackets: [
         {
-            min: { type: Number, required: true },
+            min: { type: Number, required: true, min: 0 },
             max: { type: Number, default: null },
-            rate: { type: Number, required: true },
-            deduction: { type: Number, required: true },
+            rate: { type: Number, required: true, min: 0, max: 100 },
         },
     ],
-    effectiveFrom: { type: Date, required: true },
-    effectiveTo: { type: Date },
-    isCurrent: { type: Boolean, default: true },
+    createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
-taxBracketSchema.index({ isCurrent: 1 });
+taxBracketSchema.index({ effectiveFrom: -1 });
 exports.TaxBracket = mongoose_1.default.model('TaxBracket', taxBracketSchema);
 //# sourceMappingURL=TaxBracket.js.map

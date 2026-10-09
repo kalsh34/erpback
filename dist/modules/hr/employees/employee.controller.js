@@ -124,7 +124,7 @@ class EmployeeController {
         try {
             const employees = await Employee_1.Employee.find({}).sort({ employeeCode: 1 }).lean();
             const employeeIds = employees.map((e) => e._id);
-            const contracts = await Contract_1.Contract.find({ employeeId: { $in: employeeIds } }).populate('salaryStructureId').lean();
+            const contracts = await Contract_1.Contract.find({ employeeId: { $in: employeeIds } }).lean();
             const contractMap = new Map();
             for (const c of contracts) {
                 const eid = c.employeeId?._id?.toString() || c.employeeId?.toString();
@@ -136,11 +136,9 @@ class EmployeeController {
                 'Phone', 'Email', 'Gender',
                 'Wage/Salary', 'Bank Name', 'Account Number',
                 'Contract Start', 'Contract Type', 'Pension Enrolled',
-                'OT Multiplier', 'Holiday Multiplier',
             ];
             const rows = employees.map((e) => {
                 const contract = contractMap.get(e._id.toString());
-                const structure = contract?.salaryStructureId;
                 return [
                     e.employeeCode,
                     e.firstName,
@@ -158,8 +156,6 @@ class EmployeeController {
                     contract?.contractStartDate ? new Date(contract.contractStartDate).toISOString().split('T')[0] : '',
                     contract?.contractType || '',
                     contract?.pensionEnrolled !== undefined ? (contract.pensionEnrolled ? 'Yes' : 'No') : '',
-                    structure?.otMultiplier || '',
-                    structure?.holidayMultiplier || '',
                 ];
             });
             const csv = [headers, ...rows].map(row => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');

@@ -37,7 +37,6 @@ exports.Contract = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const contractSchema = new mongoose_1.Schema({
     employeeId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Employee', required: true },
-    salaryStructureId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'SalaryStructure' },
     contractStartDate: { type: Date, required: true },
     contractEndDate: { type: Date },
     department: { type: String, trim: true },

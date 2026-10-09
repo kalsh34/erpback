@@ -38,18 +38,16 @@ const mongoose_1 = __importStar(require("mongoose"));
 const types_1 = require("../types");
 const staffAttendanceSchema = new mongoose_1.Schema({
     employeeId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Employee', required: true },
-    payrollPeriodId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'PayrollPeriod', required: true },
-    date: { type: String, required: true },
+    periodKey: { type: String, required: true, match: /^\d{4}-\d{2}$/ },
+    date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
     dayOfMonth: { type: Number, required: true },
     status: { type: String, enum: Object.values(types_1.StaffAttendanceStatus), required: true },
-    leaveType: { type: String, trim: true },
-    notes: { type: String, trim: true },
+    leaveType: { type: String },
+    notes: { type: String },
     source: { type: String, enum: Object.values(types_1.AttendanceSource), default: types_1.AttendanceSource.HR_MANUAL },
     recordedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
-}, { timestamps: true });
-staffAttendanceSchema.index({ employeeId: 1, payrollPeriodId: 1, dayOfMonth: 1 }, { unique: true });
-staffAttendanceSchema.index({ payrollPeriodId: 1 });
-// Drop stale indexes from old schema
-staffAttendanceSchema.on('index', () => { });
-exports.StaffAttendance = mongoose_1.default.model('StaffAttendance', staffAttendanceSchema, 'staff_attendance_v2');
+}, { timestamps: true, collection: 'staff_attendance_v2' });
+staffAttendanceSchema.index({ employeeId: 1, periodKey: 1, dayOfMonth: 1 }, { unique: true });
+staffAttendanceSchema.index({ periodKey: 1 });
+exports.StaffAttendance = mongoose_1.default.model('StaffAttendance', staffAttendanceSchema);
 //# sourceMappingURL=StaffAttendance.js.map

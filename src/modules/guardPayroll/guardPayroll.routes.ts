@@ -39,6 +39,7 @@ router.post('/runs/:id/approve', authorize(APPROVE), GuardPayrollController.appr
 router.post('/runs/:id/return', authorize(RETURN), GuardPayrollController.returnRun);
 router.post('/runs/:id/pay', authorize(PAY), GuardPayrollController.payRun);
 
+router.get('/banks', authorize(READ), GuardPayrollController.banksInUse);
 router.get('/runs/:id/export/bank', authorize(READ), GuardPayrollController.exportBank);
 router.get('/runs/:id/export/tax', authorize(READ), GuardPayrollController.exportTax);
 router.get('/runs/:id/export/pension', authorize(READ), GuardPayrollController.exportPension);

@@ -140,26 +140,6 @@ class GuardPayrollController {
             next(error);
         }
     }
-    static async override(req, res, next) {
-        try {
-            const record = await guardPayroll_service_1.GuardPayrollService.override(req.params.id, req.body, req.user?.userId || '', {
-                ip: req.ip, ua: req.get('user-agent'),
-            });
-            res.json({ success: true, data: record });
-        }
-        catch (error) {
-            next(error);
-        }
-    }
-    static async validatePeriod(req, res, next) {
-        try {
-            const report = await guardPayroll_service_1.GuardPayrollService.validatePeriod(req.params.periodId);
-            res.json({ success: true, data: report });
-        }
-        catch (error) {
-            next(error);
-        }
-    }
 }
 exports.GuardPayrollController = GuardPayrollController;
 //# sourceMappingURL=guardPayroll.controller.js.map

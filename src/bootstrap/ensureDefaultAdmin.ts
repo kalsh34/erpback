@@ -11,38 +11,29 @@ const ADMIN_ROLES = [UserRole.SUPER_ADMIN, UserRole.SYSTEM_ADMIN, UserRole.HR_AD
  */
 export const ensureDefaultAdmin = async (): Promise<void> => {
   try {
-    const adminCount = await User.countDocuments({ role: { $in: ADMIN_ROLES } });
+    const defaultPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'password123';
+    const passwordHash = await bcrypt.hash(defaultPassword, 12);
 
-    if (adminCount > 0) {
-      console.log(`[BOOTSTRAP] ${adminCount} admin user(s) already present - skipping default admin creation`);
-      return;
+    const demoUsers = [
+      { email: 'admin@vitalpayroll.com', firstName: 'System', lastName: 'Admin', role: UserRole.SUPER_ADMIN },
+      { email: 'hr@vitalpayroll.com', firstName: 'Henok', lastName: 'Tadesse', role: UserRole.HR_ADMIN },
+      { email: 'finance@vitalpayroll.com', firstName: 'Finance', lastName: 'Officer', role: UserRole.FINANCE_OFFICER },
+      { email: 'ops@vitalpayroll.com', firstName: 'Operations', lastName: 'Manager', role: UserRole.OPERATIONS },
+      { email: 'guard@vitalpayroll.com', firstName: 'Abebe', lastName: 'Kebede', role: UserRole.GUARD },
+    ];
+
+    for (const u of demoUsers) {
+      const existing = await User.findOne({ email: u.email });
+      if (!existing) {
+        await User.create({
+          ...u,
+          password: passwordHash,
+          isActive: true,
+        });
+        console.log(`[BOOTSTRAP] Created demo user: ${u.email} (${u.role})`);
+      }
     }
-
-    const email = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'admin@vitalpayroll.com').toLowerCase().trim();
-    const plainPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'admin123';
-    const password = await bcrypt.hash(plainPassword, 12);
-
-    const existing = await User.findOne({ email });
-
-    if (existing) {
-      existing.password = password;
-      existing.role = UserRole.SUPER_ADMIN;
-      existing.isActive = true;
-      await existing.save();
-      console.log(`[BOOTSTRAP] Promoted existing user to SUPER_ADMIN: ${email}`);
-      return;
-    }
-
-    await User.create({
-      email,
-      password,
-      firstName: 'System',
-      lastName: 'Admin',
-      role: UserRole.SUPER_ADMIN,
-    });
-
-    console.log(`[BOOTSTRAP] Created default SUPER_ADMIN: ${email} (change this password after the first login)`);
   } catch (error) {
-    console.error('[BOOTSTRAP] Failed to ensure default admin:', error);
+    console.error('[BOOTSTRAP] Failed to ensure default demo users:', error);
   }
 };

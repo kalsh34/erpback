@@ -37,8 +37,18 @@ exports.UserController = void 0;
 const User_1 = require("../../../models/User");
 const ApiError_1 = require("../../../common/ApiError");
 const types_1 = require("../../../types");
+const rbac_1 = require("../../../middleware/rbac");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
+/** Keep only known module keys; undefined stays undefined (no change on update). */
+function sanitizeModuleKeys(input) {
+    if (input === undefined)
+        return undefined;
+    if (!Array.isArray(input))
+        return [];
+    const keys = input.filter((k) => typeof k === 'string' && types_1.MODULE_ACCESS.some((m) => m.key === k));
+    return [...new Set(keys)];
+}
 class UserController {
     static async getAll(req, res, next) {
         try {
@@ -83,19 +93,21 @@ class UserController {
     }
     static async create(req, res, next) {
         try {
-            const { email, password, firstName, lastName, role } = req.body;
+            const { email, password, firstName, lastName, role, moduleGrants, moduleDenies } = req.body;
             const existing = await User_1.User.findOne({ email });
             if (existing)
                 throw ApiError_1.ApiError.conflict('Email already exists');
+            const grants = sanitizeModuleKeys(moduleGrants);
+            const denies = sanitizeModuleKeys(moduleDenies);
             const bcrypt = await Promise.resolve().then(() => __importStar(require('bcryptjs')));
             const hashedPassword = await bcrypt.hash(password, 12);
-            const user = await User_1.User.create({ email, password: hashedPassword, firstName, lastName, role });
+            const user = await User_1.User.create({ email, password: hashedPassword, firstName, lastName, role, moduleGrants: grants, moduleDenies: denies });
             AuditService_1.AuditService.log({
                 userId: req.user?.userId || '',
                 action: 'USER_CREATE',
                 entity: 'User',
                 entityId: user._id.toString(),
-                newValues: { email, firstName, lastName, role },
+                newValues: { email, firstName, lastName, role, moduleGrants: grants, moduleDenies: denies },
                 ipAddress: req.ip,
                 userAgent: req.get('user-agent'),
             });
@@ -108,12 +120,21 @@ class UserController {
     }
     static async update(req, res, next) {
         try {
-            const { firstName, lastName, role, email } = req.body;
+            const { firstName, lastName, role, email, moduleGrants, moduleDenies } = req.body;
             const old = await User_1.User.findById(req.params.id);
             if (!old)
                 throw ApiError_1.ApiError.notFound('User not found');
-            const oldValues = { firstName: old.firstName, lastName: old.lastName, role: old.role, email: old.email };
-            const user = await User_1.User.findByIdAndUpdate(req.params.id, { firstName, lastName, role, email }, { new: true, runValidators: true });
+            const oldValues = { firstName: old.firstName, lastName: old.lastName, role: old.role, email: old.email, moduleGrants: old.moduleGrants, moduleDenies: old.moduleDenies };
+            const grants = sanitizeModuleKeys(moduleGrants);
+            const denies = sanitizeModuleKeys(moduleDenies);
+            const user = await User_1.User.findByIdAndUpdate(req.params.id, {
+                firstName,
+                lastName,
+                role,
+                email,
+                ...(grants !== undefined ? { moduleGrants: grants } : {}),
+                ...(denies !== undefined ? { moduleDenies: denies } : {}),
+            }, { new: true, runValidators: true });
             if (!user)
                 throw ApiError_1.ApiError.notFound('User not found');
             AuditService_1.AuditService.log({
@@ -122,7 +143,7 @@ class UserController {
                 entity: 'User',
                 entityId: req.params.id,
                 oldValues,
-                newValues: { firstName, lastName, role, email },
+                newValues: { firstName, lastName, role, email, moduleGrants: grants, moduleDenies: denies },
                 ipAddress: req.ip,
                 userAgent: req.get('user-agent'),
             });
@@ -195,11 +216,20 @@ class UserController {
         }
     }
     static async getRoles(_req, res) {
+        // Same union the authorize() middleware enforces: hardcoded role map +
+        // module-registered permissions, so the UI shows the EFFECTIVE grants.
         const roles = Object.values(types_1.UserRole).map((role) => ({
             role,
-            permissions: types_1.ROLE_PERMISSIONS[role],
+            permissions: (0, rbac_1.getPermissionsForRole)(role),
         }));
         res.json({ success: true, data: roles });
+    }
+    /**
+     * The module-access catalog for grant/deny UIs: every module with its
+     * permissions, so the admin sees exactly what a module switch toggles.
+     */
+    static async getModuleAccess(_req, res) {
+        res.json({ success: true, data: types_1.MODULE_ACCESS });
     }
 }
 exports.UserController = UserController;

@@ -7,11 +7,13 @@ class AuditService {
         return AuditLog_1.AuditLog.create(data);
     }
     static async getAll(query) {
-        const { page = 1, limit = 20, entity, userId } = query;
+        const { page = 1, limit = 20, entity, entityId, userId } = query;
         const skip = (page - 1) * limit;
         const filter = {};
         if (entity)
             filter.entity = entity;
+        if (entityId)
+            filter.entityId = entityId;
         if (userId)
             filter.userId = userId;
         const [logs, total] = await Promise.all([
