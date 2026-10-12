@@ -7,6 +7,10 @@ const types_1 = require("../../../types");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
 const activation_1 = require("./activation");
+const Contract_1 = require("../../../models/Contract");
+const SalaryHistory_1 = require("../../../models/SalaryHistory");
+const Guarantor_1 = require("../../../models/Guarantor");
+const FileAttachment_1 = require("../../../core/files/FileAttachment");
 class EmployeeService {
     static async getAll(query) {
         const { page = 1, limit = 20, category, status, search } = query;
@@ -63,7 +67,26 @@ class EmployeeService {
             throw ApiError_1.ApiError.notFound('Employee not found');
         return employee;
     }
+    /**
+     * Full employee profile for the detail sidebar: employee + their active
+     * contract (wage/allowance history), the contract salary history, guarantors
+     * on file and any documents/uploads.
+     */
+    static async getDetail(id) {
+        const employee = await this.getById(id);
+        const [contract, contractHistory, guarantors, files] = await Promise.all([
+            Contract_1.Contract.findOne({ employeeId: id, status: 'ACTIVE' }).sort({ contractStartDate: -1 }),
+            SalaryHistory_1.SalaryHistory.find({ employeeId: id }).sort({ effectiveFrom: -1 }).lean(),
+            Guarantor_1.Guarantor.find({ employeeId: id }).sort({ createdAt: -1 }),
+            FileAttachment_1.FileAttachment.find({ entityType: 'employee', entityId: id }).sort({ createdAt: -1 }).lean(),
+        ]);
+        return { employee, contract, contractHistory, guarantors, documents: employee.documents || [], files };
+    }
     static async create(data, auditCtx) {
+        if (!data || typeof data !== 'object')
+            throw ApiError_1.ApiError.badRequest('A request body is required');
+        if (!data.employeeCode || !String(data.employeeCode).trim())
+            throw ApiError_1.ApiError.badRequest('employeeCode is required');
         const existing = await Employee_1.Employee.findOne({ employeeCode: data.employeeCode });
         if (existing)
             throw ApiError_1.ApiError.conflict('Employee code already exists');
@@ -175,6 +198,16 @@ class EmployeeService {
                 changedAt: new Date(),
             },
         ];
+        // A termination is a fact to register, not just a status flip: stamp when
+        // and why it happened (and clear the stamps if the employee comes back).
+        if (to === types_1.EmployeeStatus.TERMINATED) {
+            employee.terminationDate = new Date();
+            employee.terminationReason = reason;
+        }
+        else if (from === types_1.EmployeeStatus.TERMINATED) {
+            employee.terminationDate = undefined;
+            employee.terminationReason = undefined;
+        }
         await employee.save();
         if (auditCtx) {
             AuditService_1.AuditService.log({

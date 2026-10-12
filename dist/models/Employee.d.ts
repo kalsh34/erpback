@@ -36,6 +36,9 @@ export interface IEmployee extends Document {
         changedBy?: mongoose.Types.ObjectId;
         changedAt: Date;
     }[];
+    /** Stamped when the employee is set to TERMINATED (see EmployeeService.changeStatus). */
+    terminationDate?: Date;
+    terminationReason?: string;
     guardInfo?: {
         employmentType: EmploymentType;
         idCardNumber?: string;

@@ -11,6 +11,7 @@ router.get('/guards', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), 
 router.get('/office-staff', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.getOfficeStaff);
 router.get('/export', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.exportCsv);
 router.get('/analytics/summary', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.analytics);
+router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.getDetail);
 router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.getAll);
 router.get('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), employee_controller_1.EmployeeController.getById);
 router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_CREATE), employee_controller_1.EmployeeController.create);

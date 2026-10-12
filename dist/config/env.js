@@ -5,7 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.config = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
+// Some shell environments export a meaningless PORT (e.g. 0). The app's own
+// .env must always win over such noise, so load it with override:true.
+dotenv_1.default.config({ override: true });
 exports.config = {
     port: parseInt(process.env.PORT || '5000', 10),
     mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/vitalpayroll',

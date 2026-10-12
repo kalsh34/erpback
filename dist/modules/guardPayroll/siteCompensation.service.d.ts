@@ -39,6 +39,7 @@ export declare class SiteCompensationService {
     }> & {
         __v: number;
     }>;
+    private static createTransactional;
     /**
      * Delete a compensation row. Only allowed when it is NOT the current row and
      * no payroll record was calculated with it.

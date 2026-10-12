@@ -16,8 +16,8 @@ interface AuditCtx {
  * it into normal / holiday / sunday hours. Holiday and Sunday hours are
  * multiplied by the OT rate in payroll; normal hours are not.
  *
- * When a monthly sheet exists for a guard it takes precedence over the sum
- * of daily records — the two inputs are never silently mixed.
+ * A monthly sheet overrides daily records for that guard + site only.
+ * Other sites retain their own daily fallback, without double-counting.
  */
 export declare class GuardMonthlyHoursService {
     private static assertBucket;
@@ -90,6 +90,7 @@ export declare class GuardMonthlyHoursService {
                 totalHours: number;
                 holidayHours: number;
                 normalHours: number;
+                sundayHours: number;
             } | null;
             warnings: string[];
         } | null)[];

@@ -24,6 +24,8 @@ function monthWindow(periodKey) {
     const [year, month] = periodKey.split('-').map(Number);
     if (month < 1 || month > 12)
         throw ApiError_1.ApiError.badRequest('periodKey month must be between 01 and 12');
+    if (year < 2000 || year > 2100)
+        throw ApiError_1.ApiError.badRequest('periodKey year must be a realistic payroll year (2000–2100)');
     return {
         year,
         month,
@@ -41,6 +43,13 @@ class StaffPayrollRunService {
     static async calculate(periodKey, userId, auditCtx) {
         const { start, end } = monthWindow(periodKey);
         let run = await StaffPayrollRun_1.StaffPayrollRun.findOne({ periodKey });
+        if (run && !EDITABLE_STATUSES.includes(run.status)) {
+            throw ApiError_1.ApiError.conflict(`Staff payroll for ${periodKey} is ${run.status}. RETURN it for correction before recalculating.`);
+        }
+        // Re-check at save time: the run may have moved to SUBMITTED/APPROVED/PAID
+        // between the read above and the record replacement at the end of this
+        // method. Never overwrite a locked run's numbers.
+        run = await StaffPayrollRun_1.StaffPayrollRun.findOne({ periodKey });
         if (run && !EDITABLE_STATUSES.includes(run.status)) {
             throw ApiError_1.ApiError.conflict(`Staff payroll for ${periodKey} is ${run.status}. RETURN it for correction before recalculating.`);
         }
@@ -189,6 +198,13 @@ class StaffPayrollRunService {
             bonus: (0, staffPayrollEngine_1.round2)(records.reduce((s, r) => s + r.bonus, 0)),
             finalAmountPaid: (0, staffPayrollEngine_1.round2)(records.reduce((s, r) => s + r.finalAmountPaid, 0)),
         };
+        // Final guard right before records/totals are committed: a run that was
+        // SUBMITTED/CHECKED/APPROVED/PAID while this calculation ran must NOT be
+        // overwritten (defect fixed 2026-10, see stabilization report).
+        const freshStatus = (await StaffPayrollRun_1.StaffPayrollRun.findById(run._id).select('status').lean());
+        if (freshStatus && !EDITABLE_STATUSES.includes(freshStatus.status)) {
+            throw ApiError_1.ApiError.conflict(`Staff payroll for ${periodKey} moved to ${freshStatus.status} during calculation; recalculation aborted. RETURN it for correction first.`);
+        }
         run.status = types_1.PayrollRecordStatus.CALCULATED;
         run.calculatedBy = userId;
         run.calculatedAt = new Date();

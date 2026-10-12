@@ -13,6 +13,7 @@ router.get('/:employeeId', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_RE
 router.put('/:employeeId', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_UPDATE), guard_controller_1.GuardController.updateGuard);
 router.post('/assign-site', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSIGN_SITE), guard_controller_1.GuardController.assignSite);
 router.get('/:guardId/sites', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_READ), guard_controller_1.GuardController.getGuardSites);
+router.put('/site-assignment/:assignmentId/history', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSIGN_SITE), guard_controller_1.GuardController.correctAssignment);
 router.delete('/site-assignment/:assignmentId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ASSIGN_SITE), guard_controller_1.GuardController.removeSiteAssignment);
 router.put('/pay-rate/:assignmentId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_RATES), guard_controller_1.GuardController.updatePayRate);
 router.put('/:employeeId/home-site', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_UPDATE), guard_controller_1.GuardController.setHomeSite);

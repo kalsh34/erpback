@@ -11,6 +11,7 @@ const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment")
 const SiteNote_1 = require("../../../models/SiteNote");
 const RotationAssignment_1 = require("../../../models/RotationAssignment");
 const Rotation_1 = require("../../../models/Rotation");
+const SitePriceHistory_1 = require("../../../models/SitePriceHistory");
 const ApiError_1 = require("../../../common/ApiError");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
@@ -30,7 +31,7 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
         const primaryFilter = isInactive
             ? { siteId }
             : { siteId, isCurrent: true };
-        const [activeAssignments, primaryAssignments, recentNotes, rotationAssignments, rotations] = await Promise.all([
+        const [activeAssignments, primaryAssignments, recentNotes, rotationAssignments, rotations, priceHistoryRows] = await Promise.all([
             ShiftAssignment_1.ShiftAssignment.find({ siteId, status: isInactive ? { $in: ['ACTIVE', 'INACTIVE'] } : 'ACTIVE' })
                 .populate('guardId', 'firstName lastName employeeCode status')
                 .populate('shiftTemplateId', 'name startTime endTime color'),
@@ -46,6 +47,8 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
                 .sort({ date: -1 })
                 .limit(90),
             Rotation_1.Rotation.find({ siteId }).select('name title status startDate endDate').sort({ createdAt: -1 }).limit(5),
+            // Full price timeline: every previous price the site has had.
+            SitePriceHistory_1.SitePriceHistory.find({ siteId }).sort({ createdAt: -1 }).limit(50).populate('changedBy', 'firstName lastName').lean(),
         ]);
         // Split primary assignments for UI
         const currentAssignments = isInactive ? [] : primaryAssignments.filter((a) => a.isCurrent);
@@ -60,6 +63,7 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
                 recentNotes,
                 rotationAssignments,
                 rotations,
+                priceHistory: priceHistoryRows,
             },
         });
     }

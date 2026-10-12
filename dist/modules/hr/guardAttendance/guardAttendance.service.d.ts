@@ -121,15 +121,42 @@ export declare class GuardAttendanceService {
             maxDailyHours: number;
             expectedDailyHours: number;
         };
-        rows: any[];
+        rows: {
+            guard: {
+                _id: import("mongoose").Types.ObjectId;
+                employeeCode: string;
+                firstName: string;
+                lastName: string;
+                status: EmployeeStatus;
+            };
+            primarySiteId: string | null;
+            primarySiteName: string | null | undefined;
+            sites: {
+                siteName: string;
+                siteCode: string;
+                isPrimary: boolean;
+                totalHours: number;
+                dayCount: number;
+                siteId: string;
+                normalHours: number;
+                holidayHours: number;
+                sundayHours: number;
+                source: "MONTHLY" | "DAILY";
+            }[];
+            totalHours: number;
+            warnings: (string | undefined)[];
+        }[];
         missingAttendance: {
             _id: import("mongoose").Types.ObjectId;
             employeeCode: string;
             firstName: string;
             lastName: string;
+            status: EmployeeStatus;
         }[];
         grandTotal: number;
     }>;
+    /** Legacy daily-only diagnostic; payroll summary above uses the canonical per-site feed. */
+    private static getDailyOnlyMonthlyTotals;
     /**
      * Guard → Site → Period → Total Hours feed consumed by payroll.
      * Only ACTIVE (validated, non-void) records inside the period range count.
@@ -154,6 +181,7 @@ export declare class GuardAttendanceService {
             employeeCode: string;
             firstName: string;
             lastName: string;
+            status: EmployeeStatus;
         }[];
         issues: {
             guard: any;

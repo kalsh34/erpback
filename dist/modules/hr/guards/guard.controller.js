@@ -113,6 +113,17 @@ class GuardController {
             next(error);
         }
     }
+    static async correctAssignment(req, res, next) {
+        try {
+            const row = await guard_service_1.GuardService.correctAssignment(req.params.assignmentId, req.body, {
+                userId: req.user?.userId || '', ip: req.ip, ua: req.get('user-agent'),
+            });
+            res.json({ success: true, data: row });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     static async setPrimarySite(req, res, next) {
         try {
             const assignment = await guard_service_1.GuardService.setPrimarySite(req.params.guardId, req.body.siteId, {

@@ -196,7 +196,9 @@ export function computeGuardPayroll(input: {
 
   // Pension base = primary-site NORMAL-HOUR pay ONLY (user rule 2026-10):
   // Sunday structural OT, holiday OT, additional sites and transport excluded.
-  const pensionBase = input.pensionEnrolled && input.pension ? primary.normalPay : 0;
+  const pensionBase = input.pensionEnrolled && input.pension && primary.normalPay > 0
+    ? round2(Math.min(Math.max(primary.normalPay, input.pension.minPensionableSalary ?? 0), input.pension.maxPensionableSalary ?? Infinity))
+    : 0;
 
   let employeePension = 0;
   let employerPension = 0;

@@ -9,6 +9,7 @@ import { PrimarySiteAssignment } from '../../../models/PrimarySiteAssignment';
 import { SiteNote } from '../../../models/SiteNote';
 import { RotationAssignment } from '../../../models/RotationAssignment';
 import { Rotation } from '../../../models/Rotation';
+import { SitePriceHistory } from '../../../models/SitePriceHistory';
 import { ApiError } from '../../../common/ApiError';
 
 const router = Router();
@@ -32,7 +33,7 @@ router.get('/:id/detail', authorize(PERMISSIONS.SITE_READ), async (req: Request,
       ? { siteId }
       : { siteId, isCurrent: true };
 
-    const [activeAssignments, primaryAssignments, recentNotes, rotationAssignments, rotations] = await Promise.all([
+    const [activeAssignments, primaryAssignments, recentNotes, rotationAssignments, rotations, priceHistoryRows] = await Promise.all([
       ShiftAssignment.find({ siteId, status: isInactive ? { $in: ['ACTIVE', 'INACTIVE'] } : 'ACTIVE' })
         .populate('guardId', 'firstName lastName employeeCode status')
         .populate('shiftTemplateId', 'name startTime endTime color'),
@@ -48,6 +49,8 @@ router.get('/:id/detail', authorize(PERMISSIONS.SITE_READ), async (req: Request,
         .sort({ date: -1 })
         .limit(90),
       Rotation.find({ siteId }).select('name title status startDate endDate').sort({ createdAt: -1 }).limit(5),
+      // Full price timeline: every previous price the site has had.
+      SitePriceHistory.find({ siteId }).sort({ createdAt: -1 }).limit(50).populate('changedBy', 'firstName lastName').lean(),
     ]);
 
     // Split primary assignments for UI
@@ -58,12 +61,13 @@ router.get('/:id/detail', authorize(PERMISSIONS.SITE_READ), async (req: Request,
       success: true,
       data: {
         site,
-        activeAssignments,
+          activeAssignments,
         currentAssignments,
         pastAssignments,
         recentNotes,
         rotationAssignments,
         rotations,
+        priceHistory: priceHistoryRows,
       },
     });
   } catch (error) { next(error); }

@@ -15,6 +15,8 @@ export interface IPrimarySiteSnapshot {
     siteId: mongoose.Types.ObjectId;
     siteName: string;
     siteCode?: string;
+    taxCenter?: string;
+    pensionCenter?: string;
     compensationAmount: number;
     transportPercent: number;
     standardMonthlyHours: number;
@@ -39,6 +41,8 @@ export interface IAdditionalSiteSnapshot {
     siteId: mongoose.Types.ObjectId;
     siteName: string;
     siteCode?: string;
+    taxCenter?: string;
+    pensionCenter?: string;
     compensationAmount: number;
     otRate: number;
     normalHours: number;
@@ -66,7 +70,7 @@ export interface IGuardPayrollRecord extends Document {
     grossEarnings: number;
     /** Primary-site salary base only (transport and additional sites excluded). */
     pensionBase: number;
-    /** All sites, transport excluded, minus employee pension withheld. */
+    /** All sites, transport excluded; employee pension is deducted separately. */
     taxableEarnings: number;
     employeePension: number;
     employerPension: number;

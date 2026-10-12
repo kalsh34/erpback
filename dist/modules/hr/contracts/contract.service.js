@@ -3,14 +3,29 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ContractService = void 0;
 const Contract_1 = require("../../../models/Contract");
 const Employee_1 = require("../../../models/Employee");
+const SalaryHistory_1 = require("../../../models/SalaryHistory");
 const types_1 = require("../../../types");
 const activation_1 = require("../employees/activation");
 const ApiError_1 = require("../../../common/ApiError");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
+/** The pay-package fields recorded in SalaryHistory on every change. */
+const PAY_FIELDS = [
+    'wage',
+    'responsibilityAllowance',
+    'teleAllowance',
+    'taxableTransport',
+    'nonTaxableAllowance',
+    'transportAllowance',
+];
+const pickPay = (c) => Object.fromEntries(PAY_FIELDS.map((f) => [f, Number(c?.[f] ?? 0)]));
 class ContractService {
     static async getByEmployeeId(employeeId) {
         return Contract_1.Contract.findOne({ employeeId }).sort({ createdAt: -1 });
+    }
+    /** Full salary-change history for one employee (newest first). */
+    static async getSalaryHistory(employeeId) {
+        return SalaryHistory_1.SalaryHistory.find({ employeeId }).sort({ effectiveFrom: -1, createdAt: -1 }).populate('changedBy', 'firstName lastName');
     }
     static async getAll(query) {
         const { page = 1, limit = 20, status, search } = query;
@@ -34,6 +49,16 @@ class ContractService {
         if (existing)
             throw ApiError_1.ApiError.conflict('Employee already has an active contract');
         const contract = await Contract_1.Contract.create(data);
+        // Baseline salary history row — the starting package of this contract.
+        await SalaryHistory_1.SalaryHistory.create({
+            employeeId: data.employeeId,
+            contractId: contract._id,
+            effectiveFrom: data.contractStartDate || new Date(),
+            previous: undefined,
+            current: pickPay(contract),
+            reason: 'Contract created',
+            changedBy: auditCtx?.userId,
+        });
         await Employee_1.Employee.findByIdAndUpdate(data.employeeId, { status: types_1.EmployeeStatus.CONTRACTED });
         // With the contract in place the employee may now qualify for ACTIVE (when a
         // verified guarantor is already on file).
@@ -60,6 +85,28 @@ class ContractService {
         const contract = await Contract_1.Contract.findByIdAndUpdate(id, data, { new: true, runValidators: true });
         if (!contract)
             throw ApiError_1.ApiError.notFound('Contract not found');
+        // Pay package changed? Record the OLD package in the salary history so
+        // previous salaries are never lost when a contract is updated.
+        const oldPay = pickPay(oldValues);
+        const newPay = pickPay(contract);
+        const payChanged = PAY_FIELDS.some((f) => oldPay[f] !== newPay[f]);
+        if (payChanged) {
+            await SalaryHistory_1.SalaryHistory.create({
+                employeeId: old.employeeId,
+                contractId: id,
+                effectiveFrom: data.contractStartDate || old.contractStartDate || new Date(),
+                previous: oldPay,
+                current: newPay,
+                reason: 'Contract updated',
+                changedBy: auditCtx?.userId,
+            });
+            EventBus_1.eventBus.emit('hr.contract.salaryChanged', {
+                contractId: id,
+                employeeId: old.employeeId,
+                previousWage: oldPay.wage,
+                newWage: newPay.wage,
+            });
+        }
         if (data.status === 'ACTIVE' && old.status !== 'ACTIVE') {
             await (0, activation_1.activateEmployeeIfEligible)(String(old.employeeId));
         }

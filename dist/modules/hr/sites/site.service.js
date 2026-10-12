@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SiteService = void 0;
 const Site_1 = require("../../../models/Site");
+const SitePriceHistory_1 = require("../../../models/SitePriceHistory");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
 const ApiError_1 = require("../../../common/ApiError");
@@ -55,6 +56,14 @@ class SiteService {
         return site;
     }
     static async create(data, auditCtx) {
+        if (!data || typeof data !== 'object')
+            throw ApiError_1.ApiError.badRequest('A request body is required');
+        if (!data.siteCode || !String(data.siteCode).trim())
+            throw ApiError_1.ApiError.badRequest('siteCode is required');
+        if (!data.siteName || !String(data.siteName).trim())
+            throw ApiError_1.ApiError.badRequest('siteName is required');
+        if (!data.location || !String(data.location).trim())
+            throw ApiError_1.ApiError.badRequest('location is required');
         const existing = await Site_1.Site.findOne({ siteCode: data.siteCode });
         if (existing)
             throw ApiError_1.ApiError.conflict('Site code already exists');
@@ -89,6 +98,26 @@ class SiteService {
         const site = await Site_1.Site.findByIdAndUpdate(id, update, { new: true, runValidators: true });
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
+        // The OLD price is never lost when a site's billing figures are edited:
+        // every change is written to SitePriceHistory (previous -> current), so the
+        // full price timeline stays available in the site view.
+        const oldPrice = Number(old.paymentPrice ?? 0);
+        const newPrice = Number(site.paymentPrice ?? 0);
+        const oldEmployees = Number(old.numberOfEmployees ?? 0);
+        const newEmployees = Number(site.numberOfEmployees ?? 0);
+        if (oldPrice !== newPrice || oldEmployees !== newEmployees) {
+            await SitePriceHistory_1.SitePriceHistory.create({
+                siteId: id,
+                previous: { paymentPrice: oldPrice, numberOfEmployees: oldEmployees },
+                current: { paymentPrice: newPrice, numberOfEmployees: newEmployees },
+                changedBy: auditCtx ? auditCtx.userId : null,
+            });
+            EventBus_1.eventBus.emit('hr.site.priceChanged', {
+                siteId: id,
+                previousPrice: oldPrice,
+                newPrice,
+            });
+        }
         if (auditCtx) {
             AuditService_1.AuditService.log({
                 userId: auditCtx.userId,

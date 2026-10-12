@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { payrollTransaction } from './payrollTransaction';
 import { GuardSiteCompensation, IGuardSiteCompensation } from '../../models/GuardSiteCompensation';
 import { GuardPayrollRecord } from '../../models/GuardPayrollRecord';
 import { Site } from '../../models/Site';
@@ -35,6 +36,12 @@ export class SiteCompensationService {
    * closed the day before the new row starts — history is never overwritten.
    */
   static async create(input: { siteId: string; compensationAmount: number; effectiveFrom: string; notes?: string; userId: string }) {
+    return payrollTransaction(async () => {
+      await Site.updateOne({ _id: input.siteId }, { $inc: { __v: 1 } });
+      return this.createTransactional(input);
+    });
+  }
+  private static async createTransactional(input: { siteId: string; compensationAmount: number; effectiveFrom: string; notes?: string; userId: string }) {
     if (!input.siteId) throw ApiError.badRequest('siteId is required');
     if (typeof input.compensationAmount !== 'number' || !Number.isFinite(input.compensationAmount) || input.compensationAmount <= 0) {
       throw ApiError.badRequest('compensationAmount must be greater than 0');
@@ -47,7 +54,7 @@ export class SiteCompensationService {
     if (!site) throw ApiError.notFound('Site not found');
 
     const current = await GuardSiteCompensation.findOne({ siteId: input.siteId, isCurrent: true });
-    if (current && current.effectiveFrom.getTime() > effectiveFrom.getTime()) {
+    if (current && current.effectiveFrom.getTime() >= effectiveFrom.getTime()) {
       throw ApiError.badRequest('A later compensation is already current — add a new row after its effective date');
     }
 
@@ -81,7 +88,7 @@ export class SiteCompensationService {
       throw ApiError.badRequest('The current compensation cannot be deleted — record a new amount instead');
     }
     const used = await GuardPayrollRecord.exists({
-      'primarySite.siteId': row.siteId,
+      $or: [{ 'primarySite.siteId': row.siteId }, { 'additionalSites.siteId': row.siteId }],
       periodKey: { $gte: ymKey(row.effectiveFrom) },
     });
     if (used) throw ApiError.badRequest('This compensation was already used by a payroll run and cannot be deleted');
@@ -124,9 +131,10 @@ export class SiteCompensationService {
     const result = new Map<string, IGuardSiteCompensation>();
     for (const row of rows) {
       const key = row.siteId.toString();
-      if (!result.has(key)) {
-        result.set(key, row);
+      if (result.has(key)) {
+        throw ApiError.badRequest(`Site ${key} has multiple compensation rates in this payroll month. Resolve overlapping history or use segmented payroll for a mid-month rate change; no rate was selected arbitrarily.`);
       }
+      result.set(key, row);
     }
     return result;
   }

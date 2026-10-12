@@ -1,4 +1,5 @@
 import { Site, ISite } from '../../../models/Site';
+import { SitePriceHistory } from '../../../models/SitePriceHistory';
 import { PrimarySiteAssignment } from '../../../models/PrimarySiteAssignment';
 import { ShiftAssignment } from '../../../models/ShiftAssignment';
 import { ApiError } from '../../../common/ApiError';
@@ -56,6 +57,10 @@ export class SiteService {
   }
 
   static async create(data: Partial<ISite>, auditCtx?: { userId: string; ip?: string; ua?: string }): Promise<ISite> {
+    if (!data || typeof data !== 'object') throw ApiError.badRequest('A request body is required');
+    if (!data.siteCode || !String(data.siteCode).trim()) throw ApiError.badRequest('siteCode is required');
+    if (!data.siteName || !String(data.siteName).trim()) throw ApiError.badRequest('siteName is required');
+    if (!data.location || !String(data.location).trim()) throw ApiError.badRequest('location is required');
     const existing = await Site.findOne({ siteCode: data.siteCode });
     if (existing) throw ApiError.conflict('Site code already exists');
     const site = await Site.create(data);
@@ -93,6 +98,27 @@ export class SiteService {
 
     const site = await Site.findByIdAndUpdate(id, update, { new: true, runValidators: true });
     if (!site) throw ApiError.notFound('Site not found');
+
+    // The OLD price is never lost when a site's billing figures are edited:
+    // every change is written to SitePriceHistory (previous -> current), so the
+    // full price timeline stays available in the site view.
+    const oldPrice = Number(old.paymentPrice ?? 0);
+    const newPrice = Number(site.paymentPrice ?? 0);
+    const oldEmployees = Number(old.numberOfEmployees ?? 0);
+    const newEmployees = Number(site.numberOfEmployees ?? 0);
+    if (oldPrice !== newPrice || oldEmployees !== newEmployees) {
+      await SitePriceHistory.create({
+        siteId: id as any,
+        previous: { paymentPrice: oldPrice, numberOfEmployees: oldEmployees },
+        current: { paymentPrice: newPrice, numberOfEmployees: newEmployees },
+        changedBy: auditCtx ? (auditCtx.userId as any) : null,
+      });
+      eventBus.emit('hr.site.priceChanged', {
+        siteId: id,
+        previousPrice: oldPrice,
+        newPrice,
+      });
+    }
 
     if (auditCtx) {
       AuditService.log({

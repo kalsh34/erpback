@@ -9,6 +9,7 @@ const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.CONTRACT_READ), contract_controller_1.ContractController.getAll);
 router.get('/employee/:employeeId', (0, rbac_1.authorize)(types_1.PERMISSIONS.CONTRACT_READ), contract_controller_1.ContractController.getByEmployee);
+router.get('/employee/:employeeId/salary-history', (0, rbac_1.authorize)(types_1.PERMISSIONS.CONTRACT_READ), contract_controller_1.ContractController.getSalaryHistory);
 router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.CONTRACT_CREATE), contract_controller_1.ContractController.create);
 router.put('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.CONTRACT_UPDATE), contract_controller_1.ContractController.update);
 router.delete('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.CONTRACT_UPDATE), contract_controller_1.ContractController.delete);

@@ -5,8 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GuardPayrollRunService = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
+const assignmentTimeline_1 = require("./assignmentTimeline");
+const payrollTransaction_1 = require("./payrollTransaction");
 const GuardPayrollRun_1 = require("../../models/GuardPayrollRun");
 const GuardPayrollRecord_1 = require("../../models/GuardPayrollRecord");
+const StaffPayrollRecord_1 = require("../../models/StaffPayrollRecord");
 const Employee_1 = require("../../models/Employee");
 const Contract_1 = require("../../models/Contract");
 const PrimarySiteAssignment_1 = require("../../models/PrimarySiteAssignment");
@@ -18,7 +21,6 @@ const guardPayrollLock_service_1 = require("./guardPayrollLock.service");
 const guardPayrollEngine_1 = require("./guardPayrollEngine");
 const statutory_service_1 = require("../payrollCommon/statutory.service");
 const deductions_service_1 = require("../payrollCommon/deductions.service");
-const attendanceSummary_service_1 = require("../payrollCommon/attendanceSummary.service");
 const ApiError_1 = require("../../common/ApiError");
 const AuditService_1 = require("../../core/audit/AuditService");
 const types_1 = require("../../types");
@@ -30,6 +32,8 @@ function monthWindow(periodKey) {
     const [year, month] = periodKey.split('-').map(Number);
     if (month < 1 || month > 12)
         throw ApiError_1.ApiError.badRequest('periodKey month must be between 01 and 12');
+    if (year < 2000 || year > 2100)
+        throw ApiError_1.ApiError.badRequest('periodKey year must be a realistic payroll year (2000–2100)');
     return {
         year,
         month,
@@ -48,6 +52,9 @@ class GuardPayrollRunService {
      * Create or recalculate the run for a month using batch queries and bulk insert.
      */
     static async calculate(periodKey, userId, auditCtx) {
+        return (0, payrollTransaction_1.payrollTransaction)(() => this.calculateTransactional(periodKey, userId, auditCtx));
+    }
+    static async calculateTransactional(periodKey, userId, auditCtx) {
         const { year, month, start, end } = monthWindow(periodKey);
         let run = await GuardPayrollRun_1.GuardPayrollRun.findOne({ periodKey });
         if (run && !EDITABLE_STATUSES.includes(run.status)) {
@@ -63,6 +70,8 @@ class GuardPayrollRunService {
             statutory_service_1.StatutoryService.getTaxTableForPeriod(start),
         ]);
         const taxBrackets = taxTable?.brackets?.length ? taxTable.brackets : [];
+        if (!taxBrackets.length)
+            throw ApiError_1.ApiError.badRequest('Configure the Guard income tax table for this period before calculating payroll.');
         const guards = await Employee_1.Employee.find({
             category: types_1.EmployeeCategory.GUARD,
             status: { $in: [types_1.EmployeeStatus.ACTIVE, types_1.EmployeeStatus.CONTRACTED] },
@@ -109,10 +118,11 @@ class GuardPayrollRunService {
         }
         const [compensations, siteMetaDocs] = await Promise.all([
             siteCompensation_service_1.SiteCompensationService.getForSites(Array.from(relevantSiteIds), start, end),
-            Employee_1.Employee.db.model('Site').find({ _id: { $in: Array.from(relevantSiteIds) } }).select('siteName siteCode status').lean(),
+            Employee_1.Employee.db.model('Site').find({ _id: { $in: Array.from(relevantSiteIds) } }).select('siteName siteCode status taxCenter pensionSite').lean(),
         ]);
         const siteMeta = new Map(siteMetaDocs.map((s) => [s._id.toString(), s]));
         const problems = [];
+        const guardWarnings = [];
         const recordDocs = [];
         for (const guard of guards) {
             const guardKey = guard._id.toString();
@@ -128,17 +138,14 @@ class GuardPayrollRunService {
                 });
                 continue;
             }
-            if (guardAssignments.length > 1) {
-                problems.push({
-                    employeeId: guard._id,
-                    employeeCode: guard.employeeCode,
-                    guardName,
-                    code: 'MULTIPLE_PRIMARY_SITES',
-                    message: `Multiple overlapping primary site assignments (${guardAssignments.length})`,
-                });
+            const resolution = (0, assignmentTimeline_1.resolveMonthlyPrimary)(guardAssignments, start, end);
+            if (!resolution.assignment) {
+                problems.push({ employeeId: guard._id, employeeCode: guard.employeeCode, guardName,
+                    code: resolution.code, message: resolution.message });
                 continue;
             }
-            const primaryAssignment = guardAssignments[0];
+            const primaryAssignment = resolution.assignment;
+            const additionalAssignments = guardAssignments.filter((a) => !a.isPrimary);
             const primarySite = primaryAssignment.siteId;
             const primarySiteId = (primarySite?._id || primarySite).toString();
             const primaryCompensation = compensations.get(primarySiteId);
@@ -164,36 +171,66 @@ class GuardPayrollRunService {
                     sundayHours: found.sundayHours || 0,
                 };
             };
+            const additionalSiteIds = new Set(additionalAssignments.map((a) => (a.siteId?._id || a.siteId).toString()));
             const additionalSites = [];
+            const warnings2 = [];
             let missingCompForAdditional = false;
-            for (const siteEntry of guardHours?.sites || []) {
-                if (siteEntry.siteId === primarySiteId)
+            // Sources for billable additional sites: hours actually worked at any
+            // non-primary site, PLUS current secondary assignments (even with 0 h).
+            const secondaryEntries = [
+                ...(guardHours?.sites || []).filter((s) => s.siteId !== primarySiteId),
+                ...additionalAssignments.map((a) => ({
+                    siteId: (a.siteId?._id || a.siteId).toString(),
+                    normalHours: 0,
+                    holidayHours: 0,
+                    sundayHours: 0,
+                })),
+            ];
+            const seenSecondary = new Set();
+            for (const siteEntry of secondaryEntries) {
+                if (seenSecondary.has(siteEntry.siteId))
+                    continue;
+                seenSecondary.add(siteEntry.siteId);
+                const entryHours = hoursBySiteId.get(siteEntry.siteId);
+                const hours = {
+                    normalHours: entryHours?.normalHours || 0,
+                    holidayHours: entryHours?.holidayHours || 0,
+                    sundayHours: entryHours?.sundayHours || 0,
+                };
+                if (hours.normalHours + hours.holidayHours + hours.sundayHours === 0)
                     continue;
                 const comp = compensations.get(siteEntry.siteId);
                 if (!comp) {
-                    problems.push({
+                    // Warn but keep the guard: they still have a primary-site record to
+                    // pay. Previously this dropped the ENTIRE record and, since submit
+                    // blocks on any problem, left the whole run stuck with no way to see
+                    // the guard's pay at all.
+                    missingCompForAdditional = true;
+                    warnings2.push({
                         employeeId: guard._id,
                         employeeCode: guard.employeeCode,
                         guardName,
                         code: 'NO_ADDITIONAL_SITE_COMPENSATION',
-                        message: `No compensation rate for additional site "${siteMeta.get(siteEntry.siteId)?.siteName || siteEntry.siteId}"`,
+                        message: `No compensation rate for additional site "${siteMeta.get(siteEntry.siteId)?.siteName || siteEntry.siteId}" — hours at this site are NOT paid. Configure the rate, then recalculate.`,
                     });
-                    missingCompForAdditional = true;
-                    break;
+                    continue;
                 }
                 additionalSites.push({
                     siteId: siteEntry.siteId,
                     compensationAmount: comp.compensationAmount,
-                    hours: {
-                        normalHours: siteEntry.normalHours || 0,
-                        holidayHours: siteEntry.holidayHours || 0,
-                        sundayHours: siteEntry.sundayHours || 0,
-                    },
+                    hours,
                 });
             }
+            guardWarnings.push(...warnings2);
             if (missingCompForAdditional)
                 continue;
             const contract = contractsByGuard.get(guardKey);
+            if (!contract || typeof contract.pensionEnrolled !== 'boolean' || (contract.pensionEnrolled && !pensionRule)) {
+                problems.push({ employeeId: guard._id, employeeCode: guard.employeeCode, guardName,
+                    code: !contract || typeof contract.pensionEnrolled !== 'boolean' ? 'MISSING_PENSION_ENROLLMENT' : 'MISSING_STATUTORY_CONFIG',
+                    message: 'Confirm effective contract pension enrollment and the applicable Guard pension rule before calculating.' });
+                continue;
+            }
             const warnings = [];
             if (!contract) {
                 warnings.push('No active contract found for this period — pension was not applied.');
@@ -237,6 +274,8 @@ class GuardPayrollRunService {
                     siteId: primarySiteId,
                     siteName: primarySite?.siteName || '',
                     siteCode: primarySite?.siteCode,
+                    taxCenter: siteMeta.get(primarySiteId)?.taxCenter || '',
+                    pensionCenter: siteMeta.get(primarySiteId)?.pensionSite || '',
                     ...result.primary,
                     transportPercent: config.transportPercent,
                     standardMonthlyHours: config.standardMonthlyHours,
@@ -279,10 +318,19 @@ class GuardPayrollRunService {
             totalDeductions: (0, guardPayrollEngine_1.round2)(records.reduce((s, r) => s + r.totalDeductions, 0)),
             netPay: (0, guardPayrollEngine_1.round2)(records.reduce((s, r) => s + r.netPay, 0)),
         };
+        // Final guard right before the records/totals are committed: a run that
+        // was SUBMITTED/CHECKED/APPROVED/PAID while this long calculation ran
+        // must NOT be overwritten (defect fixed 2026-10, see stabilization report).
+        const freshStatus = (await GuardPayrollRun_1.GuardPayrollRun.findById(run._id).select('status').lean());
+        if (freshStatus && !EDITABLE_STATUSES.includes(freshStatus.status)) {
+            throw ApiError_1.ApiError.conflict(`Payroll for ${periodKey} moved to ${freshStatus.status} during calculation; recalculating was aborted. RETURN it for correction first.`);
+        }
         run.status = types_1.PayrollRecordStatus.CALCULATED;
         run.calculatedBy = userId;
         run.calculatedAt = new Date();
-        run.problems = problems;
+        // Merge the per-guard NO_ADDITIONAL_SITE_COMPENSATION warnings collected
+        // during the loop so they are visible on the run (not swallowed).
+        run.problems = [...problems, ...guardWarnings];
         run.totals = totals;
         await run.save();
         await AuditService_1.AuditService.log({
@@ -299,6 +347,14 @@ class GuardPayrollRunService {
     // ───────────────────────────────────────────────────────────────────
     // Reads
     // ───────────────────────────────────────────────────────────────────
+    /** Status-guarded recalculation of an existing run by its id. */
+    static async recalculate(runId, userId, auditCtx) {
+        const run = await this.loadRun(runId);
+        if (!EDITABLE_STATUSES.includes(run.status)) {
+            throw ApiError_1.ApiError.conflict(`Payroll for ${run.periodKey} is ${run.status}. RETURN it for correction before recalculating.`);
+        }
+        return this.calculate(run.periodKey, userId, auditCtx);
+    }
     static async listRuns(filters = {}) {
         const query = {};
         if (filters.periodKey)
@@ -307,23 +363,40 @@ class GuardPayrollRunService {
             query.status = filters.status;
         return GuardPayrollRun_1.GuardPayrollRun.find(query).sort({ periodKey: -1 }).limit(120);
     }
-    static async getRun(runId) {
+    static async getRun(runId, siteId) {
         const run = await GuardPayrollRun_1.GuardPayrollRun.findById(runId);
         if (!run)
             throw ApiError_1.ApiError.notFound('Guard payroll run not found');
-        const records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id })
-            .populate('primarySite.siteId', 'siteName siteCode')
-            .sort({ 'snapshot.employeeCode': 1 });
-        const attendance = await attendanceSummary_service_1.AttendanceSummaryService.forRun('GUARD', run.periodKey, records.map((r) => r.employeeId.toString()));
+        let records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+        // Optional site filter (primary site matches, ObjectId or embedded doc).
+        if (siteId && siteId !== 'ALL') {
+            records = records.filter((r) => {
+                const psid = r.primarySite?.siteId;
+                const resolved = psid?._id ? String(psid._id) : String(psid || '');
+                return resolved === String(siteId);
+            });
+        }
+        const attendance = { periodKey: run.periodKey, daysInMonth: new Date(Date.UTC(Number(run.periodKey.slice(0, 4)), Number(run.periodKey.slice(5)), 0)).getUTCDate(),
+            kind: 'GUARD', rows: records.map((r) => {
+                const saved = r.toObject();
+                const sites = [{ ...saved.primarySite, isPrimary: true }, ...saved.additionalSites.map((s) => ({ ...s, isPrimary: false }))];
+                const normalHours = (0, guardPayrollEngine_1.round2)(sites.reduce((n, s) => n + s.normalHours, 0));
+                const sundayHours = (0, guardPayrollEngine_1.round2)(sites.reduce((n, s) => n + s.sundayHours, 0));
+                const holidayHours = (0, guardPayrollEngine_1.round2)(sites.reduce((n, s) => n + s.holidayHours, 0));
+                const primaryHours = r.primarySite.normalHours + r.primarySite.sundayHours + r.primarySite.holidayHours;
+                return { employeeId: r.employeeId.toString(), source: 'SNAPSHOT', sites,
+                    normalHours, sundayHours, holidayHours, totalHours: (0, guardPayrollEngine_1.round2)(normalHours + sundayHours + holidayHours),
+                    standardMonthlyHours: r.primarySite.standardMonthlyHours,
+                    percentageOfStandard: (0, guardPayrollEngine_1.round2)(primaryHours / r.primarySite.standardMonthlyHours * 100),
+                    hasAttendance: normalHours + sundayHours + holidayHours > 0, suggestedAmount: null };
+            }) };
         return { run, records, attendance };
     }
     static async getRecord(recordId) {
         if (!recordId || !mongoose_1.default.Types.ObjectId.isValid(recordId)) {
             throw ApiError_1.ApiError.badRequest(`Invalid record ID: "${recordId}"`);
         }
-        const record = await GuardPayrollRecord_1.GuardPayrollRecord.findById(recordId)
-            .populate('primarySite.siteId', 'siteName siteCode')
-            .populate('additionalSites.siteId', 'siteName siteCode');
+        const record = await GuardPayrollRecord_1.GuardPayrollRecord.findById(recordId);
         if (!record)
             throw ApiError_1.ApiError.notFound('Guard payroll record not found');
         return record;
@@ -360,13 +433,40 @@ class GuardPayrollRunService {
             throw ApiError_1.ApiError.conflict(`Cannot ${action}: payroll is ${run.status} (expected ${allowed.join(' or ')}).`);
         }
     }
+    /**
+     * Re-check the run's status AFTER any async work at the exact moment of the
+     * state-changing save. Closes the race where a run gets SUBMITTED/CHECKED/
+     * APPROVED/PAID between the initial load and this save (two concurrent
+     * lifecycle calls, or a parallel recalculate).
+     */
+    static async assertStatusAtSave(runId, allowed, action) {
+        const fresh = await GuardPayrollRun_1.GuardPayrollRun.findById(runId).select('status').lean();
+        if (!fresh)
+            throw ApiError_1.ApiError.notFound('Guard payroll run not found');
+        if (!allowed.includes(fresh.status)) {
+            throw ApiError_1.ApiError.conflict(`Cannot ${action}: payroll moved to ${fresh.status} while the operation was in progress.`);
+        }
+    }
     /** CALCULATED → SUBMITTED. Locks attendance for the month. */
     static async submit(runId, userId, auditCtx) {
+        return (0, payrollTransaction_1.payrollTransaction)(() => this.submitTransactional(runId, userId, auditCtx));
+    }
+    static async submitTransactional(runId, userId, auditCtx) {
         const run = await this.loadRun(runId);
         this.assertStatus(run, [types_1.PayrollRecordStatus.CALCULATED], 'submit');
         if (run.problems.length > 0) {
-            throw ApiError_1.ApiError.badRequest(`Resolve ${run.problems.length} payroll problem(s) before submitting (e.g. guards without a primary site).`);
+            // Informational notices (e.g. a guard legitimately holding several site
+            // assignments) must not freeze the whole run. Only blocking codes do.
+            const BLOCKING_CODES = new Set(['NO_PRIMARY_SITE', 'MULTIPLE_PRIMARY_SITES', 'PRIMARY_SITE_CHANGE', 'NO_SITE_COMPENSATION', 'NO_ADDITIONAL_SITE_COMPENSATION', 'MISSING_STATUTORY_CONFIG', 'MISSING_PENSION_ENROLLMENT']);
+            const blocking = run.problems.filter((p) => BLOCKING_CODES.has(p.code));
+            if (blocking.length > 0) {
+                throw ApiError_1.ApiError.badRequest(`Resolve ${blocking.length} blocking payroll problem(s) before submitting: ${blocking
+                    .slice(0, 3)
+                    .map((p) => `${p.guardName} (${p.code})`)
+                    .join(', ')}${blocking.length > 3 ? '…' : ''}`);
+            }
         }
+        await this.assertStatusAtSave(runId, [types_1.PayrollRecordStatus.CALCULATED], 'submit');
         run.status = types_1.PayrollRecordStatus.SUBMITTED;
         run.submittedBy = userId;
         run.submittedAt = new Date();
@@ -376,8 +476,12 @@ class GuardPayrollRunService {
     }
     /** SUBMITTED → CHECKED. */
     static async check(runId, userId, auditCtx) {
+        return (0, payrollTransaction_1.payrollTransaction)(() => this.checkTransactional(runId, userId, auditCtx));
+    }
+    static async checkTransactional(runId, userId, auditCtx) {
         const run = await this.loadRun(runId);
         this.assertStatus(run, [types_1.PayrollRecordStatus.SUBMITTED], 'check');
+        await this.assertStatusAtSave(runId, [types_1.PayrollRecordStatus.SUBMITTED], 'check');
         run.status = types_1.PayrollRecordStatus.CHECKED;
         run.checkedBy = userId;
         run.checkedAt = new Date();
@@ -387,8 +491,12 @@ class GuardPayrollRunService {
     }
     /** CHECKED → APPROVED. Settles loan/advance balances for the deductions taken. */
     static async approve(runId, userId, auditCtx) {
+        return (0, payrollTransaction_1.payrollTransaction)(() => this.approveTransactional(runId, userId, auditCtx));
+    }
+    static async approveTransactional(runId, userId, auditCtx) {
         const run = await this.loadRun(runId);
         this.assertStatus(run, [types_1.PayrollRecordStatus.CHECKED], 'approve');
+        await this.assertStatusAtSave(runId, [types_1.PayrollRecordStatus.CHECKED], 'approve');
         run.status = types_1.PayrollRecordStatus.APPROVED;
         run.approvedBy = userId;
         run.approvedAt = new Date();
@@ -403,6 +511,9 @@ class GuardPayrollRunService {
      * If returned after approval, loan settlements are safely rolled back to prevent double deduction.
      */
     static async returnForCorrection(runId, reason, userId, auditCtx) {
+        return (0, payrollTransaction_1.payrollTransaction)(() => this.returnTransactional(runId, reason, userId, auditCtx));
+    }
+    static async returnTransactional(runId, reason, userId, auditCtx) {
         const run = await this.loadRun(runId);
         if (!reason || !reason.trim())
             throw ApiError_1.ApiError.badRequest('A reason is required to return payroll for correction');
@@ -423,33 +534,70 @@ class GuardPayrollRunService {
     static async markPaid(runId, paymentRef, userId, auditCtx) {
         const run = await this.loadRun(runId);
         this.assertStatus(run, [types_1.PayrollRecordStatus.APPROVED], 'mark paid');
-        run.status = types_1.PayrollRecordStatus.PAID;
-        run.paidBy = userId;
-        run.paidAt = new Date();
-        if (paymentRef)
-            run.paymentRef = paymentRef;
-        await run.save();
-        await this.log(userId, 'GUARD_PAYROLL_PAY', run, auditCtx);
+        if (!paymentRef?.trim())
+            throw ApiError_1.ApiError.badRequest('A bank confirmation or reconciled payment reference is required. Exporting instructions does not confirm payment.');
+        // Atomic conditional update: only flips APPROVED → PAID, and re-reads the
+        // stored status at save time. A run that was recalculated/returned/re-paid
+        // between load and save is rejected here instead of being paid twice.
+        const paid = await GuardPayrollRun_1.GuardPayrollRun.findOneAndUpdate({ _id: runId, status: types_1.PayrollRecordStatus.APPROVED }, {
+            $set: {
+                status: types_1.PayrollRecordStatus.PAID,
+                paidBy: userId,
+                paidAt: new Date(),
+                ...(paymentRef ? { paymentRef } : {}),
+            },
+        }, { new: true });
+        if (!paid) {
+            throw ApiError_1.ApiError.conflict(`Cannot mark paid: payroll is no longer APPROVED (concurrent change detected).`);
+        }
+        await this.log(userId, 'GUARD_PAYROLL_PAY', paid, auditCtx);
         return this.getRun(runId);
     }
     // ───────────────────────────────────────────────────────────────────
     // Exports & Payslips
     // ───────────────────────────────────────────────────────────────────
+    /**
+     * Every bank present in a combined staff + guard payroll month (deduped
+     * from bank snapshots across StaffPayrollRecord + GuardPayrollRecord),
+     * used to populate the export-menu bank list.
+     */
+    static async listBanksInUse(periodKey) {
+        const q = periodKey ? { periodKey } : {};
+        const [staff, guard] = await Promise.all([
+            StaffPayrollRecord_1.StaffPayrollRecord.find(q).select('snapshot.bankName').lean(),
+            GuardPayrollRecord_1.GuardPayrollRecord.find(q).select('snapshot.bankName').lean(),
+        ]);
+        const counts = new Map();
+        for (const doc of [...staff, ...guard]) {
+            const bank = doc.snapshot?.bankName?.trim() || 'CBE';
+            counts.set(bank, (counts.get(bank) || 0) + 1);
+        }
+        return Array.from(counts.entries())
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .map(([bank, count]) => ({ bank, count }));
+    }
     /** Export bank disbursement batch CSV (CBE / Awash / Dashen / All). */
     static async exportBankDisbursement(runId, bankFilter) {
         const run = await GuardPayrollRun_1.GuardPayrollRun.findById(runId);
         if (!run)
             throw ApiError_1.ApiError.notFound('Guard payroll run not found');
+        this.assertStatus(run, [types_1.PayrollRecordStatus.APPROVED, types_1.PayrollRecordStatus.PAID], 'generate bank instructions');
         const records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
         const filtered = bankFilter && bankFilter !== 'ALL'
             ? records.filter((r) => (r.snapshot.bankName || '').toLowerCase().includes(bankFilter.toLowerCase()))
             : records;
+        const invalid = filtered.filter((r) => !r.snapshot.bankName?.trim() || !r.snapshot.accountNumber?.trim() || !Number.isFinite(r.netPay) || r.netPay < 0);
+        if (invalid.length)
+            throw ApiError_1.ApiError.badRequest(`Correct bank details or invalid payable amounts before exporting: ${invalid.map((r) => r.snapshot.employeeCode).join(', ')}`);
+        if (new Set(filtered.map((r) => r.employeeId.toString())).size !== filtered.length)
+            throw ApiError_1.ApiError.conflict('Duplicate guard records detected in bank instructions.');
+        const csvCell = (value) => `"${value.replace(/"/g, '""')}"`;
         const headers = ['Employee Code', 'Beneficiary Full Name', 'Bank Name', 'Account Number', 'Net Pay (ETB)', 'Reference', 'Narration'];
         const rows = filtered.map((r) => [
-            r.snapshot.employeeCode || '',
-            `"${(r.snapshot.fullName || '').replace(/"/g, '""')}"`,
-            `"${(r.snapshot.bankName || 'CBE').replace(/"/g, '""')}"`,
-            `"${r.snapshot.accountNumber || ''}"`,
+            csvCell(r.snapshot.employeeCode || ''),
+            csvCell(r.snapshot.fullName || ''),
+            csvCell(r.snapshot.bankName || ''),
+            csvCell(r.snapshot.accountNumber || ''),
             r.netPay.toFixed(2),
             `"PAY-${run.periodKey}-${r.snapshot.employeeCode || ''}"`,
             `"Vital Security Guard Salary ${run.periodKey}"`,
@@ -459,13 +607,25 @@ class GuardPayrollRunService {
             csv: [headers.join(','), ...rows.map((row) => row.join(','))].join('\n'),
         };
     }
-    /** Statutory income tax schedule export (ERCA). */
-    static async exportTaxReport(runId) {
+    /**
+     * Statutory income tax schedule export — filtered by tax branch.
+     * Guards declare under the private-organization schedule (branch 'GUARD');
+     * office staff under the staff schedule ('STAFF').
+     */
+    static async exportTaxReport(runId, taxBranch) {
         const run = await GuardPayrollRun_1.GuardPayrollRun.findById(runId);
         if (!run)
             throw ApiError_1.ApiError.notFound('Guard payroll run not found');
-        const records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+        let records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+        if (taxBranch && !['GUARD', 'STAFF', 'ALL'].includes(taxBranch))
+            records = records.filter((r) => r.primarySite.taxCenter === taxBranch);
+        // Snapshot-only view of which payable rows the run contains, grouped by
+        // tax branch so per-branch exports stay self-describing.
+        if (taxBranch === 'STAFF')
+            throw ApiError_1.ApiError.badRequest('Use Staff Payroll for the staff income tax report; this run contains guards only.');
+        const branchLabel = 'GUARD (Private Org Income Tax)';
         const headers = [
+            'Tax Branch',
             'Employee Code',
             'Full Name',
             'Gross Salary (ETB)',
@@ -475,6 +635,7 @@ class GuardPayrollRunService {
             'Period',
         ];
         const rows = records.map((r) => [
+            `"${(r.primarySite.taxCenter || branchLabel).replace(/"/g, '""')}"`,
             r.snapshot.employeeCode || '',
             `"${(r.snapshot.fullName || '').replace(/"/g, '""')}"`,
             r.grossEarnings.toFixed(2),
@@ -484,27 +645,38 @@ class GuardPayrollRunService {
             run.periodKey,
         ]);
         return {
-            filename: `guard-tax-declaration-${run.periodKey}.csv`,
+            filename: `guard-tax-declaration-${taxBranch || 'ALL'}-${run.periodKey}.csv`,
             csv: [headers.join(','), ...rows.map((row) => row.join(','))].join('\n'),
         };
     }
-    /** Statutory pension schedule export (POESSA 7% / 11%). */
-    static async exportPensionReport(runId) {
+    /**
+     * Statutory pension schedule export — filtered by pension center.
+     * Centers mirror the tax branch split: private-organization guards remit
+     * via POESSA (Private Org), staff via their own scheme.
+     */
+    static async exportPensionReport(runId, pensionCenter) {
         const run = await GuardPayrollRun_1.GuardPayrollRun.findById(runId);
         if (!run)
             throw ApiError_1.ApiError.notFound('Guard payroll run not found');
-        const records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+        let records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+        if (pensionCenter && !['GUARD', 'STAFF', 'ALL'].includes(pensionCenter))
+            records = records.filter((r) => r.primarySite.pensionCenter === pensionCenter);
+        if (pensionCenter === 'STAFF')
+            throw ApiError_1.ApiError.badRequest('Use Staff Payroll for the staff pension report; this run contains guards only.');
+        const centerLabel = 'POESSA Private Organization (Guards)';
         const headers = [
+            'Pension Center',
             'Employee Code',
             'Full Name',
             'Pension Enrolled',
             'Pension Base (ETB)',
-            'Employee Share 7% (ETB)',
-            'Employer Share 11% (ETB)',
-            'Total POESSA Remittance 18% (ETB)',
+            'Employee Contribution (ETB)',
+            'Employer Contribution (ETB)',
+            'Total Pension Remittance (ETB)',
             'Period',
         ];
         const rows = records.map((r) => [
+            `"${(r.primarySite.pensionCenter || centerLabel).replace(/"/g, '""')}"`,
             r.snapshot.employeeCode || '',
             `"${(r.snapshot.fullName || '').replace(/"/g, '""')}"`,
             r.snapshot.pensionEnrolled ? 'YES' : 'NO',
@@ -515,7 +687,7 @@ class GuardPayrollRunService {
             run.periodKey,
         ]);
         return {
-            filename: `guard-pension-poessa-${run.periodKey}.csv`,
+            filename: `guard-pension-${pensionCenter || 'ALL'}-${run.periodKey}.csv`,
             csv: [headers.join(','), ...rows.map((row) => row.join(','))].join('\n'),
         };
     }
@@ -523,6 +695,7 @@ class GuardPayrollRunService {
     static async getPayslip(recordId) {
         const record = await this.getRecord(recordId);
         const run = await GuardPayrollRun_1.GuardPayrollRun.findById(record.runId);
+        const saved = record.toObject();
         return {
             company: {
                 name: 'VITAL SECURITY SERVICES PLC',
@@ -541,6 +714,7 @@ class GuardPayrollRunService {
             },
             earnings: {
                 primarySite: {
+                    ...saved.primarySite,
                     name: record.primarySite.siteName,
                     code: record.primarySite.siteCode,
                     normalHours: record.primarySite.normalHours,
@@ -551,7 +725,8 @@ class GuardPayrollRunService {
                     holidayPay: record.primarySite.holidayPay,
                     transportPaid: record.primarySite.transportPaid,
                 },
-                additionalSites: record.additionalSites.map((s) => ({
+                additionalSites: saved.additionalSites.map((s) => ({
+                    ...s,
                     name: s.siteName,
                     code: s.siteCode,
                     totalHours: s.totalHours,
@@ -564,8 +739,11 @@ class GuardPayrollRunService {
                 employerPension: record.employerPension,
                 incomeTax: record.incomeTax,
                 otherDeductions: record.deductions,
-                totalDeductions: record.totalDeductions,
+                totalDeductions: (0, guardPayrollEngine_1.round2)(record.totalDeductions + record.employeePension + record.incomeTax),
             },
+            taxableEarnings: record.taxableEarnings,
+            pensionBase: record.pensionBase,
+            paymentRef: run?.paymentRef,
             netPay: record.netPay,
             generatedAt: new Date().toISOString(),
             watermark: `VTL-SEC-${record._id.toString().slice(-8).toUpperCase()}`,

@@ -99,6 +99,15 @@ export class GuardController {
     } catch (error) { next(error); }
   }
 
+  static async correctAssignment(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const row = await GuardService.correctAssignment(req.params.assignmentId, req.body, {
+        userId: req.user?.userId || '', ip: req.ip, ua: req.get('user-agent'),
+      });
+      res.json({ success: true, data: row });
+    } catch (error) { next(error); }
+  }
+
   static async setPrimarySite(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const assignment = await GuardService.setPrimarySite(req.params.guardId, req.body.siteId, {

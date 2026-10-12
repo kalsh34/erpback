@@ -30,6 +30,15 @@ class EmployeeController {
             next(error);
         }
     }
+    static async getDetail(req, res, next) {
+        try {
+            const detail = await employee_service_1.EmployeeService.getDetail(req.params.id);
+            res.json({ success: true, data: detail });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     static async create(req, res, next) {
         try {
             const employee = await employee_service_1.EmployeeService.create(req.body, {

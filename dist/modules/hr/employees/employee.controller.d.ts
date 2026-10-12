@@ -6,6 +6,7 @@ interface AuthenticatedRequest extends Request {
 export declare class EmployeeController {
     static getAll(req: QueryRequest, res: Response, next: NextFunction): Promise<void>;
     static getById(req: Request, res: Response, next: NextFunction): Promise<void>;
+    static getDetail(req: Request, res: Response, next: NextFunction): Promise<void>;
     static create(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static update(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static changeStatus(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;

@@ -10,6 +10,8 @@ const env_1 = require("../../../config/env");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
 const guardPayrollLock_service_1 = require("../../guardPayroll/guardPayrollLock.service");
+const monthlyHours_service_1 = require("./monthlyHours.service");
+const assignmentTimeline_1 = require("../../guardPayroll/assignmentTimeline");
 const types_1 = require("../../../types");
 const dateUtils_1 = require("../../../common/dateUtils");
 /** Statuses that count as an employed guard for attendance purposes. */
@@ -66,13 +68,12 @@ class GuardAttendanceService {
         const site = await Site_1.Site.findById(siteId);
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
-        const assignment = await PrimarySiteAssignment_1.PrimarySiteAssignment.findOne({ guardId, siteId });
-        if (!assignment) {
-            throw ApiError_1.ApiError.badRequest('Guard is not assigned to this site');
-        }
-        if (!assignment.isCurrent) {
-            throw ApiError_1.ApiError.badRequest('The site assignment has ended — attendance after the end date is rejected');
-        }
+        const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
+        const dayEnd = new Date(`${dateStr}T23:59:59.999Z`);
+        const assignment = await PrimarySiteAssignment_1.PrimarySiteAssignment.findOne({ guardId, siteId,
+            effectiveFrom: { $lte: dayEnd }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: dayStart } }] });
+        if (!assignment)
+            throw ApiError_1.ApiError.badRequest('No site assignment is effective on this attendance date. Check the assignment history.');
         if (this.startOfDay(date) < this.startOfDay(assignment.effectiveFrom)) {
             throw ApiError_1.ApiError.badRequest(`Assignment starts on ${(0, dateUtils_1.ymdLocal)(assignment.effectiveFrom)} — attendance before that date is rejected`);
         }
@@ -270,7 +271,10 @@ class GuardAttendanceService {
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
         const periodKey = periodKeyOfDate(date);
-        const assignments = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ siteId, isCurrent: true }).sort({ isPrimary: -1, effectiveFrom: -1 });
+        const assignments = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ siteId,
+            effectiveFrom: { $lte: new Date(`${date}T23:59:59.999Z`) },
+            $or: [{ effectiveTo: null }, { effectiveTo: { $gte: new Date(`${date}T00:00:00.000Z`) } }],
+        }).sort({ isPrimary: -1, effectiveFrom: -1 });
         const guardIds = assignments.map((a) => a.guardId);
         const [guards, dayRecords] = await Promise.all([
             guardIds.length
@@ -339,6 +343,39 @@ class GuardAttendanceService {
      * month. Sites are never merged; the primary site is flagged per guard.
      */
     static async getMonthlyTotals(year, month, siteId) {
+        const start = new Date(Date.UTC(year, month - 1, 1));
+        const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+        const [feed, assignments, guards, siteDocs] = await Promise.all([
+            monthlyHours_service_1.GuardMonthlyHoursService.getPayrollHours(year, month),
+            PrimarySiteAssignment_1.PrimarySiteAssignment.find({ effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }),
+            Employee_1.Employee.find({ category: types_1.EmployeeCategory.GUARD, status: { $in: ATTENDABLE_STATUSES } }).sort({ employeeCode: 1 }),
+            Site_1.Site.find().select('siteName siteCode'),
+        ]);
+        const sitesById = new Map(siteDocs.map((s) => [s._id.toString(), s]));
+        const hoursByGuard = new Map(feed.guards.map((g) => [g.guardId, g]));
+        const rows = guards.map((guard) => {
+            const history = assignments.filter((a) => a.guardId.toString() === guard._id.toString());
+            const primary = (0, assignmentTimeline_1.resolveMonthlyPrimary)(history, start, end);
+            const primarySiteId = primary.assignment?.siteId.toString() || null;
+            const hours = hoursByGuard.get(guard._id.toString());
+            const sites = (hours?.sites || []).map((s) => ({ ...s,
+                siteName: sitesById.get(s.siteId)?.siteName || s.siteName || 'Unknown site',
+                siteCode: sitesById.get(s.siteId)?.siteCode || '', isPrimary: s.siteId === primarySiteId,
+                totalHours: Math.round((s.normalHours + s.sundayHours + s.holidayHours) * 100) / 100,
+                dayCount: 0,
+            }));
+            return { guard: { _id: guard._id, employeeCode: guard.employeeCode, firstName: guard.firstName, lastName: guard.lastName, status: guard.status },
+                primarySiteId, primarySiteName: primarySiteId ? sitesById.get(primarySiteId)?.siteName : null,
+                sites, totalHours: Math.round(sites.reduce((n, s) => n + s.totalHours, 0) * 100) / 100,
+                warnings: [primary.message, !hours ? 'No attendance recorded; no earnings will be generated.' : undefined].filter(Boolean),
+            };
+        }).filter((r) => !siteId || r.primarySiteId === siteId || r.sites.some((s) => s.siteId === siteId));
+        return { periodKey: feed.periodKey, config: this.getConfig(), rows,
+            missingAttendance: rows.filter((r) => !r.sites.length).map((r) => r.guard),
+            grandTotal: Math.round(rows.reduce((n, r) => n + r.totalHours, 0) * 100) / 100 };
+    }
+    /** Legacy daily-only diagnostic; payroll summary above uses the canonical per-site feed. */
+    static async getDailyOnlyMonthlyTotals(year, month, siteId) {
         const periodKey = `${year}-${String(month).padStart(2, '0')}`;
         const match = { periodKey, status: types_1.GuardAttendanceStatus.ACTIVE };
         if (siteId)

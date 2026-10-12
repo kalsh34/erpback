@@ -5,6 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GuardService = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
+const payrollTransaction_1 = require("../../guardPayroll/payrollTransaction");
+const assignmentTimeline_1 = require("../../guardPayroll/assignmentTimeline");
+const GuardPayrollRun_1 = require("../../../models/GuardPayrollRun");
 const Employee_1 = require("../../../models/Employee");
 const GuardProfile_1 = require("../../../models/GuardProfile");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
@@ -90,6 +93,12 @@ class GuardService {
         }
     }
     static async assignSite(data, auditCtx) {
+        return (0, payrollTransaction_1.payrollTransaction)(async () => {
+            await Employee_1.Employee.updateOne({ _id: data.guardId }, { $inc: { __v: 1 } });
+            return this.assignSiteTransactional(data, auditCtx);
+        });
+    }
+    static async assignSiteTransactional(data, auditCtx) {
         const employee = await Employee_1.Employee.findById(data.guardId);
         if (!employee)
             throw ApiError_1.ApiError.notFound('Guard not found');
@@ -104,12 +113,19 @@ class GuardService {
         const profile = await GuardProfile_1.GuardProfile.findOne({ employeeId: data.guardId });
         // First site assignment automatically becomes the guard's Primary Site.
         const currentCount = await PrimarySiteAssignment_1.PrimarySiteAssignment.countDocuments({ guardId: data.guardId, isCurrent: true });
+        const primaryRows = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: data.guardId, isPrimary: true });
+        if ((0, assignmentTimeline_1.primaryOverlaps)(primaryRows).length)
+            throw ApiError_1.ApiError.conflict('Primary assignment history overlaps. Use the audited assignment correction before adding sites.');
         const isPrimary = currentCount === 0;
+        const effectiveFrom = new Date(`${(0, assignmentTimeline_1.assignmentDay)(new Date())}T00:00:00.000Z`);
+        if (isPrimary && primaryRows.some((r) => !r.effectiveTo || (0, assignmentTimeline_1.assignmentDay)(r.effectiveTo) >= (0, assignmentTimeline_1.assignmentDay)(effectiveFrom))) {
+            throw ApiError_1.ApiError.conflict('A primary assignment already covers today. Correct its effective dates before adding another primary.');
+        }
         const assignment = await PrimarySiteAssignment_1.PrimarySiteAssignment.create({
             guardId: data.guardId, siteId: data.siteId, role: data.role || 'GUARD',
             isPrimary,
             standardMonthlyHours: 240, hourlyRate: profile?.rate || 0,
-            transportAllowance: profile?.transportAllowance || 0, effectiveFrom: new Date(), isCurrent: true,
+            transportAllowance: profile?.transportAllowance || 0, effectiveFrom, isCurrent: true,
         });
         if (isPrimary) {
             employee.homeSiteId = data.siteId;
@@ -128,6 +144,12 @@ class GuardService {
      * at — nothing about attendance rows changes here.
      */
     static async setPrimarySite(guardId, siteId, auditCtx) {
+        return (0, payrollTransaction_1.payrollTransaction)(async () => {
+            await Employee_1.Employee.updateOne({ _id: guardId }, { $inc: { __v: 1 } });
+            return this.setPrimaryTransactional(guardId, siteId, auditCtx);
+        });
+    }
+    static async setPrimaryTransactional(guardId, siteId, auditCtx) {
         const employee = await Employee_1.Employee.findById(guardId);
         if (!employee)
             throw ApiError_1.ApiError.notFound('Guard not found');
@@ -138,9 +160,29 @@ class GuardService {
         const previousPrimary = current.find((a) => a.isPrimary);
         if (previousPrimary && previousPrimary._id.toString() === target._id.toString())
             return target;
-        await PrimarySiteAssignment_1.PrimarySiteAssignment.updateMany({ guardId, isCurrent: true }, { $set: { isPrimary: false } });
-        target.isPrimary = true;
-        await target.save();
+        const history = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId, isPrimary: true });
+        if ((0, assignmentTimeline_1.primaryOverlaps)(history).length)
+            throw ApiError_1.ApiError.conflict('Primary history overlaps. Correct the conflicting assignments with a reason before changing the primary site.');
+        const changeDate = new Date(`${(0, assignmentTimeline_1.assignmentDay)(new Date())}T00:00:00.000Z`);
+        // Preserve prior primary roles. New role starts tomorrow; old role ends today.
+        changeDate.setUTCDate(changeDate.getUTCDate() + 1);
+        await this.assertAssignmentPeriodUnlocked(changeDate);
+        const endDate = new Date(changeDate.getTime() - 86400000);
+        let replacement = target;
+        for (const row of current.filter((a) => a.isPrimary || a._id.toString() === target._id.toString())) {
+            if ((0, assignmentTimeline_1.assignmentDay)(row.effectiveFrom) >= (0, assignmentTimeline_1.assignmentDay)(changeDate))
+                throw ApiError_1.ApiError.conflict('A future assignment role change is already scheduled. Correct its dates before scheduling another.');
+            const values = row.toObject();
+            row.isCurrent = false;
+            row.effectiveTo = endDate;
+            await row.save();
+            const { _id, createdAt, updatedAt, __v, ...rest } = values;
+            const created = await PrimarySiteAssignment_1.PrimarySiteAssignment.create({ ...rest, effectiveFrom: changeDate, effectiveTo: null,
+                isCurrent: true, isPrimary: row._id.toString() === target._id.toString() });
+            if (created.isPrimary)
+                replacement = created;
+        }
+        target.isPrimary = false; // return value below uses the new historical role row
         employee.homeSiteId = siteId;
         await employee.save();
         if (auditCtx) {
@@ -152,30 +194,89 @@ class GuardService {
                 ipAddress: auditCtx.ip, userAgent: auditCtx.ua,
             });
         }
-        EventBus_1.eventBus.emit('hr.guard.primarySiteChanged', { guardId, siteId, assignmentId: target._id });
-        return target;
+        EventBus_1.eventBus.emit('hr.guard.primarySiteChanged', { guardId, siteId, assignmentId: replacement._id });
+        return replacement;
+    }
+    static async assertAssignmentPeriodUnlocked(date) {
+        const locked = await GuardPayrollRun_1.GuardPayrollRun.exists({ periodKey: (0, assignmentTimeline_1.assignmentDay)(date).slice(0, 7),
+            status: { $nin: ['DRAFT', 'CALCULATED', 'RETURNED'] } });
+        if (locked)
+            throw ApiError_1.ApiError.conflict('Assignment changes affect locked payroll. Return that payroll for correction first.');
+    }
+    /** Explicit correction preserves IDs and requires a reason; never deletes history. */
+    static async correctAssignment(assignmentId, input, auditCtx) {
+        if (!input.reason?.trim())
+            throw ApiError_1.ApiError.badRequest('A reason is required for assignment history correction.');
+        if (typeof input.isPrimary !== 'boolean')
+            throw ApiError_1.ApiError.badRequest('Specify whether this assignment is primary.');
+        const parse = (value) => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+                throw ApiError_1.ApiError.badRequest('Assignment dates must use YYYY-MM-DD.');
+            const date = new Date(`${value}T00:00:00.000Z`);
+            if (!Number.isFinite(date.getTime()) || (0, assignmentTimeline_1.assignmentDay)(date) !== value)
+                throw ApiError_1.ApiError.badRequest('Invalid assignment date.');
+            return date;
+        };
+        const from = parse(input.effectiveFrom);
+        const to = input.effectiveTo ? parse(input.effectiveTo) : undefined;
+        if (to && to < from)
+            throw ApiError_1.ApiError.badRequest('End date must be on or after the start date (inclusive).');
+        return (0, payrollTransaction_1.payrollTransaction)(async () => {
+            const row = await PrimarySiteAssignment_1.PrimarySiteAssignment.findById(assignmentId);
+            if (!row)
+                throw ApiError_1.ApiError.notFound('Assignment not found');
+            await Employee_1.Employee.updateOne({ _id: row.guardId }, { $inc: { __v: 1 } });
+            const oldValues = row.toObject();
+            const first = (0, assignmentTimeline_1.assignmentDay)(from < row.effectiveFrom ? from : row.effectiveFrom).slice(0, 7);
+            const last = (0, assignmentTimeline_1.assignmentDay)(!to || !row.effectiveTo ? new Date('2100-12-31') : to > row.effectiveTo ? to : row.effectiveTo).slice(0, 7);
+            if (await GuardPayrollRun_1.GuardPayrollRun.exists({ periodKey: { $gte: first, $lte: last }, status: { $nin: ['DRAFT', 'CALCULATED', 'RETURNED'] } })) {
+                throw ApiError_1.ApiError.conflict('This correction intersects finalized payroll. Return affected runs before correcting; paid snapshots cannot be reopened.');
+            }
+            const others = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: row.guardId, _id: { $ne: row._id }, isPrimary: true });
+            if ((0, assignmentTimeline_1.primaryOverlaps)([...others, { _id: row._id, isPrimary: input.isPrimary, effectiveFrom: from, effectiveTo: to }]).length) {
+                throw ApiError_1.ApiError.conflict('The correction still overlaps another primary assignment. End the older interval before the next start date.');
+            }
+            row.effectiveFrom = from;
+            row.effectiveTo = to;
+            row.isPrimary = input.isPrimary;
+            row.isCurrent = !to;
+            await row.save();
+            await AuditService_1.AuditService.log({ ...auditCtx, action: 'GUARD_ASSIGNMENT_HISTORY_CORRECT', entity: 'PrimarySiteAssignment', entityId: assignmentId,
+                oldValues: { ...oldValues }, newValues: { ...row.toObject() }, reason: input.reason.trim(), ipAddress: auditCtx.ip, userAgent: auditCtx.ua });
+            return row;
+        });
     }
     static async getGuardSites(guardId) {
         return PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId }).populate('siteId').sort({ effectiveFrom: -1 });
     }
     static async removeSiteAssignment(assignmentId, auditCtx) {
+        return (0, payrollTransaction_1.payrollTransaction)(async () => {
+            const row = await PrimarySiteAssignment_1.PrimarySiteAssignment.findById(assignmentId);
+            if (!row)
+                throw ApiError_1.ApiError.notFound('Assignment not found');
+            await Employee_1.Employee.updateOne({ _id: row.guardId }, { $inc: { __v: 1 } });
+            return this.removeAssignmentTransactional(assignmentId, auditCtx);
+        });
+    }
+    static async removeAssignmentTransactional(assignmentId, auditCtx) {
         const assignment = await PrimarySiteAssignment_1.PrimarySiteAssignment.findById(assignmentId);
         if (!assignment)
             throw ApiError_1.ApiError.notFound('Assignment not found');
+        if (!assignment.isCurrent)
+            throw ApiError_1.ApiError.conflict('This assignment is already closed. Use audited history correction to change its dates.');
+        const today = new Date(`${(0, assignmentTimeline_1.assignmentDay)(new Date())}T00:00:00.000Z`);
+        await this.assertAssignmentPeriodUnlocked(today);
+        if ((0, assignmentTimeline_1.assignmentDay)(assignment.effectiveFrom) > (0, assignmentTimeline_1.assignmentDay)(today))
+            throw ApiError_1.ApiError.conflict('This assignment starts in the future. Use audited history correction.');
         assignment.isCurrent = false;
-        assignment.isPrimary = false;
-        assignment.effectiveTo = new Date();
+        // Keep isPrimary as historical evidence; do not silently promote another site.
+        assignment.effectiveTo = today;
         await assignment.save();
         // The primary site must always be one of the guard's ACTIVE assignments:
         // if we just relieved the primary, promote another active one (or clear it).
         if (assignment.guardId) {
-            const remaining = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: assignment.guardId, isCurrent: true }).sort({ effectiveFrom: -1 });
-            const next = remaining.find((a) => a.isPrimary) || remaining[0];
-            await PrimarySiteAssignment_1.PrimarySiteAssignment.updateMany({ guardId: assignment.guardId, isCurrent: true }, { $set: { isPrimary: false } });
-            if (next) {
-                next.isPrimary = true;
-                await next.save();
-            }
+            const remaining = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: assignment.guardId, isCurrent: true });
+            const next = remaining.find((a) => a.isPrimary);
             await Employee_1.Employee.updateOne({ _id: assignment.guardId }, { $set: { homeSiteId: next ? next.siteId : null } });
         }
         if (auditCtx) {

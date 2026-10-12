@@ -1,6 +1,12 @@
 import { IContract } from '../../../models/Contract';
 export declare class ContractService {
     static getByEmployeeId(employeeId: string): Promise<IContract | null>;
+    /** Full salary-change history for one employee (newest first). */
+    static getSalaryHistory(employeeId: string): Promise<(import("mongoose").Document<unknown, {}, import("../../../models/SalaryHistory").ISalaryHistory, {}, {}> & import("../../../models/SalaryHistory").ISalaryHistory & Required<{
+        _id: import("mongoose").Types.ObjectId;
+    }> & {
+        __v: number;
+    })[]>;
     static getAll(query: {
         page?: number;
         limit?: number;

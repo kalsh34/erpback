@@ -1,5 +1,8 @@
 import dotenv from 'dotenv';
-dotenv.config();
+
+// Some shell environments export a meaningless PORT (e.g. 0). The app's own
+// .env must always win over such noise, so load it with override:true.
+dotenv.config({ override: true });
 
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),

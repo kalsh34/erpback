@@ -20,6 +20,8 @@ export declare class GuardPayrollController {
     static returnRun(req: Request, res: Response, next: NextFunction): Promise<void>;
     static payRun(req: Request, res: Response, next: NextFunction): Promise<void>;
     static attendanceLock(req: Request, res: Response, next: NextFunction): Promise<void>;
+    /** Banks actually in use for a payroll month (staff + guard combined). */
+    static banksInUse(req: Request, res: Response, next: NextFunction): Promise<void>;
     static exportBank(req: Request, res: Response, next: NextFunction): Promise<void>;
     static exportTax(req: Request, res: Response, next: NextFunction): Promise<void>;
     static exportPension(req: Request, res: Response, next: NextFunction): Promise<void>;

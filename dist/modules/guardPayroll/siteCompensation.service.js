@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DAY_MS = exports.SiteCompensationService = void 0;
+const payrollTransaction_1 = require("./payrollTransaction");
 const GuardSiteCompensation_1 = require("../../models/GuardSiteCompensation");
 const GuardPayrollRecord_1 = require("../../models/GuardPayrollRecord");
 const Site_1 = require("../../models/Site");
@@ -36,6 +37,12 @@ class SiteCompensationService {
      * closed the day before the new row starts — history is never overwritten.
      */
     static async create(input) {
+        return (0, payrollTransaction_1.payrollTransaction)(async () => {
+            await Site_1.Site.updateOne({ _id: input.siteId }, { $inc: { __v: 1 } });
+            return this.createTransactional(input);
+        });
+    }
+    static async createTransactional(input) {
         if (!input.siteId)
             throw ApiError_1.ApiError.badRequest('siteId is required');
         if (typeof input.compensationAmount !== 'number' || !Number.isFinite(input.compensationAmount) || input.compensationAmount <= 0) {
@@ -50,7 +57,7 @@ class SiteCompensationService {
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
         const current = await GuardSiteCompensation_1.GuardSiteCompensation.findOne({ siteId: input.siteId, isCurrent: true });
-        if (current && current.effectiveFrom.getTime() > effectiveFrom.getTime()) {
+        if (current && current.effectiveFrom.getTime() >= effectiveFrom.getTime()) {
             throw ApiError_1.ApiError.badRequest('A later compensation is already current — add a new row after its effective date');
         }
         if (current) {
@@ -82,7 +89,7 @@ class SiteCompensationService {
             throw ApiError_1.ApiError.badRequest('The current compensation cannot be deleted — record a new amount instead');
         }
         const used = await GuardPayrollRecord_1.GuardPayrollRecord.exists({
-            'primarySite.siteId': row.siteId,
+            $or: [{ 'primarySite.siteId': row.siteId }, { 'additionalSites.siteId': row.siteId }],
             periodKey: { $gte: ymKey(row.effectiveFrom) },
         });
         if (used)
@@ -122,9 +129,10 @@ class SiteCompensationService {
         const result = new Map();
         for (const row of rows) {
             const key = row.siteId.toString();
-            if (!result.has(key)) {
-                result.set(key, row);
+            if (result.has(key)) {
+                throw ApiError_1.ApiError.badRequest(`Site ${key} has multiple compensation rates in this payroll month. Resolve overlapping history or use segmented payroll for a mid-month rate change; no rate was selected arbitrarily.`);
             }
+            result.set(key, row);
         }
         return result;
     }

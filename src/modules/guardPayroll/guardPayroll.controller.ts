@@ -144,8 +144,7 @@ export class GuardPayrollController {
 
   static async recalculateRun(req: Request, res: Response, next: NextFunction) {
     try {
-      const run = await GuardPayrollRunService.getRun(req.params.id);
-      res.json({ success: true, data: await GuardPayrollRunService.calculate(run.run.periodKey, userId(req), auditCtx(req)) });
+      res.json({ success: true, data: await GuardPayrollRunService.recalculate(req.params.id, userId(req), auditCtx(req)) });
     } catch (error) { next(error); }
   }
 

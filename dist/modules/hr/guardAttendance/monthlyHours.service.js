@@ -24,8 +24,8 @@ const ymKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
  * it into normal / holiday / sunday hours. Holiday and Sunday hours are
  * multiplied by the OT rate in payroll; normal hours are not.
  *
- * When a monthly sheet exists for a guard it takes precedence over the sum
- * of daily records — the two inputs are never silently mixed.
+ * A monthly sheet overrides daily records for that guard + site only.
+ * Other sites retain their own daily fallback, without double-counting.
  */
 class GuardMonthlyHoursService {
     static assertBucket(bucket) {
@@ -41,12 +41,15 @@ class GuardMonthlyHoursService {
             if (v > MAX_MONTHLY_HOURS)
                 throw ApiError_1.ApiError.badRequest(`${key} cannot exceed ${MAX_MONTHLY_HOURS}h per month`);
         }
+        if (bucket.normalHours + bucket.holidayHours + bucket.sundayHours > MAX_MONTHLY_HOURS) {
+            throw ApiError_1.ApiError.badRequest(`Combined monthly hours cannot exceed ${MAX_MONTHLY_HOURS}h`);
+        }
         if (bucket.normalHours + bucket.holidayHours + bucket.sundayHours <= 0) {
             throw ApiError_1.ApiError.badRequest('Enter hours in at least one section (normal, holiday or Sunday)');
         }
     }
     /** Guard, site and assignment checks shared by every write. */
-    static async assertGuardSite(guardId, siteId) {
+    static async assertGuardSite(guardId, siteId, year, month) {
         const guard = await Employee_1.Employee.findById(guardId);
         if (!guard)
             throw ApiError_1.ApiError.notFound('Guard not found in HR');
@@ -55,12 +58,12 @@ class GuardMonthlyHoursService {
         const site = await Site_1.Site.findById(siteId);
         if (!site)
             throw ApiError_1.ApiError.notFound('Site not found');
-        const assignment = await PrimarySiteAssignment_1.PrimarySiteAssignment.findOne({ guardId, siteId });
+        const start = new Date(Date.UTC(year, month - 1, 1));
+        const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+        const assignment = await PrimarySiteAssignment_1.PrimarySiteAssignment.findOne({ guardId, siteId,
+            effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] });
         if (!assignment)
-            throw ApiError_1.ApiError.badRequest('Guard is not assigned to this site');
-        if (!assignment.isCurrent) {
-            throw ApiError_1.ApiError.badRequest('The site assignment has ended — monthly hours can no longer be recorded');
-        }
+            throw ApiError_1.ApiError.badRequest('No site assignment is effective in the selected month. Correct the historical assignment dates.');
         return { guard, site, assignment };
     }
     /**
@@ -81,7 +84,7 @@ class GuardMonthlyHoursService {
                 if (!entry.guardId || !entry.siteId)
                     throw ApiError_1.ApiError.badRequest('guardId and siteId are required');
                 this.assertBucket(entry);
-                await this.assertGuardSite(entry.guardId, entry.siteId);
+                await this.assertGuardSite(entry.guardId, entry.siteId, params.year, params.month);
                 const existing = await GuardMonthlyHours_1.GuardMonthlyHours.findOne({
                     guardId: entry.guardId,
                     siteId: entry.siteId,
@@ -173,10 +176,12 @@ class GuardMonthlyHoursService {
             if (!byGuard.has(gId))
                 byGuard.set(gId, new Map());
             const perSite = byGuard.get(gId);
-            const bucket = perSite.get(sId) || { siteName: siteDoc?.siteName || 'Site', totalHours: 0, holidayHours: 0, normalHours: 0 };
+            const bucket = perSite.get(sId) || { siteName: siteDoc?.siteName || 'Site', totalHours: 0, holidayHours: 0, normalHours: 0, sundayHours: 0 };
             bucket.totalHours = (0, monthlyHours_helpers_1.round2)(bucket.totalHours + rec.hoursWorked);
             if (rec.isHoliday)
                 bucket.holidayHours = (0, monthlyHours_helpers_1.round2)(bucket.holidayHours + rec.hoursWorked);
+            else if (new Date(`${rec.date}T00:00:00.000Z`).getUTCDay() === 0)
+                bucket.sundayHours = (0, monthlyHours_helpers_1.round2)(bucket.sundayHours + rec.hoursWorked);
             else
                 bucket.normalHours = (0, monthlyHours_helpers_1.round2)(bucket.normalHours + rec.hoursWorked);
             perSite.set(sId, bucket);
@@ -190,7 +195,10 @@ class GuardMonthlyHoursService {
      */
     static async getMonthlySheet(year, month, siteId) {
         const periodKey = ymKey(year, month);
-        const assignmentFilter = { isCurrent: true };
+        const assignmentFilter = {
+            effectiveFrom: { $lte: new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)) },
+            $or: [{ effectiveTo: null }, { effectiveTo: { $gte: new Date(Date.UTC(year, month - 1, 1)) } }],
+        };
         if (siteId)
             assignmentFilter.siteId = siteId;
         const assignments = await PrimarySiteAssignment_1.PrimarySiteAssignment.find(assignmentFilter)
@@ -209,7 +217,15 @@ class GuardMonthlyHoursService {
         for (const sheet of sheets) {
             sheetByGuardSite.set(`${sheet.guardId.toString()}:${sheet.siteId.toString()}`, sheet);
         }
+        const seenAssignments = new Set();
         const rows = assignments
+            .filter((assignment) => {
+            const key = `${assignment.guardId}:${assignment.siteId?._id || assignment.siteId}`;
+            if (seenAssignments.has(key))
+                return false;
+            seenAssignments.add(key);
+            return true;
+        })
             .map((assignment) => {
             const gId = assignment.guardId.toString();
             // siteId may be a populated document or a bare ObjectId — handle both.
@@ -261,7 +277,7 @@ class GuardMonthlyHoursService {
                     }
                     : null,
                 daily: daily
-                    ? { totalHours: daily.totalHours, holidayHours: daily.holidayHours, normalHours: daily.normalHours }
+                    ? { totalHours: daily.totalHours, holidayHours: daily.holidayHours, normalHours: daily.normalHours, sundayHours: daily.sundayHours }
                     : null,
                 warnings,
             };
@@ -291,7 +307,7 @@ class GuardMonthlyHoursService {
         if (guardId)
             sheetFilter.guardId = guardId;
         const sheets = await GuardMonthlyHours_1.GuardMonthlyHours.find(sheetFilter);
-        const guardsWithSheets = new Set(sheets.map((s) => s.guardId.toString()));
+        const sitesWithSheets = new Set(sheets.map((s) => `${s.guardId}:${s.siteId}`));
         // DAILY FALLBACK — Sunday hours are classified from the calendar date
         // ($dayOfWeek 1 = Sunday). GuardAttendanceRecord.date is a "YYYY-MM-DD"
         // string; $toDate parses it as UTC midnight, so the weekday is exact.
@@ -328,8 +344,8 @@ class GuardMonthlyHoursService {
                     },
                 },
             },
-        ])).filter((r) => !guardsWithSheets.has(r._id.guardId.toString()));
-        const siteDocs = await Site_1.Site.find({ _id: { $in: sheets.map((s) => s.siteId) } }).select('siteName siteCode');
+        ])).filter((r) => !sitesWithSheets.has(`${r._id.guardId}:${r._id.siteId}`));
+        const siteDocs = await Site_1.Site.find({ _id: { $in: [...sheets.map((s) => s.siteId), ...dailyRows.map((r) => r._id.siteId)] } }).select('siteName siteCode');
         const siteById = new Map(siteDocs.map((s) => [s._id.toString(), s]));
         const byGuard = new Map();
         const pushSite = (gId, site) => {
@@ -364,6 +380,7 @@ class GuardMonthlyHoursService {
         for (const row of dailyRows) {
             pushSite(row._id.guardId.toString(), {
                 siteId: row._id.siteId.toString(),
+                siteName: siteById.get(row._id.siteId.toString())?.siteName,
                 normalHours: (0, monthlyHours_helpers_1.round2)(row.normalHours),
                 holidayHours: (0, monthlyHours_helpers_1.round2)(row.holidayHours),
                 sundayHours: (0, monthlyHours_helpers_1.round2)(row.sundayHours || 0),

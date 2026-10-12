@@ -40,6 +40,7 @@ export declare class GuardService {
     }> & {
         __v: number;
     }>;
+    private static assignSiteTransactional;
     /**
      * Operations can move the Primary Site later. The flag lives on the
      * assignment itself (never inferred from array order) and homeSiteId is kept
@@ -47,6 +48,23 @@ export declare class GuardService {
      * at — nothing about attendance rows changes here.
      */
     static setPrimarySite(guardId: string, siteId: string, auditCtx?: {
+        userId: string;
+        ip?: string;
+        ua?: string;
+    }): Promise<mongoose.Document<unknown, {}, import("../../../models/PrimarySiteAssignment").IPrimarySiteAssignment, {}, {}> & import("../../../models/PrimarySiteAssignment").IPrimarySiteAssignment & Required<{
+        _id: mongoose.Types.ObjectId;
+    }> & {
+        __v: number;
+    }>;
+    private static setPrimaryTransactional;
+    private static assertAssignmentPeriodUnlocked;
+    /** Explicit correction preserves IDs and requires a reason; never deletes history. */
+    static correctAssignment(assignmentId: string, input: {
+        effectiveFrom: string;
+        effectiveTo?: string | null;
+        isPrimary: boolean;
+        reason: string;
+    }, auditCtx: {
         userId: string;
         ip?: string;
         ua?: string;
@@ -69,6 +87,7 @@ export declare class GuardService {
     }> & {
         __v: number;
     }>;
+    private static removeAssignmentTransactional;
     /**
      * Guard roster with profiles + current site assignments.
      * Optional filters:

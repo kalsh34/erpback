@@ -5,8 +5,16 @@ const guardPayroll_controller_1 = require("./guardPayroll.controller");
 const auth_1 = require("../../middleware/auth");
 const rbac_1 = require("../../middleware/rbac");
 const types_1 = require("../../types");
+const ApiError_1 = require("../../common/ApiError");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+// Guard self-service never grants access to the all-employee payroll read surface.
+router.get('/my', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_PAYROLL_READ), guardPayroll_controller_1.GuardPayrollController.myPayroll);
+router.use((req, _res, next) => {
+    if (req.user?.role === types_1.UserRole.GUARD)
+        return next(ApiError_1.ApiError.forbidden('Use My Payroll to view your own financial records.'));
+    next();
+});
 const READ = types_1.PERMISSIONS.GUARD_PAYROLL_READ;
 const RATES = types_1.PERMISSIONS.GUARD_PAYROLL_RATES;
 const CALCULATE = types_1.PERMISSIONS.GUARD_PAYROLL_CALCULATE;
@@ -34,12 +42,12 @@ router.post('/runs/:id/check', (0, rbac_1.authorize)(CHECK), guardPayroll_contro
 router.post('/runs/:id/approve', (0, rbac_1.authorize)(APPROVE), guardPayroll_controller_1.GuardPayrollController.approveRun);
 router.post('/runs/:id/return', (0, rbac_1.authorize)(RETURN), guardPayroll_controller_1.GuardPayrollController.returnRun);
 router.post('/runs/:id/pay', (0, rbac_1.authorize)(PAY), guardPayroll_controller_1.GuardPayrollController.payRun);
+router.get('/banks', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.banksInUse);
 router.get('/runs/:id/export/bank', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.exportBank);
 router.get('/runs/:id/export/tax', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.exportTax);
 router.get('/runs/:id/export/pension', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.exportPension);
 router.get('/records/:id', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.getRecord);
 router.get('/records/:id/payslip', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.getPayslip);
-router.get('/my', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.myPayroll);
 // Attendance lock state for the attendance pages (read-level so Operations can see it).
 router.get('/attendance-lock', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.attendanceLock);
 exports.default = router;

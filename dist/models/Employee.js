@@ -72,6 +72,8 @@ const employeeSchema = new mongoose_1.Schema({
             changedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', default: null },
             changedAt: { type: Date, default: Date.now },
         }],
+    terminationDate: { type: Date, default: undefined },
+    terminationReason: { type: String, trim: true, default: undefined },
     guardInfo: {
         employmentType: { type: String, enum: Object.values(types_1.EmploymentType) },
         idCardNumber: { type: String, trim: true },
