@@ -1,7 +1,7 @@
 /**
  * GUARD PAYROLL ENGINE CHECK — realistic multi-site example.
  *
- * Run: npm run check:guard-payroll   (no DB needed — the engine is pure)
+ * Run: node -r ts-node/register tests/guardPayrollEngine.check.ts (no DB needed)
  *
  * Worked example (fictional values, approved business rules):
  *   Site A (PRIMARY)    compensation 12,000 → OT 50.00, Sunday structural 1,600,
@@ -14,13 +14,13 @@
  *         = 8,000 + 400 + 1,200 + 2,080 = 11,680
  *   Site B: 20 h × 37.50 = 750      Site C: 12 h × 25.00 = 300
  *   GROSS = 12,730
- *   Pension 7%/11% on the primary NORMAL-HOUR pay 8,000 ONLY → employee 560,
- *   employer 880 (Sunday OT 1,200 + holiday OT 400 + additional 1,050 excluded)
+ *   Pension 7%/11% on primary normal 8,000 + Sunday 1,200 = 9,200 → employee 644,
+ *   employer 1,012 (holiday OT 400 + additional 1,050 + transport excluded)
  *   Taxable = 8,000 + 400 + 1,200 + 750 + 300 = 10,650 (all pay, transport
  *   excluded; employee pension NOT subtracted — same as the staff calculation)
  *   Staff tax schedule on 10,650 = 300 + 600 + 750 + 650×30% = 1,845.00
  *   Deductions: loan installment 500 + penalty 200 = 700
- *   NET = 12,730 − 560 − 1,845 − 700 = 9,625.00
+ *   NET = 12,730 − 644 − 1,845 − 700 = 9,541.00
  */
 import { computeGuardPayroll, PayrollConfigNumbers } from '../src/modules/guardPayroll/guardPayrollEngine';
 
@@ -104,13 +104,13 @@ check('Site C OT uses Site C compensation (6000/240)', guardX.additionalSites[1]
 check('Site B earnings (20×37.50)', guardX.additionalSites[0].siteEarnings, 750);
 check('Site C earnings (12×25.00)', guardX.additionalSites[1].siteEarnings, 300);
 check('Gross (11680+750+300)', guardX.grossEarnings, 12730);
-check('Pension base = primary NORMAL-HOUR pay ONLY (8,000, no Sunday/holiday OT)', guardX.pensionBase, 8000);
-check('Employee pension (7% of 8000)', guardX.employeePension, 560);
-check('Employer pension (11% of 8000)', guardX.employerPension, 880);
+check('Pension base = primary normal + actual Sunday pay (8000+1200)', guardX.pensionBase, 9200);
+check('Employee pension (7% of 9200)', guardX.employeePension, 644);
+check('Employer pension (11% of 9200)', guardX.employerPension, 1012);
 check('Taxable (8000+400+1200+750+300, transport excluded, no pension relief)', guardX.taxableEarnings, 10650);
 check('Income tax (STAFF schedule on 10650)', guardX.incomeTax, 1845);
 check('Total deductions (500+200)', guardX.totalDeductions, 700);
-check('NET PAY', guardX.netPay, 9625);
+check('NET PAY', guardX.netPay, 9541);
 
 // ─────────────────────────────────────────────────────────────────────
 section('Attendance-driven: zero hours earn zero (no auto full-month pay)');
@@ -142,11 +142,12 @@ const joinedLate = computeGuardPayroll({
 check('Normal pay (60×40)', joinedLate.primary.normalPay, 2400);
 check('Sunday pay (8×50)', joinedLate.primary.sundayPay, 400);
 check('Transport paid (worked this month)', joinedLate.primary.transportPaid, 2080);
-check('Pension base = normal-hour pay only (2400, Sunday OT excluded)', joinedLate.pensionBase, 2400);
-check('Employee pension (7% of 2400)', joinedLate.employeePension, 168);
+check('Pension base = normal + Sunday pay (2400+400)', joinedLate.pensionBase, 2800);
+check('Employee pension (7% of 2800)', joinedLate.employeePension, 196);
+check('Employer pension (11% of 2800)', joinedLate.employerPension, 308);
 check('Taxable (2400+400, no pension relief)', joinedLate.taxableEarnings, 2800);
 check('Income tax (staff schedule on 2800 = 15% of 800)', joinedLate.incomeTax, 120);
-check('Net (4880 − 168 − 120)', joinedLate.netPay, 4592);
+check('Net (4880 − 196 − 120)', joinedLate.netPay, 4564);
 
 // ─────────────────────────────────────────────────────────────────────
 section('Not pension-enrolled: no pension, taxable keeps full salary base');
@@ -162,6 +163,57 @@ const noPension = computeGuardPayroll({
 check('Pension base = 0', noPension.pensionBase, 0);
 check('Employee pension = 0', noPension.employeePension, 0);
 check('Taxable (8000+400+1200, full base kept)', noPension.taxableEarnings, 9600);
+
+// Sunday attendance is pensionable even without any normal hours. The fixed
+// 32-hour structural allocation must not replace the Sunday hours actually worked.
+section('Pension edge cases: Sunday-only, exclusions, caps and rounding');
+function pensionCase(hours: { normalHours: number; sundayHours: number; holidayHours: number },
+  overrides: Partial<Parameters<typeof computeGuardPayroll>[0]> = {}) {
+  return computeGuardPayroll({
+    primary: { siteId: 'siteA', compensationAmount: 12000, hours },
+    additionalSites: [], config: CONFIG, pensionEnrolled: true,
+    pension: { employeePercent: 7, employerPercent: 11 },
+    taxBrackets: STAFF_TAX_BRACKETS, deductions: [], ...overrides,
+  });
+}
+const sundayOnly = pensionCase({ normalHours: 0, sundayHours: 8, holidayHours: 0 });
+check('Sunday-only base = actual 8×50 (not structural 32×50)', sundayOnly.pensionBase, 400);
+check('Sunday-only employee contribution', sundayOnly.employeePension, 28);
+check('Sunday-only employer contribution', sundayOnly.employerPension, 44);
+const normalOnly = pensionCase({ normalHours: 10, sundayHours: 0, holidayHours: 0 });
+check('Normal-only base remains unchanged', normalOnly.pensionBase, 400);
+const holidayOnly = pensionCase({ normalHours: 0, sundayHours: 0, holidayHours: 8 });
+check('Holiday-only base remains zero', holidayOnly.pensionBase, 0);
+check('Holiday-only employee contribution', holidayOnly.employeePension, 0);
+check('Holiday-only employer contribution', holidayOnly.employerPension, 0);
+const secondaryOnly = pensionCase({ normalHours: 0, sundayHours: 0, holidayHours: 0 }, {
+  additionalSites: [{ siteId: 'siteB', compensationAmount: 9000,
+    hours: { normalHours: 0, sundayHours: 8, holidayHours: 8 } }],
+});
+check('Additional Sunday/holiday earnings are still paid', secondaryOnly.grossEarnings, 600);
+check('Additional Sunday/holiday earnings are not pensionable', secondaryOnly.pensionBase, 0);
+const missingRule = pensionCase({ normalHours: 10, sundayHours: 8, holidayHours: 0 }, { pension: null });
+check('Missing pension rule keeps zero base', missingRule.pensionBase, 0);
+check('Opt-out employer contribution remains zero', noPension.employerPension, 0);
+const capped = pensionCase({ normalHours: 200, sundayHours: 24, holidayHours: 8 }, {
+  pension: { employeePercent: 7, employerPercent: 11, maxPensionableSalary: 9000 },
+});
+check('Maximum applies to combined normal + Sunday pay', capped.pensionBase, 9000);
+check('Capped employee contribution', capped.employeePension, 630);
+check('Capped employer contribution', capped.employerPension, 990);
+const minimum = pensionCase({ normalHours: 0, sundayHours: 8, holidayHours: 0 }, {
+  pension: { employeePercent: 7, employerPercent: 11, minPensionableSalary: 1000 },
+});
+check('Minimum applies to Sunday-only earnings', minimum.pensionBase, 1000);
+check('Minimum employee contribution', minimum.employeePension, 70);
+const idleWithMinimum = pensionCase({ normalHours: 0, sundayHours: 0, holidayHours: 0 }, {
+  pension: { employeePercent: 7, employerPercent: 11, minPensionableSalary: 1000 },
+});
+check('Minimum never creates pension with zero pensionable attendance', idleWithMinimum.pensionBase, 0);
+const fractional = pensionCase({ normalHours: 3.333, sundayHours: 1.111, holidayHours: 0 });
+check('Base sums rounded pay components', fractional.pensionBase, 188.87);
+check('Employee pension rounds to cents', fractional.employeePension, 13.22);
+check('Employer pension rounds to cents', fractional.employerPension, 20.78);
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

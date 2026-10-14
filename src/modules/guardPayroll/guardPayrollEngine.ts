@@ -23,9 +23,9 @@
  *   Additional Site Pay    = hours at that site × THAT site's OT Rate
  *   Each site is calculated independently, then aggregated.
  *
- * PENSION (user rule 2026-10): the primary-site NORMAL-HOUR pay ONLY — the
- * Sunday structural OT, holiday OT, additional-site earnings and transport are
- * ALL excluded from the pension base.
+ * PENSION (user rule 2026-10): primary-site normal pay + actual Sunday pay.
+ * Each uses its own hourly rate; the fixed Sunday structural allocation is NOT
+ * added again. Holiday pay, additional-site earnings and transport are excluded.
  *
  * INCOME TAX (user rule 2026-10): every pay from the primary site (normal +
  * Sunday OT + holiday OT) and all additional sites, transport excluded — the
@@ -194,10 +194,11 @@ export function computeGuardPayroll(input: {
   const additionalTotal = round2(additionalSites.reduce((sum, s) => sum + s.siteEarnings, 0));
   const grossEarnings = round2(primary.siteEarnings + additionalTotal);
 
-  // Pension base = primary-site NORMAL-HOUR pay ONLY (user rule 2026-10):
-  // Sunday structural OT, holiday OT, additional sites and transport excluded.
-  const pensionBase = input.pensionEnrolled && input.pension && primary.normalPay > 0
-    ? round2(Math.min(Math.max(primary.normalPay, input.pension.minPensionableSalary ?? 0), input.pension.maxPensionableSalary ?? Infinity))
+  // Pension uses actual primary-site normal + Sunday pay, each at its own rate.
+  // Holiday pay, additional sites and transport remain excluded.
+  const pensionablePay = round2(primary.normalPay + primary.sundayPay);
+  const pensionBase = input.pensionEnrolled && input.pension && pensionablePay > 0
+    ? round2(Math.min(Math.max(pensionablePay, input.pension.minPensionableSalary ?? 0), input.pension.maxPensionableSalary ?? Infinity))
     : 0;
 
   let employeePension = 0;

@@ -76,13 +76,13 @@ export class GuardService {
     }
   }
 
-  static async assignSite(data: { guardId: string; siteId: string; role?: 'GUARD' | 'SUPERVISOR' }, auditCtx?: { userId: string; ip?: string; ua?: string }) {
+  static async assignSite(data: { guardId: string; siteId: string; effectiveFrom?: string; role?: 'GUARD' | 'SUPERVISOR' }, auditCtx?: { userId: string; ip?: string; ua?: string }) {
     return payrollTransaction(async () => {
       await Employee.updateOne({ _id: data.guardId }, { $inc: { __v: 1 } });
       return this.assignSiteTransactional(data, auditCtx);
     });
   }
-  private static async assignSiteTransactional(data: { guardId: string; siteId: string; role?: 'GUARD' | 'SUPERVISOR' }, auditCtx?: { userId: string; ip?: string; ua?: string }) {
+  private static async assignSiteTransactional(data: { guardId: string; siteId: string; effectiveFrom?: string; role?: 'GUARD' | 'SUPERVISOR' }, auditCtx?: { userId: string; ip?: string; ua?: string }) {
     const employee = await Employee.findById(data.guardId);
     if (!employee) throw ApiError.notFound('Guard not found');
     if (employee.category !== EmployeeCategory.GUARD) throw ApiError.badRequest('Employee is not a guard');
@@ -96,7 +96,10 @@ export class GuardService {
     const primaryRows = await PrimarySiteAssignment.find({ guardId: data.guardId, isPrimary: true });
     if (primaryOverlaps(primaryRows).length) throw ApiError.conflict('Primary assignment history overlaps. Use the audited assignment correction before adding sites.');
     const isPrimary = currentCount === 0;
-    const effectiveFrom = new Date(`${assignmentDay(new Date())}T00:00:00.000Z`);
+    const from = data.effectiveFrom || assignmentDay(new Date());
+    const effectiveFrom = new Date(`${from}T00:00:00.000Z`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !Number.isFinite(effectiveFrom.getTime()) || assignmentDay(effectiveFrom) !== from) throw ApiError.badRequest('Assignment start date must be a valid YYYY-MM-DD date.');
+    await this.assertAssignmentPeriodUnlocked(effectiveFrom);
     if (isPrimary && primaryRows.some((r) => !r.effectiveTo || assignmentDay(r.effectiveTo) >= assignmentDay(effectiveFrom))) {
       throw ApiError.conflict('A primary assignment already covers today. Correct its effective dates before adding another primary.');
     }

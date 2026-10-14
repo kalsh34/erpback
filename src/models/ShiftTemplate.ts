@@ -35,7 +35,7 @@ const shiftTemplateSchema = new Schema<IShiftTemplate>(
   { timestamps: true }
 );
 
-shiftTemplateSchema.index({ name: 1 });
+// name already declares its unique index on the schema path.
 shiftTemplateSchema.index({ siteId: 1 });
 
 export const ShiftTemplate = mongoose.model<IShiftTemplate>('ShiftTemplate', shiftTemplateSchema);

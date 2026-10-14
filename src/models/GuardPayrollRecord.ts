@@ -72,7 +72,7 @@ export interface IGuardPayrollRecord extends Document {
   additionalSites: IAdditionalSiteSnapshot[];
   /** Primary + all additional site earnings, before any deduction. */
   grossEarnings: number;
-  /** Primary-site salary base only (transport and additional sites excluded). */
+  /** Primary normal + Sunday pay, subject to pension limits; holiday, transport and additional sites excluded. */
   pensionBase: number;
   /** All sites, transport excluded; employee pension is deducted separately. */
   taxableEarnings: number;

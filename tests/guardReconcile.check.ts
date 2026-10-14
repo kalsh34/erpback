@@ -5,6 +5,7 @@
  */
 import mongoose from 'mongoose';
 import fs from 'node:fs';
+import { StatutoryService } from '../src/modules/payrollCommon/statutory.service';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -62,13 +63,13 @@ async function main() {
       storedTransport: round2(primary.transportPaid ?? 0),
       storedNet: round2(r.netPay ?? 0),
     };
-    // Pension base (user rule 2026-10) = primary-site NORMAL-hour pay only,
-    // clamped to pension salary limits — NOT basicSalary, NOT gross.
-    const expectedPensionBase = rec.storedEmployeePension > 0 || rec.storedPensionBase > 0
-      ? Math.min(Math.max(round2(primary.normalPay ?? 0), primary.pensionMin ?? 0), primary.pensionMax ?? Infinity)
-      : 0;
-    rec.pensionBaseMatchesRule = Math.abs(rec.storedPensionBase - (Number.isFinite(expectedPensionBase) ? round2(expectedPensionBase) : (primary.normalPay ?? 0))) < 0.02
-      || Math.abs(rec.storedPensionBase - round2(primary.normalPay ?? 0)) < 0.02;
+    // Independently derive primary normal + actual Sunday pay from attendance.
+    // Resolve the applicable rule rather than inferring enrollment from the result.
+    const pensionRule = await StatutoryService.getPensionRuleForPeriod(new Date(`${r.periodKey}-01T00:00:00.000Z`));
+    const pensionablePay = round2(round2(att.normal * (primary.basicHourlyRate ?? 0)) + round2(att.sunday * (primary.otRate ?? 0)));
+    const expectedPensionBase = r.snapshot?.pensionEnrolled && pensionRule && pensionablePay > 0
+      ? round2(Math.min(Math.max(pensionablePay, pensionRule.minPensionableSalary ?? 0), pensionRule.maxPensionableSalary ?? Infinity)) : 0;
+    rec.pensionBaseMatchesRule = Math.abs(rec.storedPensionBase - expectedPensionBase) < 0.02;
     rec.transportEquals20pct = Math.abs(rec.storedTransport - round2((primary.remaining ?? 0) * (primary.transportPercent ?? 20) / 100)) < 0.02;
     rec.primaryHoursMatch = Math.abs(rec.expectedPrimaryHours - rec.storedPrimaryHours) < 0.02;
     rec.primaryEarningsMatch = Math.abs(rec.expectedPrimaryEarnings - round2((primary.normalPay ?? 0) + (primary.sundayPay ?? 0) + (primary.holidayPay ?? 0))) < 0.02;

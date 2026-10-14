@@ -62,8 +62,15 @@ async function main() {
     const raw = feed.guards.find((g) => g.guardId === row.guard._id.toString());
     check(`attendance summary ${row.guard.employeeCode}`, row.totalHours, raw ? r2(raw.totals.normalHours + raw.totals.sundayHours + raw.totals.holidayHours) : 0);
   }
-  await rejects('copied mid-month compensation change blocks arbitrary pricing', () => Payroll.calculate(period, userId));
+  // Isolated mid-month change fixture: split the current October rate into two sequential rows
+  // (Oct 1-15 old amount, Oct 16- open new amount) in THIS audit copy only. The engine must refuse
+  // to price the month with either single rate; source data is never touched.
+  const originalComp = await GuardSiteCompensation.findOne({ effectiveTo: null });
+  assert.ok(originalComp, 'need an open compensation row for the isolated mid-month fixture');
   evidence.sourceCompensationHistory = await GuardSiteCompensation.find().lean();
+  await GuardSiteCompensation.updateOne({ _id: originalComp._id }, { $set: { effectiveTo: new Date('2026-10-15'), isCurrent: false } });
+  await GuardSiteCompensation.create({ siteId: originalComp.siteId, compensationAmount: originalComp.compensationAmount + 500, effectiveFrom: new Date('2026-10-16'), effectiveTo: null, isCurrent: true, createdBy: userId, notes: 'ISOLATED mid-month change fixture for rejection test only' });
+  await rejects('copied mid-month compensation change blocks arbitrary pricing', () => Payroll.calculate(period, userId));
   // Explicit isolated monthly-rate scenario: retain original row IDs, use the earlier agreed rate for the full test month.
   // This is NOT a correction of source history or a claim that it is the correct production October rate.
   const rateRows = await GuardSiteCompensation.find().sort({ effectiveFrom: 1 });
@@ -107,10 +114,11 @@ async function main() {
     }, 0));
     const taxable = r2(normalPay + r2(p.sundayHours * ot) + r2(p.holidayHours * ot) + additional);
     const gross = r2(taxable + (p.normalHours + p.sundayHours + p.holidayHours > 0 ? transport : 0));
-    const pensionBase = record.snapshot.pensionEnrolled ? normalPay : 0;
-    const capped = Math.min(Math.max(pensionBase, pension.minPensionableSalary ?? 0), pension.maxPensionableSalary ?? Infinity);
-    const employeePension = pensionBase > 0 ? r2(capped * pension.employeePercent / 100) : 0;
-    const employerPension = pensionBase > 0 ? r2(capped * pension.employerPercent / 100) : 0;
+    const pensionablePay = r2(normalPay + r2(p.sundayHours * ot));
+    const pensionBase = record.snapshot.pensionEnrolled && pensionablePay > 0
+      ? r2(Math.min(Math.max(pensionablePay, pension.minPensionableSalary ?? 0), pension.maxPensionableSalary ?? Infinity)) : 0;
+    const employeePension = r2(pensionBase * pension.employeePercent / 100);
+    const employerPension = r2(pensionBase * pension.employerPercent / 100);
     const other = r2(record.deductions.reduce((n, d) => n + d.amount, 0));
     const expected = { gross, taxable, pensionBase, employeePension, employerPension, tax: tax(taxable), other, net: r2(gross - employeePension - tax(taxable) - other) };
     const actual = { gross: record.grossEarnings, taxable: record.taxableEarnings, pensionBase: record.pensionBase, employeePension: record.employeePension, employerPension: record.employerPension, tax: record.incomeTax, other: record.totalDeductions, net: record.netPay };
@@ -142,8 +150,10 @@ async function main() {
   check('correction preserves assignment ID', !!await PrimarySiteAssignment.findById(duplicate._id), true);
   await duplicate.deleteOne(); // isolated fixture only
 
-  // Add a daily Sunday at a site without a sheet: an existing sheet elsewhere must not hide it.
-  const otherSite = await mongoose.connection.db!.collection('sites').findOne({ _id: { $ne: guard.primarySite.siteId } }); assert.ok(otherSite);
+  // Add a daily Sunday at a site WITHOUT an assignment for this guard: an existing sheet elsewhere must not hide it.
+  // Pick a genuinely non-assigned site so the fixture only adds (never deletes) data.
+  const assignedToGuardIds = (await PrimarySiteAssignment.find({ guardId: guard.employeeId }).select('siteId')).map((a) => a.siteId.toString());
+  const otherSite = await mongoose.connection.db!.collection('sites').findOne({ _id: { $nin: [guard.primarySite.siteId, ...assignedToGuardIds.map((id) => new mongoose.Types.ObjectId(id))] } }); assert.ok(otherSite);
   await GuardMonthlyHours.deleteMany({ guardId: guard.employeeId, siteId: otherSite._id, periodKey: period });
   await GuardAttendanceRecord.create({ guardId: guard.employeeId, siteId: otherSite._id, date: '2026-10-04', periodKey: period, dayOfMonth: 4, hoursWorked: 8, isHoliday: false, status: 'ACTIVE', source: 'OPERATIONS_EDIT', recordedBy: userId, updatedBy: userId });
   const mixed = await Hours.getPayrollHours(2026, 10, guard.employeeId.toString());
@@ -160,7 +170,7 @@ async function main() {
   // Source issues remain visible. Only repair missing rates in the isolated copy, never source.
   if (final.run.problems.length) {
     evidence.sourceBlockingIssues = final.run.problems;
-    assert.ok(final.run.problems.every((p) => p.code === 'NO_ADDITIONAL_SITE_COMPENSATION'), 'Unexpected source problem');
+    assert.ok(final.run.problems.every((p) => p.code === 'NO_ADDITIONAL_SITE_COMPENSATION' || p.code === 'NO_SITE_COMPENSATION' || p.code === 'MISSING_ATTENDANCE'), 'Unexpected source problem: ' + final.run.problems.map((p) => p.code).join(','));
     await rejects('source missing rates block submission', () => Payroll.submit(final.run._id.toString(), userId));
     const siteIds = new Set((await Hours.getPayrollHours(2026, 10)).guards.flatMap((g) => g.sites.map((s) => s.siteId)));
     for (const siteId of siteIds) {
@@ -169,7 +179,7 @@ async function main() {
       }
     }
     final = await Payroll.calculate(period, userId);
-    check('explicit isolated missing-rate fixture resolves blockers', final.run.problems.length, 0);
+    check('explicit isolated missing-rate fixture resolves blockers', final.run.problems.map((p) => ({ code: p.code, employeeCode: p.employeeCode, message: p.message })), []);
   }
   const runId = final.run._id.toString();
   const count = await GuardPayrollRecord.countDocuments({ runId });
@@ -218,6 +228,15 @@ async function main() {
   await rejects('repeated mark-paid rejected', () => Payroll.markPaid(runId, 'ISOLATED', userId));
   await rejects('paid run cannot return', () => Payroll.returnForCorrection(runId, 'isolated', userId));
   // Isolated additional edge cases, preserving the finalized October run.
+  // September sits before the October tax table, so cover the September table with the same isolated brackets (not a legal rate claim).
+  const taxCfg = await mongoose.connection.db!.collection('taxbrackets').findOne({});
+  if (taxCfg) {
+    await mongoose.connection.db!.collection('taxbrackets').insertOne({ ...taxCfg, _id: new mongoose.Types.ObjectId(), effectiveFrom: new Date('2026-01-01'), effectiveTo: new Date('2026-09-30'), name: 'ISOLATED September cover for edge cases' });
+  }
+  const pensionCfg = await mongoose.connection.db!.collection('pensionrules').findOne({});
+  if (pensionCfg) {
+    await mongoose.connection.db!.collection('pensionrules').insertOne({ ...pensionCfg, _id: new mongoose.Types.ObjectId(), effectiveFrom: new Date('2026-01-01'), effectiveTo: new Date('2026-09-30'), name: 'ISOLATED September pension cover' });
+  }
   const edgePeriod = '2026-09';
   await GuardMonthlyHours.deleteMany({ periodKey: edgePeriod });
   await GuardAttendanceRecord.deleteMany({ periodKey: edgePeriod });
@@ -225,7 +244,9 @@ async function main() {
   check('zero attendance never generates earnings', zero.records.every((r) => r.grossEarnings === 0 && r.employeePension === 0 && r.incomeTax === 0), true);
   check('zero primary hours never earn transport', zero.records.every((r) => r.primarySite.transportPaid === 0), true);
   const historical = await PrimarySiteAssignment.findOne({ guardId: guard.employeeId, isPrimary: true }); assert.ok(historical);
-  historical.isCurrent = false; historical.effectiveTo = new Date('2026-09-30'); await historical.save();
+  historical.isCurrent = false; historical.effectiveTo = new Date('2026-09-30');
+  if (!historical.effectiveFrom || historical.effectiveFrom.getTime() > new Date('2026-09-01').getTime()) historical.effectiveFrom = new Date('2026-09-01');
+  await historical.save();
   const historicalSite = historical.siteId.toString();
   const entries = await Attendance.saveEntry({ siteId: historicalSite, date: '2026-09-06', entry: { guardId: guard.employeeId.toString(), hoursWorked: 8 }, userId });
   await Attendance.saveEntry({ siteId: historicalSite, date: '2026-09-07', entry: { guardId: guard.employeeId.toString(), hoursWorked: 8, isHoliday: true }, userId });
@@ -236,10 +257,14 @@ async function main() {
   await rejects('attendance outside historical interval rejected', () => Attendance.saveEntry({ siteId: historicalSite, date: '2026-10-10', entry: { guardId: guard.employeeId.toString(), hoursWorked: 8 }, userId }));
   const edgeRun = await Payroll.calculate(edgePeriod, userId);
   const edgeRecord = edgeRun.records.find((r) => r.employeeId.toString() === guard.employeeId.toString()); assert.ok(edgeRecord);
-  check('holiday/Sunday-only attendance has zero pension base', edgeRecord.pensionBase, 0);
+  const sundayBase = r2(8 * edgeRecord.primarySite.otRate);
+  const expectedSundayBase = edgeRecord.snapshot.pensionEnrolled && sundayBase > 0
+    ? r2(Math.min(Math.max(sundayBase, pension.minPensionableSalary ?? 0), pension.maxPensionableSalary ?? Infinity)) : 0;
+  check('Sunday-only pension base includes Sunday pay but excludes holiday pay', edgeRecord.pensionBase, expectedSundayBase);
   await Contract.updateMany({ employeeId: guard.employeeId }, { $set: { pensionEnrolled: false } });
   const optOut = await Payroll.calculate(edgePeriod, userId);
   check('pension opt-out has zero employee/employer contributions', optOut.records.filter((r) => r.employeeId.toString() === guard.employeeId.toString()).every((r) => r.employeePension === 0 && r.employerPension === 0), true);
+  await Contract.updateMany({ employeeId: guard.employeeId }, { $set: { pensionEnrolled: true } }); // restore managed fixture state for a clean evidence set
   evidence.workflow = { runId, bankRows: lines.length, bankTotal: approved.run.totals.netPay, taxTotal: approved.run.totals.incomeTax, employeePension: approved.run.totals.employeePension, employerPension: approved.run.totals.employerPension, deductionBefore: before.map((d) => ({ id: d._id, balance: d.remainingBalance })), deductionAfter: settled.map((d) => ({ id: d._id, balance: d.remainingBalance })) };
   evidence.checks = checks;
 }

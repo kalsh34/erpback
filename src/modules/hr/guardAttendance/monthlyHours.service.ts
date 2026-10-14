@@ -20,7 +20,12 @@ interface AuditCtx { ip?: string; ua?: string }
 
 const MAX_MONTHLY_HOURS = 744; // sanity cap (longest month = 31 × 24h)
 
-const ymKey = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
+const ymKey = (year: number, month: number) => {
+  if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw ApiError.badRequest('Select a valid payroll year (2000–2100) and month (1–12).');
+  }
+  return `${year}-${String(month).padStart(2, '0')}`;
+};
 
 /**
  * MONTHLY TOTAL HOURS — the second attendance input mode.

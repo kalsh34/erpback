@@ -23,6 +23,7 @@ const PAY = PERMISSIONS.GUARD_PAYROLL_PAY;
 const RETURN = PERMISSIONS.GUARD_PAYROLL_RETURN;
 
 router.get('/status', authorize(READ), GuardPayrollController.status);
+router.get('/readiness', authorize(READ), GuardPayrollController.readiness);
 
 // Engine configuration (transport %, divisors).
 router.get('/config', authorize(READ), GuardPayrollController.getConfig);

@@ -27,6 +27,12 @@ export class GuardPayrollController {
     } catch (error) { next(error); }
   }
 
+  static async readiness(req: Request, res: Response, next: NextFunction) {
+    try {
+      res.json({ success: true, data: await GuardPayrollRunService.readiness(String(req.query.periodKey || '')) });
+    } catch (error) { next(error); }
+  }
+
   // ── Config ─────────────────────────────────────────────────────────
   static async getConfig(_req: Request, res: Response, next: NextFunction) {
     try {

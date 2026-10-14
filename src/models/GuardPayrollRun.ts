@@ -17,6 +17,7 @@ export interface IGuardPayrollRun extends Document {
   status: PayrollRecordStatus;
   calculatedBy?: mongoose.Types.ObjectId;
   calculatedAt?: Date;
+  inputFingerprint?: string;
   submittedBy?: mongoose.Types.ObjectId;
   submittedAt?: Date;
   checkedBy?: mongoose.Types.ObjectId;
@@ -68,6 +69,7 @@ const guardPayrollRunSchema = new Schema<IGuardPayrollRun>(
     },
     calculatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     calculatedAt: { type: Date },
+    inputFingerprint: { type: String },
     submittedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     submittedAt: { type: Date },
     checkedBy: { type: Schema.Types.ObjectId, ref: 'User' },

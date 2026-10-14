@@ -1,4 +1,7 @@
 import mongoose from 'mongoose';
+import { createHash } from 'node:crypto';
+import { GuardSiteCompensation } from '../../models/GuardSiteCompensation';
+import { EmployeeDeduction } from '../../models/EmployeeDeduction';
 import { resolveMonthlyPrimary } from './assignmentTimeline';
 import { payrollTransaction } from './payrollTransaction';
 import { GuardPayrollRun, IGuardPayrollRun } from '../../models/GuardPayrollRun';
@@ -67,6 +70,7 @@ export class GuardPayrollRunService {
     }
     const wasReturned = run.status === PayrollRecordStatus.RETURNED;
 
+    const inputFingerprint = await this.inputFingerprint(periodKey);
     const config = await GuardPayrollConfigService.getNumbers();
     const [pensionRule, taxTable] = await Promise.all([
       StatutoryService.getPensionRuleForPeriod(start),
@@ -173,6 +177,12 @@ export class GuardPayrollRunService {
 
       const guardHours = hoursByGuard.get(guardKey);
       const hoursBySiteId = new Map(guardHours?.sites.map((s) => [s.siteId, s]) || []);
+      const missingAttendance = guardAssignments.filter((a) => !hoursBySiteId.has(((a.siteId as any)?._id || a.siteId).toString()));
+      if (missingAttendance.length) {
+        problems.push({ employeeId: guard._id, employeeCode: guard.employeeCode, guardName,
+          code: 'MISSING_ATTENDANCE', message: `Missing attendance for ${missingAttendance.map(a => (a.siteId as any)?.siteName || a.siteId).join(', ')} in ${periodKey}. Enter monthly hours or daily attendance before calculating.` });
+        continue;
+      }
 
       const hoursForSite = (siteId: string): SiteHoursBuckets => {
         const found = hoursBySiteId.get(siteId);
@@ -344,6 +354,7 @@ export class GuardPayrollRunService {
     run.status = PayrollRecordStatus.CALCULATED;
     run.calculatedBy = userId as any;
     run.calculatedAt = new Date();
+    run.inputFingerprint = inputFingerprint;
     // Merge the per-guard NO_ADDITIONAL_SITE_COMPENSATION warnings collected
     // during the loop so they are visible on the run (not swallowed).
     run.problems = [...problems, ...guardWarnings];
@@ -361,6 +372,61 @@ export class GuardPayrollRunService {
     });
 
     return this.getRun(run._id.toString());
+  }
+
+  /** Stable digest of authoritative inputs; an editable calculation may become stale. */
+  private static async inputFingerprint(periodKey: string) {
+    const { year, month, start, end } = monthWindow(periodKey);
+    const guards = await Employee.find({ category: EmployeeCategory.GUARD, status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.CONTRACTED] } })
+      .select('employeeCode firstName lastName bankName accountNumber status').sort({ _id: 1 }).lean();
+    const ids = guards.map(g => g._id);
+    const [hours, assignments, contracts, rates, deductions, config, tax, pension] = await Promise.all([
+      GuardMonthlyHoursService.getPayrollHours(year, month),
+      PrimarySiteAssignment.find({ guardId: { $in: ids }, effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).select('guardId siteId isPrimary effectiveFrom effectiveTo').sort({ _id: 1 }).lean(),
+      Contract.find({ employeeId: { $in: ids }, status: 'ACTIVE', contractStartDate: { $lte: end }, $or: [{ contractEndDate: null }, { contractEndDate: { $gte: start } }] }).select('employeeId contractStartDate contractEndDate pensionEnrolled contractType wage').sort({ _id: 1 }).lean(),
+      GuardSiteCompensation.find({ effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).select('siteId compensationAmount effectiveFrom effectiveTo').sort({ _id: 1 }).lean(),
+      EmployeeDeduction.find({ employeeId: { $in: ids }, status: 'ACTIVE' }).sort({ _id: 1 }).lean(),
+      GuardPayrollConfigService.getNumbers(), StatutoryService.getTaxTableForPeriod(start), StatutoryService.getPensionRuleForPeriod(start),
+    ]);
+    const canonicalHours = hours.guards.sort((a, b) => a.guardId.localeCompare(b.guardId)).map(g => ({ guardId: g.guardId, sites: g.sites.sort((a, b) => a.siteId.localeCompare(b.siteId)) }));
+    return createHash('sha256').update(JSON.stringify({ guards, hours: canonicalHours, assignments, contracts, rates, deductions, config, tax: tax?.toObject(), pension: pension?.toObject() })).digest('hex');
+  }
+
+  /** Read-only period preflight, using the same canonical site-hours and effective rates as calculation. */
+  static async readiness(periodKey: string) {
+    const { year, month, start, end } = monthWindow(periodKey);
+    const guards = await Employee.find({ category: EmployeeCategory.GUARD, status: { $in: [EmployeeStatus.ACTIVE, EmployeeStatus.CONTRACTED] } }).sort({ employeeCode: 1 });
+    const ids = guards.map(g => g._id);
+    const [assignments, contracts, feed, tax, pension, lock] = await Promise.all([
+      PrimarySiteAssignment.find({ guardId: { $in: ids }, effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).populate('siteId', 'siteName siteCode'),
+      Contract.find({ employeeId: { $in: ids }, status: 'ACTIVE', contractStartDate: { $lte: end }, $or: [{ contractEndDate: null }, { contractEndDate: { $gte: start } }] }).sort({ contractStartDate: -1 }),
+      GuardMonthlyHoursService.getPayrollHours(year, month), StatutoryService.getTaxTableForPeriod(start), StatutoryService.getPensionRuleForPeriod(start), GuardPayrollLockService.getLockInfo(periodKey),
+    ]);
+    const issues: { code: string; employeeCode?: string; message: string }[] = [];
+    if (!guards.length) issues.push({ code: 'NO_GUARDS', message: 'Register guards and complete their effective contracts before preparing payroll.' });
+    if (!tax?.brackets.length) issues.push({ code: 'MISSING_STATUTORY_CONFIG', message: 'Configure an effective Guard income tax table in Payroll Settings.' });
+    const hello = await mongoose.connection.db!.admin().command({ hello: 1 });
+    if (!hello.setName && hello.msg !== 'isdbgrid') issues.push({ code: 'DATABASE_TRANSACTIONS', message: 'Payroll requires a MongoDB replica set for safe transactions. Ask your administrator to configure it.' });
+    let rates = new Map<string, any>();
+    try { rates = await SiteCompensationService.getForSites([...new Set(assignments.map(a => ((a.siteId as any)?._id || a.siteId).toString()))], start, end); }
+    catch (e) { issues.push({ code: 'SITE_COMPENSATION_HISTORY', message: (e as Error).message }); }
+    const rows = guards.map(g => {
+      const id = g._id.toString(), owned = assignments.filter(a => a.guardId.toString() === id);
+      const resolution = resolveMonthlyPrimary(owned, start, end);
+      if (!resolution.assignment) issues.push({ code: resolution.code || 'NO_PRIMARY_SITE', employeeCode: g.employeeCode, message: resolution.message || 'Select exactly one primary site for this period.' });
+      const contract = contracts.find(c => c.employeeId.toString() === id);
+      if (!contract || typeof contract.pensionEnrolled !== 'boolean' || (contract.pensionEnrolled && !pension)) issues.push({ code: 'MISSING_PENSION_ENROLLMENT', employeeCode: g.employeeCode, message: 'Confirm the effective contract and pension enrollment/rule.' });
+      const hours = feed.guards.find(h => h.guardId === id);
+      const sites = owned.map(a => {
+        const site: any = a.siteId, sid = (site?._id || site).toString(), h = hours?.sites.find(s => s.siteId === sid), rate = rates.get(sid);
+        if (!h) issues.push({ code: 'MISSING_ATTENDANCE', employeeCode: g.employeeCode, message: `Enter attendance for ${site?.siteName || sid} in ${periodKey}.` });
+        if (!rate) issues.push({ code: 'NO_SITE_COMPENSATION', employeeCode: g.employeeCode, message: `Configure effective compensation for ${site?.siteName || sid}.` });
+        return { siteId: sid, siteName: site?.siteName || sid, siteCode: site?.siteCode, isPrimary: !!a.isPrimary, compensationAmount: rate?.compensationAmount ?? null,
+          normalHours: h?.normalHours ?? 0, sundayHours: h?.sundayHours ?? 0, holidayHours: h?.holidayHours ?? 0, source: h?.source || 'MISSING' };
+      });
+      return { employeeId: id, employeeCode: g.employeeCode, guardName: `${g.firstName} ${g.lastName}`, sites };
+    });
+    return { periodKey, ready: !issues.length, guardCount: guards.length, issues, rows, lock };
   }
 
   // ───────────────────────────────────────────────────────────────────
@@ -489,7 +555,7 @@ export class GuardPayrollRunService {
     if (run.problems.length > 0) {
       // Informational notices (e.g. a guard legitimately holding several site
       // assignments) must not freeze the whole run. Only blocking codes do.
-      const BLOCKING_CODES = new Set(['NO_PRIMARY_SITE', 'MULTIPLE_PRIMARY_SITES', 'PRIMARY_SITE_CHANGE', 'NO_SITE_COMPENSATION', 'NO_ADDITIONAL_SITE_COMPENSATION', 'MISSING_STATUTORY_CONFIG', 'MISSING_PENSION_ENROLLMENT']);
+      const BLOCKING_CODES = new Set(['NO_PRIMARY_SITE', 'MULTIPLE_PRIMARY_SITES', 'PRIMARY_SITE_CHANGE', 'NO_SITE_COMPENSATION', 'NO_ADDITIONAL_SITE_COMPENSATION', 'MISSING_STATUTORY_CONFIG', 'MISSING_PENSION_ENROLLMENT', 'MISSING_ATTENDANCE']);
       const blocking = run.problems.filter((p) => BLOCKING_CODES.has(p.code));
       if (blocking.length > 0) {
         throw ApiError.badRequest(
@@ -499,6 +565,10 @@ export class GuardPayrollRunService {
             .join(', ')}${blocking.length > 3 ? '…' : ''}`
         );
       }
+    }
+    if (!run.totals.guards) throw ApiError.badRequest('No guard payroll records to submit. Complete setup and attendance, then calculate payroll.');
+    if (!run.inputFingerprint || run.inputFingerprint !== await this.inputFingerprint(run.periodKey)) {
+      throw ApiError.conflict('Payroll inputs changed since calculation. Review attendance, assignments, rates and deductions, then recalculate before submitting.');
     }
     await this.assertStatusAtSave(runId, [PayrollRecordStatus.CALCULATED], 'submit');
     run.status = PayrollRecordStatus.SUBMITTED;

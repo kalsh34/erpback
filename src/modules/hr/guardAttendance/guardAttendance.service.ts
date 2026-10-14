@@ -9,6 +9,7 @@ import { eventBus } from '../../../core/events/EventBus';
 import { GuardPayrollLockService } from '../../guardPayroll/guardPayrollLock.service';
 import { GuardMonthlyHoursService } from './monthlyHours.service';
 import { resolveMonthlyPrimary } from '../../guardPayroll/assignmentTimeline';
+import { GuardPayrollRunService } from '../../guardPayroll/guardPayrollRun.service';
 import {
   EmployeeCategory, EmployeeStatus, AttendanceSource, GuardAttendanceStatus,
 } from '../../../types';
@@ -543,34 +544,14 @@ export class GuardAttendanceService {
 
   /** Pre-payroll checks: missing attendance and assignment gaps. */
   static async getPayrollReadiness(year: number, month: number) {
-    const totals = await this.getMonthlyTotals(year, month);
-    const issues: { guard: any; type: string; message: string }[] = [];
-
-    for (const row of totals.rows) {
-      const guardAssignments = await PrimarySiteAssignment.find({ guardId: row.guard._id, isCurrent: true });
-      if (guardAssignments.length === 0) {
-        issues.push({ guard: row.guard, type: 'NO_ASSIGNMENT', message: 'No active site assignment' });
-        continue;
-      }
-      for (const siteRow of row.sites) {
-        if (siteRow.dayCount === 0) {
-          issues.push({ guard: row.guard, type: 'ZERO_DAYS', message: `${siteRow.siteName}: no daily records` });
-        }
-      }
-    }
-
-    for (const gap of totals.missingAttendance) {
-      issues.push({ guard: gap, type: 'MISSING_ATTENDANCE', message: 'Assigned to a site but no attendance recorded for this period' });
-    }
-
+    const preflight = await GuardPayrollRunService.readiness(`${year}-${String(month).padStart(2, '0')}`);
     return {
-      periodKey: totals.periodKey,
-      config: totals.config,
-      guardsWithAttendance: totals.rows.length,
-      missingAttendance: totals.missingAttendance,
-      issues,
-      ready: issues.length === 0,
+      periodKey: preflight.periodKey, config: this.getConfig(), ready: preflight.ready,
+      guardsWithAttendance: preflight.rows.filter(r => r.sites.some(s => s.source !== 'MISSING')).length,
+      missingAttendance: preflight.rows.filter(r => r.sites.some(s => s.source === 'MISSING')).map(r => ({ _id: r.employeeId, employeeCode: r.employeeCode, firstName: r.guardName, lastName: '' })),
+      issues: preflight.issues.map(i => ({ guard: { employeeCode: i.employeeCode }, type: i.code, message: i.message })),
     };
+
   }
 
   /** Raw records for a date range (audit/history view). */
