@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { User } from '../../../models/User';
 import { ApiError } from '../../../common/ApiError';
-import { UserRole, MODULE_ACCESS } from '../../../types';
+import { UserRole, MODULE_ACCESS, EmployeeCategory } from '../../../types';
+import { Employee } from '../../../models/Employee';
 import { getPermissionsForRole } from '../../../middleware/rbac';
 import { AuditService } from '../../../core/audit/AuditService';
 import { eventBus } from '../../../core/events/EventBus';
@@ -64,16 +65,39 @@ export class UserController {
 
   static async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const { email, password, firstName, lastName, role, moduleGrants, moduleDenies } = req.body;
+      const { email, password, firstName, lastName, role, employeeId, moduleGrants, moduleDenies } = req.body;
       const existing = await User.findOne({ email });
       if (existing) throw ApiError.conflict('Email already exists');
+
+      // A guard login must belong to a guard staff record: attendance, shifts and
+      // patrol scans are all tied to that employee.
+      let linkedEmployeeId: string | null = null;
+      if (role === UserRole.GUARD) {
+        if (!employeeId) throw ApiError.badRequest('Select the guard staff record this account belongs to');
+        const employee = await Employee.findById(employeeId);
+        if (!employee || employee.category !== EmployeeCategory.GUARD) {
+          throw ApiError.badRequest('The selected staff record is not a guard');
+        }
+        const alreadyLinked = await User.findOne({ employeeId });
+        if (alreadyLinked) throw ApiError.conflict('This guard already has a login account');
+        linkedEmployeeId = employeeId;
+      }
 
       const grants = sanitizeModuleKeys(moduleGrants);
       const denies = sanitizeModuleKeys(moduleDenies);
 
       const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(password, 12);
-      const user = await User.create({ email, password: hashedPassword, firstName, lastName, role, moduleGrants: grants, moduleDenies: denies });
+      const user = await User.create({
+        email,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        role,
+        employeeId: linkedEmployeeId,
+        moduleGrants: grants,
+        moduleDenies: denies,
+      });
 
       AuditService.log({
         userId: req.user?.userId || '',

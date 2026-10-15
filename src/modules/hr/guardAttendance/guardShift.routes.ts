@@ -13,6 +13,9 @@ router.use(authenticate);
 
 router.post('/clock-in', authorize(PERMISSIONS.GUARD_ATTENDANCE_SELF), GuardShiftController.clockIn);
 router.post('/clock-out', authorize(PERMISSIONS.GUARD_ATTENDANCE_SELF), GuardShiftController.clockOut);
+router.post('/patrol', authorize(PERMISSIONS.GUARD_ATTENDANCE_SELF), GuardShiftController.patrol);
 router.get('/my', authorize(PERMISSIONS.GUARD_ATTENDANCE_SELF), GuardShiftController.my);
+router.get('/site/:siteId', authorize(PERMISSIONS.GUARD_ATTENDANCE_SELF), GuardShiftController.scanSite);
+router.get('/activity', authorize(PERMISSIONS.GUARD_ATTENDANCE_READ), GuardShiftController.activity);
 
 export default router;
