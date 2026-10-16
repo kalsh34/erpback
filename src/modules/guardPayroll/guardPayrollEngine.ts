@@ -54,6 +54,8 @@ export interface EngineSiteInput {
   siteId: string;
   compensationAmount: number;
   hours: SiteHoursBuckets;
+  /** Optional per-site formula overrides (fall back to the global config values). */
+  formula?: Partial<PayrollConfigNumbers>;
 }
 
 export interface EngineDeductionInput {
@@ -79,6 +81,10 @@ export interface EngineTaxLine {
 export interface PrimarySiteCalculation extends SiteHoursBuckets {
   compensationAmount: number;
   transportPercent: number;
+  /** Formula numbers actually used for this site (global or per-site overrides). */
+  standardMonthlyHours: number;
+  sundayStructuralHours: number;
+  basicHourlyDivisor: number;
   otRate: number;
   sundayStructuralAllocation: number;
   remaining: number;
@@ -117,21 +123,23 @@ export interface EngineOutput {
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 export const round4 = (n: number) => Math.round(n * 10000) / 10000;
 
-/** One primary site's compensation decomposition — rates derive ONLY from the compensation amount. */
+/** One primary site's compensation decomposition — rates derive ONLY from the compensation amount.
+ *  A per-site formula (input.formula) overrides the global config for this site. */
 export function computePrimarySite(input: EngineSiteInput, config: PayrollConfigNumbers): PrimarySiteCalculation {
   const { compensationAmount } = input;
+  const cfg: PayrollConfigNumbers = { ...config, ...(input.formula || {}) };
   const hours = {
     normalHours: input.hours.normalHours || 0,
     holidayHours: input.hours.holidayHours || 0,
     sundayHours: input.hours.sundayHours || 0,
   };
 
-  const otRate = round4(compensationAmount / config.standardMonthlyHours);
-  const sundayStructuralAllocation = round2(otRate * config.sundayStructuralHours);
+  const otRate = round4(compensationAmount / cfg.standardMonthlyHours);
+  const sundayStructuralAllocation = round2(otRate * cfg.sundayStructuralHours);
   const remaining = round2(compensationAmount - sundayStructuralAllocation);
-  const transportFull = round2((remaining * config.transportPercent) / 100);
+  const transportFull = round2((remaining * cfg.transportPercent) / 100);
   const basicSalary = round2(remaining - transportFull);
-  const basicHourlyRate = round4(basicSalary / config.basicHourlyDivisor);
+  const basicHourlyRate = round4(basicSalary / cfg.basicHourlyDivisor);
 
   const normalPay = round2(hours.normalHours * basicHourlyRate);
   const holidayPay = round2(hours.holidayHours * otRate);
@@ -145,7 +153,10 @@ export function computePrimarySite(input: EngineSiteInput, config: PayrollConfig
   return {
     ...hours,
     compensationAmount,
-    transportPercent: config.transportPercent,
+    transportPercent: cfg.transportPercent,
+    standardMonthlyHours: cfg.standardMonthlyHours,
+    sundayStructuralHours: cfg.sundayStructuralHours,
+    basicHourlyDivisor: cfg.basicHourlyDivisor,
     otRate,
     sundayStructuralAllocation,
     remaining,
@@ -160,14 +171,16 @@ export function computePrimarySite(input: EngineSiteInput, config: PayrollConfig
   };
 }
 
-/** One additional site — hours × THAT site's OT rate. No basic, no transport. */
+/** One additional site — hours × THAT site's OT rate. No basic, no transport.
+ *  A per-site formula (input.formula) overrides the global config for this site. */
 export function computeAdditionalSite(input: EngineSiteInput, config: PayrollConfigNumbers): AdditionalSiteCalculation {
+  const cfg: PayrollConfigNumbers = { ...config, ...(input.formula || {}) };
   const hours = {
     normalHours: input.hours.normalHours || 0,
     holidayHours: input.hours.holidayHours || 0,
     sundayHours: input.hours.sundayHours || 0,
   };
-  const otRate = round4(input.compensationAmount / config.standardMonthlyHours);
+  const otRate = round4(input.compensationAmount / cfg.standardMonthlyHours);
   const totalHours = round2(hours.normalHours + hours.holidayHours + hours.sundayHours);
   return {
     siteId: input.siteId,

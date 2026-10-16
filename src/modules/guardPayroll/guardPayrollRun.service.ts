@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { createHash } from 'node:crypto';
-import { GuardSiteCompensation } from '../../models/GuardSiteCompensation';
+import { GuardSiteCompensation, ISiteFormulaOverride } from '../../models/GuardSiteCompensation';
 import { EmployeeDeduction } from '../../models/EmployeeDeduction';
 import { resolveMonthlyPrimary } from './assignmentTimeline';
 import { payrollTransaction } from './payrollTransaction';
@@ -59,14 +59,27 @@ export class GuardPayrollRunService {
   private static async calculateTransactional(periodKey: string, userId: string, auditCtx?: AuditCtx) {
     const { year, month, start, end } = monthWindow(periodKey);
 
+    const EDITABLE = () => run && EDITABLE_STATUSES.includes(run.status);
     let run = await GuardPayrollRun.findOne({ periodKey });
-    if (run && !EDITABLE_STATUSES.includes(run.status)) {
-      throw ApiError.conflict(
-        `Payroll for ${periodKey} is ${run.status}. RETURN it for correction before recalculating.`
-      );
-    }
     if (!run) {
-      run = await GuardPayrollRun.create({ periodKey, status: PayrollRecordStatus.DRAFT });
+      // Concurrent calculations race on the unique periodKey index: the loser
+      // gets a duplicate-key error instead of the wrong message. Re-find and
+      // continue with the winner's run when it is still editable.
+      try {
+        run = await GuardPayrollRun.create({ periodKey, status: PayrollRecordStatus.DRAFT });
+      } catch (err: any) {
+        if (err?.code === 11000) {
+          run = await GuardPayrollRun.findOne({ periodKey });
+          if (!run) throw err;
+        } else {
+          throw err;
+        }
+      }
+    }
+    if (!EDITABLE()) {
+      throw ApiError.conflict(
+        `Payroll for ${periodKey} is ${run!.status}. RETURN it for correction before recalculating.`
+      );
     }
     const wasReturned = run.status === PayrollRecordStatus.RETURNED;
 
@@ -195,7 +208,7 @@ export class GuardPayrollRunService {
       };
 
       const additionalSiteIds = new Set(additionalAssignments.map((a) => ((a.siteId as any)?._id || a.siteId).toString()));
-      const additionalSites: { siteId: string; compensationAmount: number; hours: SiteHoursBuckets }[] = [];
+      const additionalSites: { siteId: string; compensationAmount: number; formula?: ISiteFormulaOverride; hours: SiteHoursBuckets }[] = [];
       const warnings2: IGuardPayrollRun['problems'] = [];
 
       let missingCompForAdditional = false;
@@ -240,6 +253,7 @@ export class GuardPayrollRunService {
         additionalSites.push({
           siteId: siteEntry.siteId,
           compensationAmount: comp.compensationAmount,
+          formula: comp.formula,
           hours,
         });
       }
@@ -263,7 +277,7 @@ export class GuardPayrollRunService {
       const deductions = deductionsMap.get(guardKey) || [];
 
       const result = computeGuardPayroll({
-        primary: { siteId: primarySiteId, compensationAmount: primaryCompensation.compensationAmount, hours: hoursForSite(primarySiteId) },
+        primary: { siteId: primarySiteId, compensationAmount: primaryCompensation.compensationAmount, formula: primaryCompensation.formula, hours: hoursForSite(primarySiteId) },
         additionalSites,
         config,
         pensionEnrolled: contract?.pensionEnrolled ?? false,
@@ -299,10 +313,10 @@ export class GuardPayrollRunService {
           taxCenter: siteMeta.get(primarySiteId)?.taxCenter || '',
           pensionCenter: siteMeta.get(primarySiteId)?.pensionSite || '',
           ...result.primary,
-          transportPercent: config.transportPercent,
-          standardMonthlyHours: config.standardMonthlyHours,
-          sundayStructuralHours: config.sundayStructuralHours,
-          basicHourlyDivisor: config.basicHourlyDivisor,
+          transportPercent: result.primary.transportPercent,
+          standardMonthlyHours: result.primary.standardMonthlyHours ?? config.standardMonthlyHours,
+          sundayStructuralHours: result.primary.sundayStructuralHours ?? config.sundayStructuralHours,
+          basicHourlyDivisor: result.primary.basicHourlyDivisor ?? config.basicHourlyDivisor,
         },
         additionalSites: result.additionalSites.map((site) => ({
           siteId: site.siteId,
@@ -384,7 +398,7 @@ export class GuardPayrollRunService {
       GuardMonthlyHoursService.getPayrollHours(year, month),
       PrimarySiteAssignment.find({ guardId: { $in: ids }, effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).select('guardId siteId isPrimary effectiveFrom effectiveTo').sort({ _id: 1 }).lean(),
       Contract.find({ employeeId: { $in: ids }, status: 'ACTIVE', contractStartDate: { $lte: end }, $or: [{ contractEndDate: null }, { contractEndDate: { $gte: start } }] }).select('employeeId contractStartDate contractEndDate pensionEnrolled contractType wage').sort({ _id: 1 }).lean(),
-      GuardSiteCompensation.find({ effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).select('siteId compensationAmount effectiveFrom effectiveTo').sort({ _id: 1 }).lean(),
+      GuardSiteCompensation.find({ effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).select('siteId compensationAmount formula effectiveFrom effectiveTo').sort({ _id: 1 }).lean(),
       EmployeeDeduction.find({ employeeId: { $in: ids }, status: 'ACTIVE' }).sort({ _id: 1 }).lean(),
       GuardPayrollConfigService.getNumbers(), StatutoryService.getTaxTableForPeriod(start), StatutoryService.getPensionRuleForPeriod(start),
     ]);
