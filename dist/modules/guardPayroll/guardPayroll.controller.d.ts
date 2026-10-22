@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 /** GUARD PAYROLL v2 — runs, records, site compensation, config, locks. */
 export declare class GuardPayrollController {
     static status(_req: Request, res: Response, next: NextFunction): Promise<void>;
+    static readiness(req: Request, res: Response, next: NextFunction): Promise<void>;
     static getConfig(_req: Request, res: Response, next: NextFunction): Promise<void>;
     static updateConfig(req: Request, res: Response, next: NextFunction): Promise<void>;
     static listCompensations(req: Request, res: Response, next: NextFunction): Promise<void>;

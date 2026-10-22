@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GuardShiftService = void 0;
 const GuardShift_1 = require("../../../models/GuardShift");
+const GuardPatrolScan_1 = require("../../../models/GuardPatrolScan");
 const GuardAttendanceRecord_1 = require("../../../models/GuardAttendanceRecord");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
 const Employee_1 = require("../../../models/Employee");
@@ -110,7 +111,57 @@ class GuardShiftService {
         await this.notifyManagers('Guard clocked out', `${guardName} clocked out at ${site?.siteName || 'site'} — ${hours}h recorded.`, '/attendance', 'SUCCESS');
         return { shift, hours };
     }
-    /** Guard portal data: shifts, open shift, today's rows, month total. */
+    /** Minimal site info for the guard scanner (guards have no SITE_READ permission). */
+    static async getScanSite(siteId) {
+        const site = await Site_1.Site.findById(siteId).select('siteName siteCode location status');
+        if (!site)
+            throw ApiError_1.ApiError.notFound('Site not found — the QR code may be outdated');
+        return site;
+    }
+    /** PATROL SCAN — the guard scans a site QR while on an open shift at that site. */
+    static async recordPatrol(userId, siteId) {
+        const { guard } = await this.resolveGuard(userId);
+        const shift = await GuardShift_1.GuardShift.findOne({ guardUserId: userId, status: 'OPEN' });
+        if (!shift)
+            throw ApiError_1.ApiError.badRequest('Clock in before patrolling — you have no open shift');
+        if (shift.siteId.toString() !== siteId) {
+            throw ApiError_1.ApiError.badRequest('This QR code is for a different site than your open shift');
+        }
+        const now = new Date();
+        return GuardPatrolScan_1.GuardPatrolScan.create({
+            shiftId: shift._id,
+            guardUserId: userId,
+            employeeId: guard._id,
+            siteId: shift.siteId,
+            date: shift.date,
+            scannedAt: now,
+        });
+    }
+    /** Admin view: shifts and patrol scans in a date range (YYYY-MM-DD, inclusive). */
+    static async listActivity(filters) {
+        const from = filters.from || (0, dateUtils_1.ymdLocal)(new Date());
+        const to = filters.to || from;
+        const shiftQuery = { date: { $gte: from, $lte: to } };
+        const scanQuery = { date: { $gte: from, $lte: to } };
+        if (filters.siteId) {
+            shiftQuery.siteId = filters.siteId;
+            scanQuery.siteId = filters.siteId;
+        }
+        if (filters.employeeId) {
+            shiftQuery.employeeId = filters.employeeId;
+            scanQuery.employeeId = filters.employeeId;
+        }
+        const [shifts, patrols] = await Promise.all([
+            GuardShift_1.GuardShift.find(shiftQuery).sort({ clockInAt: -1 }).limit(500)
+                .populate('employeeId', 'firstName lastName employeeCode')
+                .populate('siteId', 'siteName siteCode'),
+            GuardPatrolScan_1.GuardPatrolScan.find(scanQuery).sort({ scannedAt: -1 }).limit(1000)
+                .populate('employeeId', 'firstName lastName employeeCode')
+                .populate('siteId', 'siteName siteCode'),
+        ]);
+        return { from, to, shifts, patrols };
+    }
+    /** Guard portal data: shifts (with patrol counts), open shift, today's rows, month total. */
     static async getMyShifts(userId, limit = 60) {
         const { guard } = await this.resolveGuard(userId).catch(() => ({ guard: null }));
         if (!guard) {
@@ -126,13 +177,24 @@ class GuardShiftService {
             GuardAttendanceRecord_1.GuardAttendanceRecord.find({ guardId: guard._id, date: today, status: types_1.GuardAttendanceStatus.ACTIVE })
                 .populate('siteId', 'siteName siteCode'),
         ]);
+        // Patrol counts per shift, so the guard sees how many rounds each shift had.
+        const shiftIds = shifts.map((s) => s._id);
+        const counts = await GuardPatrolScan_1.GuardPatrolScan.aggregate([
+            { $match: { shiftId: { $in: shiftIds } } },
+            { $group: { _id: '$shiftId', count: { $sum: 1 } } },
+        ]);
+        const countByShift = new Map(counts.map((c) => [c._id.toString(), c.count]));
+        const shiftsWithPatrols = shifts.map((s) => ({
+            ...s.toObject(),
+            patrolCount: countByShift.get(s._id.toString()) || 0,
+        }));
         const monthRecords = await GuardAttendanceRecord_1.GuardAttendanceRecord.find({
             guardId: guard._id,
             periodKey,
             status: types_1.GuardAttendanceStatus.ACTIVE,
         }).select('hoursWorked');
         const monthHours = round2(monthRecords.reduce((s, r) => s + r.hoursWorked, 0));
-        return { shifts, openShift, todayRecords, monthHours, periodKey };
+        return { shifts: shiftsWithPatrols, openShift, todayRecords, monthHours, periodKey };
     }
 }
 exports.GuardShiftService = GuardShiftService;

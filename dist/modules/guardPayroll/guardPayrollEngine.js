@@ -24,9 +24,9 @@
  *   Additional Site Pay    = hours at that site × THAT site's OT Rate
  *   Each site is calculated independently, then aggregated.
  *
- * PENSION (user rule 2026-10): the primary-site NORMAL-HOUR pay ONLY — the
- * Sunday structural OT, holiday OT, additional-site earnings and transport are
- * ALL excluded from the pension base.
+ * PENSION (user rule 2026-10): primary-site normal pay + actual Sunday pay.
+ * Each uses its own hourly rate; the fixed Sunday structural allocation is NOT
+ * added again. Holiday pay, additional-site earnings and transport are excluded.
  *
  * INCOME TAX (user rule 2026-10): every pay from the primary site (normal +
  * Sunday OT + holiday OT) and all additional sites, transport excluded — the
@@ -46,20 +46,22 @@ const round2 = (n) => Math.round(n * 100) / 100;
 exports.round2 = round2;
 const round4 = (n) => Math.round(n * 10000) / 10000;
 exports.round4 = round4;
-/** One primary site's compensation decomposition — rates derive ONLY from the compensation amount. */
+/** One primary site's compensation decomposition — rates derive ONLY from the compensation amount.
+ *  A per-site formula (input.formula) overrides the global config for this site. */
 function computePrimarySite(input, config) {
     const { compensationAmount } = input;
+    const cfg = { ...config, ...(input.formula || {}) };
     const hours = {
         normalHours: input.hours.normalHours || 0,
         holidayHours: input.hours.holidayHours || 0,
         sundayHours: input.hours.sundayHours || 0,
     };
-    const otRate = (0, exports.round4)(compensationAmount / config.standardMonthlyHours);
-    const sundayStructuralAllocation = (0, exports.round2)(otRate * config.sundayStructuralHours);
+    const otRate = (0, exports.round4)(compensationAmount / cfg.standardMonthlyHours);
+    const sundayStructuralAllocation = (0, exports.round2)(otRate * cfg.sundayStructuralHours);
     const remaining = (0, exports.round2)(compensationAmount - sundayStructuralAllocation);
-    const transportFull = (0, exports.round2)((remaining * config.transportPercent) / 100);
+    const transportFull = (0, exports.round2)((remaining * cfg.transportPercent) / 100);
     const basicSalary = (0, exports.round2)(remaining - transportFull);
-    const basicHourlyRate = (0, exports.round4)(basicSalary / config.basicHourlyDivisor);
+    const basicHourlyRate = (0, exports.round4)(basicSalary / cfg.basicHourlyDivisor);
     const normalPay = (0, exports.round2)(hours.normalHours * basicHourlyRate);
     const holidayPay = (0, exports.round2)(hours.holidayHours * otRate);
     const sundayPay = (0, exports.round2)(hours.sundayHours * otRate);
@@ -70,7 +72,10 @@ function computePrimarySite(input, config) {
     return {
         ...hours,
         compensationAmount,
-        transportPercent: config.transportPercent,
+        transportPercent: cfg.transportPercent,
+        standardMonthlyHours: cfg.standardMonthlyHours,
+        sundayStructuralHours: cfg.sundayStructuralHours,
+        basicHourlyDivisor: cfg.basicHourlyDivisor,
         otRate,
         sundayStructuralAllocation,
         remaining,
@@ -84,14 +89,16 @@ function computePrimarySite(input, config) {
         siteEarnings: (0, exports.round2)(primaryTaxable + transportPaid),
     };
 }
-/** One additional site — hours × THAT site's OT rate. No basic, no transport. */
+/** One additional site — hours × THAT site's OT rate. No basic, no transport.
+ *  A per-site formula (input.formula) overrides the global config for this site. */
 function computeAdditionalSite(input, config) {
+    const cfg = { ...config, ...(input.formula || {}) };
     const hours = {
         normalHours: input.hours.normalHours || 0,
         holidayHours: input.hours.holidayHours || 0,
         sundayHours: input.hours.sundayHours || 0,
     };
-    const otRate = (0, exports.round4)(input.compensationAmount / config.standardMonthlyHours);
+    const otRate = (0, exports.round4)(input.compensationAmount / cfg.standardMonthlyHours);
     const totalHours = (0, exports.round2)(hours.normalHours + hours.holidayHours + hours.sundayHours);
     return {
         siteId: input.siteId,
@@ -107,10 +114,11 @@ function computeGuardPayroll(input) {
     const additionalSites = (input.additionalSites || []).map((site) => computeAdditionalSite(site, input.config));
     const additionalTotal = (0, exports.round2)(additionalSites.reduce((sum, s) => sum + s.siteEarnings, 0));
     const grossEarnings = (0, exports.round2)(primary.siteEarnings + additionalTotal);
-    // Pension base = primary-site NORMAL-HOUR pay ONLY (user rule 2026-10):
-    // Sunday structural OT, holiday OT, additional sites and transport excluded.
-    const pensionBase = input.pensionEnrolled && input.pension && primary.normalPay > 0
-        ? (0, exports.round2)(Math.min(Math.max(primary.normalPay, input.pension.minPensionableSalary ?? 0), input.pension.maxPensionableSalary ?? Infinity))
+    // Pension uses actual primary-site normal + Sunday pay, each at its own rate.
+    // Holiday pay, additional sites and transport remain excluded.
+    const pensionablePay = (0, exports.round2)(primary.normalPay + primary.sundayPay);
+    const pensionBase = input.pensionEnrolled && input.pension && pensionablePay > 0
+        ? (0, exports.round2)(Math.min(Math.max(pensionablePay, input.pension.minPensionableSalary ?? 0), input.pension.maxPensionableSalary ?? Infinity))
         : 0;
     let employeePension = 0;
     let employerPension = 0;

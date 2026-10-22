@@ -99,6 +99,20 @@ export class SiteCompensationService {
 
     const current = await GuardSiteCompensation.findOne({ siteId: input.siteId, isCurrent: true });
 
+    // Self-heal on every write: a site must hold exactly ONE current rate. If
+    // stray legacy/raced rows are also flagged current for this site, retire
+    // them so the unique index and lookups stay unambiguous. History rows are
+    // never deleted; the row we go on to amend/create remains the rate in force.
+    const strayQuery = current
+      ? { siteId: input.siteId, isCurrent: true, _id: { $ne: current._id } }
+      : { siteId: input.siteId, isCurrent: true };
+    const strays = await GuardSiteCompensation.updateMany(strayQuery, { $set: { isCurrent: false } });
+    if (strays.modifiedCount > 0) {
+      console.warn(
+        `[siteCompensation] Retired ${strays.modifiedCount} duplicate current rate(s) for site ${input.siteId} before recording a new rate`
+      );
+    }
+
     // Same-day correction: the current row starts on this same date, so the
     // "later compensation" rule does not apply — amend the current row itself
     // and keep an audit trail, instead of erroring on every repeated edit.

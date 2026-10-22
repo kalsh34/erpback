@@ -117,7 +117,11 @@ class GuardService {
         if ((0, assignmentTimeline_1.primaryOverlaps)(primaryRows).length)
             throw ApiError_1.ApiError.conflict('Primary assignment history overlaps. Use the audited assignment correction before adding sites.');
         const isPrimary = currentCount === 0;
-        const effectiveFrom = new Date(`${(0, assignmentTimeline_1.assignmentDay)(new Date())}T00:00:00.000Z`);
+        const from = data.effectiveFrom || (0, assignmentTimeline_1.assignmentDay)(new Date());
+        const effectiveFrom = new Date(`${from}T00:00:00.000Z`);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !Number.isFinite(effectiveFrom.getTime()) || (0, assignmentTimeline_1.assignmentDay)(effectiveFrom) !== from)
+            throw ApiError_1.ApiError.badRequest('Assignment start date must be a valid YYYY-MM-DD date.');
+        await this.assertAssignmentPeriodUnlocked(effectiveFrom);
         if (isPrimary && primaryRows.some((r) => !r.effectiveTo || (0, assignmentTimeline_1.assignmentDay)(r.effectiveTo) >= (0, assignmentTimeline_1.assignmentDay)(effectiveFrom))) {
             throw ApiError_1.ApiError.conflict('A primary assignment already covers today. Correct its effective dates before adding another primary.');
         }

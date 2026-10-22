@@ -99,6 +99,12 @@ const guardSiteCompensationSchema = new Schema<IGuardSiteCompensation>(
 
 guardSiteCompensationSchema.index({ siteId: 1, effectiveFrom: -1 });
 guardSiteCompensationSchema.index({ siteId: 1, isCurrent: 1 });
+// Hard rule: ONE current compensation rate per site. A rate may belong to one
+// site only — a site can never carry two current rows (DB-enforced).
+guardSiteCompensationSchema.index(
+  { siteId: 1 },
+  { unique: true, partialFilterExpression: { isCurrent: true } }
+);
 
 export const GuardSiteCompensation = mongoose.model<IGuardSiteCompensation>(
   'GuardSiteCompensation',

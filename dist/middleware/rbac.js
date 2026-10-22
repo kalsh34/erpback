@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authorize = void 0;
 exports.computeEffectivePermissions = computeEffectivePermissions;
+exports.getMandatoryDeniedPermissions = getMandatoryDeniedPermissions;
 exports.getPermissionsForRole = getPermissionsForRole;
 exports.hasPermission = hasPermission;
 const ApiError_1 = require("../common/ApiError");
@@ -41,7 +42,19 @@ function computeEffectivePermissions(user) {
         if (mod)
             mod.permissions.forEach((p) => set.delete(p));
     }
+    // Module denies/grants only operate on whole-module bundles, so a single
+    // bundle can mix permissions a role is meant to never hold (e.g. the
+    // `company` bundle carries COMPANY_CREATE/COMPANY_UPDATE, which HR and
+    // Finance roles must not regain). Mandatory exclusions therefore apply
+    // LAST: no combination of grants or denies can ever restore them.
+    for (const forbidden of getMandatoryDeniedPermissions(user.role)) {
+        set.delete(forbidden);
+    }
     return [...set];
+}
+/** Permissions the role is never allowed to hold, regardless of grants. */
+function getMandatoryDeniedPermissions(role) {
+    return types_1.ROLE_MANDATORY_DENIES[role] ?? [];
 }
 /** Union of the hardcoded role map and the module registry (same rule `authorize` uses). */
 function getPermissionsForRole(role) {

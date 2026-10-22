@@ -19,6 +19,17 @@ const PAY_FIELDS = [
     'transportAllowance',
 ];
 const pickPay = (c) => Object.fromEntries(PAY_FIELDS.map((f) => [f, Number(c?.[f] ?? 0)]));
+/**
+ * DEF-L1: `transportAllowance` is a GUARD-domain field (guard profile / Guard
+ * Payroll context). The staff payroll formula (frozen spreadsheet rule) is fed
+ * ONLY from `taxableTransport` and `nonTaxableAllowance` — a staff contract
+ * that stores a positive transportAllowance silently never affects pay. The
+ * field is therefore explicitly rejected for staff contracts with a clear
+ * message instead of being silently discarded. Guards keep it.
+ */
+const STAFF_TRANSPORT_MESSAGE = 'transportAllowance applies to guard contracts only and is unchanged by Staff Payroll. ' +
+    'For staff contracts use taxableTransport (taxable part) and nonTaxableAllowance (non-taxable part); ' +
+    'set transportAllowance to 0 or omit it.';
 class ContractService {
     static async getByEmployeeId(employeeId) {
         return Contract_1.Contract.findOne({ employeeId }).sort({ createdAt: -1 });
@@ -44,10 +55,20 @@ class ContractService {
         ]);
         return { data: contracts, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
     }
+    static async assertStaffTransportField(employeeId, incoming) {
+        const value = Number(incoming?.transportAllowance ?? 0);
+        if (!(Number.isFinite(value) && value > 0))
+            return; // 0/absent — nothing to police
+        const emp = await Employee_1.Employee.findOne({ _id: employeeId }).select('category').lean();
+        if (emp && emp.category === types_1.EmployeeCategory.GUARD)
+            return; // guard contracts own the field
+        throw ApiError_1.ApiError.badRequest(STAFF_TRANSPORT_MESSAGE);
+    }
     static async create(data, auditCtx) {
         const existing = await Contract_1.Contract.findOne({ employeeId: data.employeeId, status: 'ACTIVE' });
         if (existing)
             throw ApiError_1.ApiError.conflict('Employee already has an active contract');
+        await ContractService.assertStaffTransportField(data.employeeId, data);
         const contract = await Contract_1.Contract.create(data);
         // Baseline salary history row — the starting package of this contract.
         await SalaryHistory_1.SalaryHistory.create({
@@ -81,6 +102,7 @@ class ContractService {
         const old = await Contract_1.Contract.findById(id);
         if (!old)
             throw ApiError_1.ApiError.notFound('Contract not found');
+        await ContractService.assertStaffTransportField(old.employeeId, data);
         const oldValues = old.toObject();
         const contract = await Contract_1.Contract.findByIdAndUpdate(id, data, { new: true, runValidators: true });
         if (!contract)

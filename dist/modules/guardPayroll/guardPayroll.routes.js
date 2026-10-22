@@ -23,6 +23,7 @@ const APPROVE = types_1.PERMISSIONS.GUARD_PAYROLL_APPROVE;
 const PAY = types_1.PERMISSIONS.GUARD_PAYROLL_PAY;
 const RETURN = types_1.PERMISSIONS.GUARD_PAYROLL_RETURN;
 router.get('/status', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.status);
+router.get('/readiness', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.readiness);
 // Engine configuration (transport %, divisors).
 router.get('/config', (0, rbac_1.authorize)(READ), guardPayroll_controller_1.GuardPayrollController.getConfig);
 router.put('/config', (0, rbac_1.authorize)(RATES), guardPayroll_controller_1.GuardPayrollController.updateConfig);

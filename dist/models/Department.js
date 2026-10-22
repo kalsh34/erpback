@@ -39,6 +39,6 @@ const departmentSchema = new mongoose_1.Schema({
     name: { type: String, required: true, unique: true, trim: true },
     active: { type: Boolean, default: true },
 }, { timestamps: true });
-departmentSchema.index({ name: 1 }, { unique: true });
+// name already declares its unique index on the schema path.
 exports.Department = mongoose_1.default.model('Department', departmentSchema);
 //# sourceMappingURL=Department.js.map

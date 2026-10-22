@@ -13,6 +13,9 @@ const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.post('/clock-in', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_SELF), guardShift_controller_1.GuardShiftController.clockIn);
 router.post('/clock-out', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_SELF), guardShift_controller_1.GuardShiftController.clockOut);
+router.post('/patrol', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_SELF), guardShift_controller_1.GuardShiftController.patrol);
 router.get('/my', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_SELF), guardShift_controller_1.GuardShiftController.my);
+router.get('/site/:siteId', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_SELF), guardShift_controller_1.GuardShiftController.scanSite);
+router.get('/activity', (0, rbac_1.authorize)(types_1.PERMISSIONS.GUARD_ATTENDANCE_READ), guardShift_controller_1.GuardShiftController.activity);
 exports.default = router;
 //# sourceMappingURL=guardShift.routes.js.map

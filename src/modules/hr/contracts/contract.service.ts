@@ -1,7 +1,7 @@
 import { Contract, IContract } from '../../../models/Contract';
 import { Employee } from '../../../models/Employee';
 import { SalaryHistory } from '../../../models/SalaryHistory';
-import { EmployeeStatus } from '../../../types';
+import { EmployeeStatus, EmployeeCategory } from '../../../types';
 import { activateEmployeeIfEligible } from '../employees/activation';
 import { ApiError } from '../../../common/ApiError';
 import { AuditService } from '../../../core/audit/AuditService';
@@ -19,6 +19,19 @@ const PAY_FIELDS = [
 
 const pickPay = (c: any) =>
   Object.fromEntries(PAY_FIELDS.map((f) => [f, Number(c?.[f] ?? 0)])) as Record<(typeof PAY_FIELDS)[number], number>;
+
+/**
+ * DEF-L1: `transportAllowance` is a GUARD-domain field (guard profile / Guard
+ * Payroll context). The staff payroll formula (frozen spreadsheet rule) is fed
+ * ONLY from `taxableTransport` and `nonTaxableAllowance` — a staff contract
+ * that stores a positive transportAllowance silently never affects pay. The
+ * field is therefore explicitly rejected for staff contracts with a clear
+ * message instead of being silently discarded. Guards keep it.
+ */
+const STAFF_TRANSPORT_MESSAGE =
+  'transportAllowance applies to guard contracts only and is unchanged by Staff Payroll. ' +
+  'For staff contracts use taxableTransport (taxable part) and nonTaxableAllowance (non-taxable part); ' +
+  'set transportAllowance to 0 or omit it.';
 
 export class ContractService {
   static async getByEmployeeId(employeeId: string): Promise<IContract | null> {
@@ -47,9 +60,18 @@ export class ContractService {
     return { data: contracts, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
+  private static async assertStaffTransportField(employeeId: unknown, incoming: Partial<IContract>): Promise<void> {
+    const value = Number(incoming?.transportAllowance ?? 0);
+    if (!(Number.isFinite(value) && value > 0)) return; // 0/absent — nothing to police
+    const emp = await Employee.findOne({ _id: employeeId } as any).select('category').lean();
+    if (emp && (emp as any).category === EmployeeCategory.GUARD) return; // guard contracts own the field
+    throw ApiError.badRequest(STAFF_TRANSPORT_MESSAGE);
+  }
+
   static async create(data: Partial<IContract>, auditCtx?: { userId: string; ip?: string; ua?: string }): Promise<IContract> {
     const existing = await Contract.findOne({ employeeId: data.employeeId, status: 'ACTIVE' });
     if (existing) throw ApiError.conflict('Employee already has an active contract');
+    await ContractService.assertStaffTransportField(data.employeeId, data);
 
     const contract = await Contract.create(data);
 
@@ -89,6 +111,7 @@ export class ContractService {
   static async update(id: string, data: Partial<IContract>, auditCtx?: { userId: string; ip?: string; ua?: string }): Promise<IContract> {
     const old = await Contract.findById(id);
     if (!old) throw ApiError.notFound('Contract not found');
+    await ContractService.assertStaffTransportField(old.employeeId, data);
     const oldValues = old.toObject();
 
     const contract = await Contract.findByIdAndUpdate(id, data, { new: true, runValidators: true });

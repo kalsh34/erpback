@@ -25,6 +25,7 @@ export declare class ContractService {
             totalPages: number;
         };
     }>;
+    private static assertStaffTransportField;
     static create(data: Partial<IContract>, auditCtx?: {
         userId: string;
         ip?: string;

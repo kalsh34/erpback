@@ -220,6 +220,11 @@ export const PERMISSIONS = {
   CONTRACT_UPDATE: 'contract.update',
   GUARANTOR_READ: 'guarantor.read',
   GUARANTOR_MANAGE: 'guarantor.manage',
+
+  FLEET_READ: 'fleet.read',
+  FLEET_MANAGE: 'fleet.manage',
+  FLEET_ASSIGN: 'fleet.assign',
+  FLEET_REPORT: 'fleet.report',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -312,6 +317,16 @@ export const MODULE_ACCESS: { key: string; label: string; permissions: Permissio
   },
   { key: 'recruitment', label: 'Recruitment', permissions: [PERMISSIONS.CANDIDATE_READ, PERMISSIONS.CANDIDATE_MANAGE] },
   { key: 'performance', label: 'Performance', permissions: [PERMISSIONS.PERFORMANCE_READ, PERMISSIONS.PERFORMANCE_MANAGE] },
+  {
+    key: 'fleet',
+    label: 'Fleet Management',
+    permissions: [
+      PERMISSIONS.FLEET_READ,
+      PERMISSIONS.FLEET_MANAGE,
+      PERMISSIONS.FLEET_ASSIGN,
+      PERMISSIONS.FLEET_REPORT,
+    ],
+  },
 ];
 
 export const MODULE_ACCESS_KEYS = MODULE_ACCESS.map((m) => m.key);
@@ -421,9 +436,9 @@ PERMISSIONS.AUDIT_READ,
     PERMISSIONS.SITE_CREATE,
     PERMISSIONS.SITE_READ,
     PERMISSIONS.SITE_UPDATE,
-    PERMISSIONS.COMPANY_CREATE,
+    // COMPANY_CREATE / COMPANY_UPDATE intentionally NOT granted: companies are
+    // administered by admins only (HR manages employees/sites, not companies).
     PERMISSIONS.COMPANY_READ,
-    PERMISSIONS.COMPANY_UPDATE,
     PERMISSIONS.GUARD_REGISTER,
     PERMISSIONS.GUARD_ASSIGN_SITE,
     PERMISSIONS.GUARD_ATTENDANCE_READ,
@@ -458,8 +473,9 @@ PERMISSIONS.ROTATION_OVERRIDE,
     PERMISSIONS.USER_READ,
     PERMISSIONS.EMPLOYEE_READ,
     PERMISSIONS.SITE_READ,
+    // COMPANY_UPDATE intentionally NOT granted: Finance must not administer or
+    // delete companies (company administration belongs to admins).
     PERMISSIONS.COMPANY_READ,
-    PERMISSIONS.COMPANY_UPDATE,
     PERMISSIONS.GUARD_ATTENDANCE_READ,
     PERMISSIONS.GUARD_PAYROLL_READ,
     PERMISSIONS.GUARD_PAYROLL_RATES,
@@ -553,8 +569,24 @@ PERMISSIONS.ROTATION_APPROVE,
     PERMISSIONS.ROTATION_READ,
         PERMISSIONS.CONTRACT_READ,
     PERMISSIONS.GUARANTOR_READ,
-PERMISSIONS.ROTATION_APPROVE,
+    // ROTATION_APPROVE intentionally NOT granted: the CEO role is strictly
+    // read-only (no business mutations of any kind, rotations included).
   ],
+};
+
+/**
+ * Permissions that are MANDATORY exclusions for a role: the role map omits
+ * them intentionally (see the COMPANY_* comments above) and per-user module
+ * grants must never be able to restore them. computeEffectivePermissions
+ * applies these as a final filter — whole-module grant bundles (e.g. the
+ * `company` bundle, which legitimately hands COMPANY_CREATE/UPDATE to
+ * Operations) cannot punch through role-level restrictions.
+ */
+export const ROLE_MANDATORY_DENIES: Partial<Record<UserRole, Permission[]>> = {
+  // HR manages employees/sites; companies are administered by admins only.
+  [UserRole.HR_ADMIN]: [PERMISSIONS.COMPANY_CREATE, PERMISSIONS.COMPANY_UPDATE],
+  // Finance must not administer or delete companies.
+  [UserRole.FINANCE_OFFICER]: [PERMISSIONS.COMPANY_CREATE, PERMISSIONS.COMPANY_UPDATE],
 };
 
 // --- Payroll Calculation Types ---

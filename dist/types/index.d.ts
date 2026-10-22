@@ -190,6 +190,10 @@ export declare const PERMISSIONS: {
     readonly CONTRACT_UPDATE: "contract.update";
     readonly GUARANTOR_READ: "guarantor.read";
     readonly GUARANTOR_MANAGE: "guarantor.manage";
+    readonly FLEET_READ: "fleet.read";
+    readonly FLEET_MANAGE: "fleet.manage";
+    readonly FLEET_ASSIGN: "fleet.assign";
+    readonly FLEET_REPORT: "fleet.report";
 };
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 /**
@@ -204,6 +208,15 @@ export declare const MODULE_ACCESS: {
 }[];
 export declare const MODULE_ACCESS_KEYS: string[];
 export declare const ROLE_PERMISSIONS: Record<UserRole, Permission[]>;
+/**
+ * Permissions that are MANDATORY exclusions for a role: the role map omits
+ * them intentionally (see the COMPANY_* comments above) and per-user module
+ * grants must never be able to restore them. computeEffectivePermissions
+ * applies these as a final filter — whole-module grant bundles (e.g. the
+ * `company` bundle, which legitimately hands COMPANY_CREATE/UPDATE to
+ * Operations) cannot punch through role-level restrictions.
+ */
+export declare const ROLE_MANDATORY_DENIES: Partial<Record<UserRole, Permission[]>>;
 export interface TaxBracketEntry {
     min: number;
     max: number | null;

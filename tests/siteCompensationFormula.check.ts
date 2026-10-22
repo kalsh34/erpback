@@ -91,9 +91,39 @@ async function main() {
   check('future-dated change still creates a new current row', finalRows.length === 2 && finalRows[1].isCurrent && finalRows[1].compensationAmount === 9500);
   check('previous row is closed the day before', finalRows[0].effectiveTo?.toISOString().slice(0, 10) === '2026-10-31' && !finalRows[0].isCurrent);
 
-  // 8. listAll resolves formula values for the UI.
+  // 8. The DB index blocks a second current rate for the same site outright.
+  const blockedRow = await GuardSiteCompensation.create({ siteId: siteBId, compensationAmount: 9999, effectiveFrom: new Date(Date.now() - 90 * 24 * 3600 * 1000), isCurrent: false });
+  let uniqueBlocked = false;
+  try {
+    await GuardSiteCompensation.updateOne({ _id: blockedRow._id }, { $set: { isCurrent: true } });
+    const currents = await GuardSiteCompensation.find({ siteId: siteBId, isCurrent: true });
+    uniqueBlocked = currents.length === 1; // update silently kept single current (unexpected)
+  } catch {
+    uniqueBlocked = true; // the unique index rejected the second current row
+  }
+  check('unique index enforces one current rate per site', uniqueBlocked);
+
+  // 9. Legacy databases (no index yet) could hold stray duplicate currents;
+  // create() must self-heal them. Simulate by dropping the index temporarily.
+  await mongoose.connection.db!.collection('guardsitecompensations').dropIndex('siteId_1');
+  await GuardSiteCompensation.updateOne({ _id: blockedRow._id }, { $set: { isCurrent: true } });
+  const strays = await GuardSiteCompensation.find({ siteId: siteBId, isCurrent: true });
+  check('stray duplicate current injected (legacy simulation)', strays.length === 2);
   const all = await SiteCompensationService.listAll({ siteId: siteAId });
   check('listAll returns resolved formula for each row', Array.isArray(all) && all.length === 2 && (all[1] as any).formula.transportPercent === 25);
+  const healed = await createTx({ siteId: siteBId, compensationAmount: 12500, effectiveFrom: today, userId });
+  check('create retires the stray duplicate current rate', healed.compensationAmount === 12500);
+  const currentsAfterHeal = await GuardSiteCompensation.find({ siteId: siteBId, isCurrent: true });
+  check('exactly ONE current rate remains for the site after self-heal', currentsAfterHeal.length === 1 && String(currentsAfterHeal[0]._id) === String(healed._id));
+  await GuardSiteCompensation.init().catch(() => {}); // rebuild the unique index
+  await GuardSiteCompensation.syncIndexes();
+  let reblocked = false;
+  try {
+    await GuardSiteCompensation.updateOne({ _id: blockedRow._id }, { $set: { isCurrent: true } });
+  } catch {
+    reblocked = true;
+  }
+  check('unique index is rebuilt after self-heal', reblocked);
 
   await mongoose.connection.dropDatabase();
   await mongoose.disconnect();

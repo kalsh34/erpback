@@ -144,7 +144,10 @@ export class GuardPayrollController {
     try {
       const periodKey = req.body?.periodKey || req.params?.periodKey;
       if (!periodKey) throw ApiError.badRequest('periodKey (YYYY-MM) is required');
-      res.status(201).json({ success: true, data: await GuardPayrollRunService.calculate(periodKey, userId(req), auditCtx(req)) });
+      // Part 2/1: optional primary-site scope and 'remaining' (add-only) mode.
+      const siteId = (req.body?.siteId as string | undefined) || null;
+      const mode = req.body?.mode === 'remaining' ? 'remaining' : 'full';
+      res.status(201).json({ success: true, data: await GuardPayrollRunService.calculate(periodKey, userId(req), auditCtx(req), { siteId, mode }) });
     } catch (error) { next(error); }
   }
 

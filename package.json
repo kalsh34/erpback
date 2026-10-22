@@ -9,6 +9,7 @@
     "postinstall": "npm run build",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "test": "ts-node --transpile-only tests/run.ts",
     "seed": "ts-node-dev --transpile-only src/seed.ts"
   },
   "dependencies": {
@@ -21,7 +22,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.6.0",
     "morgan": "^1.10.0",
-    "multer": "^2.3.0"
+    "multer": "^2.3.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

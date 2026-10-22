@@ -23,9 +23,9 @@
  *   Additional Site Pay    = hours at that site × THAT site's OT Rate
  *   Each site is calculated independently, then aggregated.
  *
- * PENSION (user rule 2026-10): the primary-site NORMAL-HOUR pay ONLY — the
- * Sunday structural OT, holiday OT, additional-site earnings and transport are
- * ALL excluded from the pension base.
+ * PENSION (user rule 2026-10): primary-site normal pay + actual Sunday pay.
+ * Each uses its own hourly rate; the fixed Sunday structural allocation is NOT
+ * added again. Holiday pay, additional-site earnings and transport are excluded.
  *
  * INCOME TAX (user rule 2026-10): every pay from the primary site (normal +
  * Sunday OT + holiday OT) and all additional sites, transport excluded — the
@@ -51,6 +51,8 @@ export interface EngineSiteInput {
     siteId: string;
     compensationAmount: number;
     hours: SiteHoursBuckets;
+    /** Optional per-site formula overrides (fall back to the global config values). */
+    formula?: Partial<PayrollConfigNumbers>;
 }
 export interface EngineDeductionInput {
     deductionId: string;
@@ -72,6 +74,10 @@ export interface EngineTaxLine {
 export interface PrimarySiteCalculation extends SiteHoursBuckets {
     compensationAmount: number;
     transportPercent: number;
+    /** Formula numbers actually used for this site (global or per-site overrides). */
+    standardMonthlyHours: number;
+    sundayStructuralHours: number;
+    basicHourlyDivisor: number;
     otRate: number;
     sundayStructuralAllocation: number;
     remaining: number;
@@ -106,9 +112,11 @@ export interface EngineOutput {
 }
 export declare const round2: (n: number) => number;
 export declare const round4: (n: number) => number;
-/** One primary site's compensation decomposition — rates derive ONLY from the compensation amount. */
+/** One primary site's compensation decomposition — rates derive ONLY from the compensation amount.
+ *  A per-site formula (input.formula) overrides the global config for this site. */
 export declare function computePrimarySite(input: EngineSiteInput, config: PayrollConfigNumbers): PrimarySiteCalculation;
-/** One additional site — hours × THAT site's OT rate. No basic, no transport. */
+/** One additional site — hours × THAT site's OT rate. No basic, no transport.
+ *  A per-site formula (input.formula) overrides the global config for this site. */
 export declare function computeAdditionalSite(input: EngineSiteInput, config: PayrollConfigNumbers): AdditionalSiteCalculation;
 export declare function computeGuardPayroll(input: {
     primary: EngineSiteInput;

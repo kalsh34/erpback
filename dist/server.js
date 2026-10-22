@@ -10,10 +10,12 @@ const ensureDefaultAdmin_1 = require("./bootstrap/ensureDefaultAdmin");
 const hr_permissions_1 = require("./modules/hr/permissions/hr.permissions");
 const payroll_permissions_1 = require("./modules/hr/permissions/payroll.permissions");
 const core_permissions_1 = require("./core/permissions/core.permissions");
+const fleet_permissions_1 = require("./modules/fleet/fleet.permissions");
 const registerAllPermissions = () => {
     (0, core_permissions_1.registerCorePermissions)();
     (0, hr_permissions_1.registerHRPermissions)();
     (0, payroll_permissions_1.registerPayrollPermissions)();
+    (0, fleet_permissions_1.registerFleetPermissions)();
     console.log('[PERMISSIONS] All module permissions registered');
 };
 const start = async () => {

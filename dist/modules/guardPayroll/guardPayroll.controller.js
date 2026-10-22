@@ -32,6 +32,14 @@ class GuardPayrollController {
             next(error);
         }
     }
+    static async readiness(req, res, next) {
+        try {
+            res.json({ success: true, data: await guardPayrollRun_service_1.GuardPayrollRunService.readiness(String(req.query.periodKey || '')) });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     // ── Config ─────────────────────────────────────────────────────────
     static async getConfig(_req, res, next) {
         try {
@@ -154,7 +162,10 @@ class GuardPayrollController {
             const periodKey = req.body?.periodKey || req.params?.periodKey;
             if (!periodKey)
                 throw ApiError_1.ApiError.badRequest('periodKey (YYYY-MM) is required');
-            res.status(201).json({ success: true, data: await guardPayrollRun_service_1.GuardPayrollRunService.calculate(periodKey, userId(req), auditCtx(req)) });
+            // Part 2/1: optional primary-site scope and 'remaining' (add-only) mode.
+            const siteId = req.body?.siteId || null;
+            const mode = req.body?.mode === 'remaining' ? 'remaining' : 'full';
+            res.status(201).json({ success: true, data: await guardPayrollRun_service_1.GuardPayrollRunService.calculate(periodKey, userId(req), auditCtx(req), { siteId, mode }) });
         }
         catch (error) {
             next(error);

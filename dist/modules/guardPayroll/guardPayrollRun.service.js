@@ -5,6 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GuardPayrollRunService = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
+const node_crypto_1 = require("node:crypto");
+const GuardSiteCompensation_1 = require("../../models/GuardSiteCompensation");
+const EmployeeDeduction_1 = require("../../models/EmployeeDeduction");
 const assignmentTimeline_1 = require("./assignmentTimeline");
 const payrollTransaction_1 = require("./payrollTransaction");
 const GuardPayrollRun_1 = require("../../models/GuardPayrollRun");
@@ -51,19 +54,36 @@ class GuardPayrollRunService {
     /**
      * Create or recalculate the run for a month using batch queries and bulk insert.
      */
-    static async calculate(periodKey, userId, auditCtx) {
-        return (0, payrollTransaction_1.payrollTransaction)(() => this.calculateTransactional(periodKey, userId, auditCtx));
+    static async calculate(periodKey, userId, auditCtx, opts) {
+        return (0, payrollTransaction_1.payrollTransaction)(() => this.calculateTransactional(periodKey, userId, auditCtx, opts));
     }
-    static async calculateTransactional(periodKey, userId, auditCtx) {
+    static async calculateTransactional(periodKey, userId, auditCtx, opts) {
         const { year, month, start, end } = monthWindow(periodKey);
+        const EDITABLE = () => run && EDITABLE_STATUSES.includes(run.status);
         let run = await GuardPayrollRun_1.GuardPayrollRun.findOne({ periodKey });
-        if (run && !EDITABLE_STATUSES.includes(run.status)) {
+        if (!run) {
+            // Concurrent calculations race on the unique periodKey index: the loser
+            // gets a duplicate-key error instead of the wrong message. Re-find and
+            // continue with the winner's run when it is still editable.
+            try {
+                run = await GuardPayrollRun_1.GuardPayrollRun.create({ periodKey, status: types_1.PayrollRecordStatus.DRAFT });
+            }
+            catch (err) {
+                if (err?.code === 11000) {
+                    run = await GuardPayrollRun_1.GuardPayrollRun.findOne({ periodKey });
+                    if (!run)
+                        throw err;
+                }
+                else {
+                    throw err;
+                }
+            }
+        }
+        if (!EDITABLE()) {
             throw ApiError_1.ApiError.conflict(`Payroll for ${periodKey} is ${run.status}. RETURN it for correction before recalculating.`);
         }
-        if (!run) {
-            run = await GuardPayrollRun_1.GuardPayrollRun.create({ periodKey, status: types_1.PayrollRecordStatus.DRAFT });
-        }
         const wasReturned = run.status === types_1.PayrollRecordStatus.RETURNED;
+        const inputFingerprint = await this.inputFingerprint(periodKey);
         const config = await guardPayrollConfig_service_1.GuardPayrollConfigService.getNumbers();
         const [pensionRule, taxTable] = await Promise.all([
             statutory_service_1.StatutoryService.getPensionRuleForPeriod(start),
@@ -72,6 +92,10 @@ class GuardPayrollRunService {
         const taxBrackets = taxTable?.brackets?.length ? taxTable.brackets : [];
         if (!taxBrackets.length)
             throw ApiError_1.ApiError.badRequest('Configure the Guard income tax table for this period before calculating payroll.');
+        // Run-level blocker: the pension rule applies to every enrolled guard, so a
+        // missing rule would corrupt every payslip — never produce one.
+        if (!pensionRule)
+            throw ApiError_1.ApiError.badRequest('Configure an effective Guard pension rule for this period before calculating payroll.');
         const guards = await Employee_1.Employee.find({
             category: types_1.EmployeeCategory.GUARD,
             status: { $in: [types_1.EmployeeStatus.ACTIVE, types_1.EmployeeStatus.CONTRACTED] },
@@ -107,6 +131,34 @@ class GuardPayrollRunService {
             if (!contractsByGuard.has(key))
                 contractsByGuard.set(key, c);
         }
+        // ── Scope resolution ─────────────────────────────────────────────
+        // The run's scope is a primary site: only guards whose effective primary
+        // site in the period is that site belong to the run when scoped.
+        const scopeOpt = opts?.siteId && opts.siteId !== 'ALL' ? opts.siteId : null;
+        const scopeSiteId = scopeOpt && mongoose_1.default.Types.ObjectId.isValid(scopeOpt) ? new mongoose_1.default.Types.ObjectId(scopeOpt) : null;
+        if (scopeOpt && !scopeSiteId)
+            throw ApiError_1.ApiError.badRequest(`Invalid siteId scope: "${scopeOpt}"`);
+        const mode = opts?.mode === 'remaining' ? 'remaining' : 'full';
+        /** Guards in the active scope, keyed by id, with their resolved primary. */
+        const scopePrimary = new Map();
+        let scopedGuards;
+        if (scopeSiteId) {
+            for (const guard of guards) {
+                const guardAssignments = assignmentsByGuard.get(guard._id.toString()) || [];
+                const resolution = (0, assignmentTimeline_1.resolveMonthlyPrimary)(guardAssignments, start, end);
+                const primarySite = resolution.assignment?.siteId;
+                const pid = primarySite ? (primarySite._id || primarySite).toString() : null;
+                if (pid && pid === scopeSiteId.toString())
+                    scopePrimary.set(guard._id.toString(), resolution.assignment);
+            }
+            scopedGuards = guards.filter((g) => scopePrimary.has(g._id.toString()));
+        }
+        else {
+            scopedGuards = guards;
+        }
+        // Existing records: 'remaining' mode must never touch or duplicate them.
+        const existingRecords = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).select('employeeId').lean();
+        const existingIds = new Set(existingRecords.map((r) => String(r.employeeId)));
         const relevantSiteIds = new Set();
         for (const a of assignments) {
             if (a.siteId?._id)
@@ -124,8 +176,11 @@ class GuardPayrollRunService {
         const problems = [];
         const guardWarnings = [];
         const recordDocs = [];
-        for (const guard of guards) {
+        for (const guard of scopedGuards) {
             const guardKey = guard._id.toString();
+            // Incremental re-run: never touch or duplicate an existing record.
+            if (mode === 'remaining' && existingIds.has(guardKey))
+                continue;
             const guardName = `${guard.firstName} ${guard.lastName}`.trim();
             const guardAssignments = assignmentsByGuard.get(guardKey) || [];
             if (guardAssignments.length === 0) {
@@ -161,6 +216,12 @@ class GuardPayrollRunService {
             }
             const guardHours = hoursByGuard.get(guardKey);
             const hoursBySiteId = new Map(guardHours?.sites.map((s) => [s.siteId, s]) || []);
+            const missingAttendance = guardAssignments.filter((a) => !hoursBySiteId.has((a.siteId?._id || a.siteId).toString()));
+            if (missingAttendance.length) {
+                problems.push({ employeeId: guard._id, employeeCode: guard.employeeCode, guardName,
+                    code: 'MISSING_ATTENDANCE', message: `Missing attendance for ${missingAttendance.map(a => a.siteId?.siteName || a.siteId).join(', ')} in ${periodKey}. Enter monthly hours or daily attendance before calculating.` });
+                continue;
+            }
             const hoursForSite = (siteId) => {
                 const found = hoursBySiteId.get(siteId);
                 if (!found)
@@ -218,6 +279,7 @@ class GuardPayrollRunService {
                 additionalSites.push({
                     siteId: siteEntry.siteId,
                     compensationAmount: comp.compensationAmount,
+                    formula: comp.formula,
                     hours,
                 });
             }
@@ -242,7 +304,7 @@ class GuardPayrollRunService {
             // O(1) in-memory lookup from pre-fetched batch map
             const deductions = deductionsMap.get(guardKey) || [];
             const result = (0, guardPayrollEngine_1.computeGuardPayroll)({
-                primary: { siteId: primarySiteId, compensationAmount: primaryCompensation.compensationAmount, hours: hoursForSite(primarySiteId) },
+                primary: { siteId: primarySiteId, compensationAmount: primaryCompensation.compensationAmount, formula: primaryCompensation.formula, hours: hoursForSite(primarySiteId) },
                 additionalSites,
                 config,
                 pensionEnrolled: contract?.pensionEnrolled ?? false,
@@ -277,10 +339,10 @@ class GuardPayrollRunService {
                     taxCenter: siteMeta.get(primarySiteId)?.taxCenter || '',
                     pensionCenter: siteMeta.get(primarySiteId)?.pensionSite || '',
                     ...result.primary,
-                    transportPercent: config.transportPercent,
-                    standardMonthlyHours: config.standardMonthlyHours,
-                    sundayStructuralHours: config.sundayStructuralHours,
-                    basicHourlyDivisor: config.basicHourlyDivisor,
+                    transportPercent: result.primary.transportPercent,
+                    standardMonthlyHours: result.primary.standardMonthlyHours ?? config.standardMonthlyHours,
+                    sundayStructuralHours: result.primary.sundayStructuralHours ?? config.sundayStructuralHours,
+                    basicHourlyDivisor: result.primary.basicHourlyDivisor ?? config.basicHourlyDivisor,
                 },
                 additionalSites: result.additionalSites.map((site) => ({
                     siteId: site.siteId,
@@ -306,17 +368,26 @@ class GuardPayrollRunService {
                 warnings,
             });
         }
-        // Atomically wipe previous calculation and insert all calculated records in bulk
-        await GuardPayrollRecord_1.GuardPayrollRecord.deleteMany({ runId: run._id });
-        const records = recordDocs.length > 0 ? await GuardPayrollRecord_1.GuardPayrollRecord.insertMany(recordDocs) : [];
+        // Atomically wipe previous calculation (only within the scope) and insert
+        // all calculated records in bulk. 'remaining' never deletes: it only adds.
+        if (mode === 'full') {
+            await GuardPayrollRecord_1.GuardPayrollRecord.deleteMany(scopeSiteId ? { runId: run._id, employeeId: { $in: scopedGuards.map((g) => g._id) } } : { runId: run._id });
+        }
+        const records = recordDocs.length > 0 ? await GuardPayrollRecord_1.GuardPayrollRecord.insertMany(recordDocs, { ordered: false }) : [];
+        // Merge problems: per-scope results replace prior problems for scoped
+        // guards; other sites' previously recorded problems are preserved.
+        const scopedIds = new Set(scopedGuards.map((g) => String(g._id)));
+        const preservedProblems = run.problems.filter((p) => !scopedIds.has(String(p.employeeId)));
+        // Totals always reflect the whole run (all records, not just this pass).
+        const allRecords = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).select('grossEarnings employeePension employerPension incomeTax totalDeductions netPay').lean();
         const totals = {
-            guards: records.length,
-            grossEarnings: (0, guardPayrollEngine_1.round2)(records.reduce((s, r) => s + r.grossEarnings, 0)),
-            employeePension: (0, guardPayrollEngine_1.round2)(records.reduce((s, r) => s + r.employeePension, 0)),
-            employerPension: (0, guardPayrollEngine_1.round2)(records.reduce((s, r) => s + r.employerPension, 0)),
-            incomeTax: (0, guardPayrollEngine_1.round2)(records.reduce((s, r) => s + r.incomeTax, 0)),
-            totalDeductions: (0, guardPayrollEngine_1.round2)(records.reduce((s, r) => s + r.totalDeductions, 0)),
-            netPay: (0, guardPayrollEngine_1.round2)(records.reduce((s, r) => s + r.netPay, 0)),
+            guards: allRecords.length,
+            grossEarnings: (0, guardPayrollEngine_1.round2)(allRecords.reduce((s, r) => s + (r.grossEarnings || 0), 0)),
+            employeePension: (0, guardPayrollEngine_1.round2)(allRecords.reduce((s, r) => s + (r.employeePension || 0), 0)),
+            employerPension: (0, guardPayrollEngine_1.round2)(allRecords.reduce((s, r) => s + (r.employerPension || 0), 0)),
+            incomeTax: (0, guardPayrollEngine_1.round2)(allRecords.reduce((s, r) => s + (r.incomeTax || 0), 0)),
+            totalDeductions: (0, guardPayrollEngine_1.round2)(allRecords.reduce((s, r) => s + (r.totalDeductions || 0), 0)),
+            netPay: (0, guardPayrollEngine_1.round2)(allRecords.reduce((s, r) => s + (r.netPay || 0), 0)),
         };
         // Final guard right before the records/totals are committed: a run that
         // was SUBMITTED/CHECKED/APPROVED/PAID while this long calculation ran
@@ -328,9 +399,13 @@ class GuardPayrollRunService {
         run.status = types_1.PayrollRecordStatus.CALCULATED;
         run.calculatedBy = userId;
         run.calculatedAt = new Date();
+        run.inputFingerprint = inputFingerprint;
         // Merge the per-guard NO_ADDITIONAL_SITE_COMPENSATION warnings collected
         // during the loop so they are visible on the run (not swallowed).
-        run.problems = [...problems, ...guardWarnings];
+        run.problems = [...preservedProblems, ...problems, ...guardWarnings];
+        run.scopeSiteId = scopeSiteId;
+        run.scopeSiteName = scopeSiteId ? String(siteMeta.get(scopeSiteId.toString())?.siteName || '') : '';
+        run.lastCalcMode = mode;
         run.totals = totals;
         await run.save();
         await AuditService_1.AuditService.log({
@@ -338,22 +413,122 @@ class GuardPayrollRunService {
             action: wasReturned ? 'GUARD_PAYROLL_RECALCULATE' : 'GUARD_PAYROLL_CALCULATE',
             entity: 'GuardPayrollRun',
             entityId: run._id.toString(),
-            newValues: { periodKey, status: run.status, guards: totals.guards, netPay: totals.netPay, problems: problems.length },
+            newValues: { periodKey, status: run.status, guards: totals.guards, netPay: totals.netPay, problems: problems.length, scope: scopeSiteId?.toString() || 'ALL', mode },
             ipAddress: auditCtx?.ip,
             userAgent: auditCtx?.ua,
         });
         return this.getRun(run._id.toString());
     }
+    /** Stable digest of authoritative inputs; an editable calculation may become stale. */
+    static async inputFingerprint(periodKey) {
+        const { year, month, start, end } = monthWindow(periodKey);
+        const guards = await Employee_1.Employee.find({ category: types_1.EmployeeCategory.GUARD, status: { $in: [types_1.EmployeeStatus.ACTIVE, types_1.EmployeeStatus.CONTRACTED] } })
+            .select('employeeCode firstName lastName bankName accountNumber status').sort({ _id: 1 }).lean();
+        const ids = guards.map(g => g._id);
+        const [hours, assignments, contracts, rates, deductions, config, tax, pension] = await Promise.all([
+            monthlyHours_service_1.GuardMonthlyHoursService.getPayrollHours(year, month),
+            PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: { $in: ids }, effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).select('guardId siteId isPrimary effectiveFrom effectiveTo').sort({ _id: 1 }).lean(),
+            Contract_1.Contract.find({ employeeId: { $in: ids }, status: 'ACTIVE', contractStartDate: { $lte: end }, $or: [{ contractEndDate: null }, { contractEndDate: { $gte: start } }] }).select('employeeId contractStartDate contractEndDate pensionEnrolled contractType wage').sort({ _id: 1 }).lean(),
+            GuardSiteCompensation_1.GuardSiteCompensation.find({ effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).select('siteId compensationAmount formula effectiveFrom effectiveTo').sort({ _id: 1 }).lean(),
+            EmployeeDeduction_1.EmployeeDeduction.find({ employeeId: { $in: ids }, status: 'ACTIVE' }).sort({ _id: 1 }).lean(),
+            guardPayrollConfig_service_1.GuardPayrollConfigService.getNumbers(), statutory_service_1.StatutoryService.getTaxTableForPeriod(start), statutory_service_1.StatutoryService.getPensionRuleForPeriod(start),
+        ]);
+        const canonicalHours = hours.guards.sort((a, b) => a.guardId.localeCompare(b.guardId)).map(g => ({ guardId: g.guardId, sites: g.sites.sort((a, b) => a.siteId.localeCompare(b.siteId)) }));
+        return (0, node_crypto_1.createHash)('sha256').update(JSON.stringify({ guards, hours: canonicalHours, assignments, contracts, rates, deductions, config, tax: tax?.toObject(), pension: pension?.toObject() })).digest('hex');
+    }
+    /** Read-only period preflight, using the same canonical site-hours and effective rates as calculation. */
+    static async readiness(periodKey) {
+        const { year, month, start, end } = monthWindow(periodKey);
+        const guards = await Employee_1.Employee.find({ category: types_1.EmployeeCategory.GUARD, status: { $in: [types_1.EmployeeStatus.ACTIVE, types_1.EmployeeStatus.CONTRACTED] } }).sort({ employeeCode: 1 });
+        const ids = guards.map(g => g._id);
+        const [assignments, contracts, feed, tax, pension, lock] = await Promise.all([
+            PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: { $in: ids }, effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).populate('siteId', 'siteName siteCode'),
+            Contract_1.Contract.find({ employeeId: { $in: ids }, status: 'ACTIVE', contractStartDate: { $lte: end }, $or: [{ contractEndDate: null }, { contractEndDate: { $gte: start } }] }).sort({ contractStartDate: -1 }),
+            monthlyHours_service_1.GuardMonthlyHoursService.getPayrollHours(year, month), statutory_service_1.StatutoryService.getTaxTableForPeriod(start), statutory_service_1.StatutoryService.getPensionRuleForPeriod(start), guardPayrollLock_service_1.GuardPayrollLockService.getLockInfo(periodKey),
+        ]);
+        const issues = [];
+        if (!guards.length)
+            issues.push({ code: 'NO_GUARDS', message: 'Register guards and complete their effective contracts before preparing payroll.' });
+        if (!tax?.brackets.length)
+            issues.push({ code: 'MISSING_STATUTORY_CONFIG', message: 'Configure an effective Guard income tax table in Payroll Settings.' });
+        if (!pension)
+            issues.push({ code: 'MISSING_PENSION_RULE', message: 'Configure an effective Guard pension rule in Payroll Settings.' });
+        const hello = await mongoose_1.default.connection.db.admin().command({ hello: 1 });
+        if (!hello.setName && hello.msg !== 'isdbgrid')
+            issues.push({ code: 'DATABASE_TRANSACTIONS', message: 'Payroll requires a MongoDB replica set for safe transactions. Ask your administrator to configure it.' });
+        let rates = new Map();
+        try {
+            rates = await siteCompensation_service_1.SiteCompensationService.getForSites([...new Set(assignments.map(a => (a.siteId?._id || a.siteId).toString()))], start, end);
+        }
+        catch (e) {
+            issues.push({ code: 'SITE_COMPENSATION_HISTORY', message: e.message });
+        }
+        const rows = guards.map(g => {
+            const id = g._id.toString(), owned = assignments.filter(a => a.guardId.toString() === id);
+            const resolution = (0, assignmentTimeline_1.resolveMonthlyPrimary)(owned, start, end);
+            if (!resolution.assignment)
+                issues.push({ code: resolution.code || 'NO_PRIMARY_SITE', employeeCode: g.employeeCode, message: resolution.message || 'Select exactly one primary site for this period.' });
+            const contract = contracts.find(c => c.employeeId.toString() === id);
+            if (!contract || typeof contract.pensionEnrolled !== 'boolean' || (contract.pensionEnrolled && !pension))
+                issues.push({ code: 'MISSING_PENSION_ENROLLMENT', employeeCode: g.employeeCode, message: 'Confirm the effective contract and pension enrollment/rule.' });
+            const hours = feed.guards.find(h => h.guardId === id);
+            const sites = owned.map(a => {
+                const site = a.siteId, sid = (site?._id || site).toString(), h = hours?.sites.find(s => s.siteId === sid), rate = rates.get(sid);
+                if (!h)
+                    issues.push({ code: 'MISSING_ATTENDANCE', employeeCode: g.employeeCode, message: `Enter attendance for ${site?.siteName || sid} in ${periodKey}.` });
+                if (!rate)
+                    issues.push({ code: 'NO_SITE_COMPENSATION', employeeCode: g.employeeCode, message: `Configure effective compensation for ${site?.siteName || sid}.` });
+                return { siteId: sid, siteName: site?.siteName || sid, siteCode: site?.siteCode, isPrimary: !!a.isPrimary, compensationAmount: rate?.compensationAmount ?? null,
+                    normalHours: h?.normalHours ?? 0, sundayHours: h?.sundayHours ?? 0, holidayHours: h?.holidayHours ?? 0, source: h?.source || 'MISSING' };
+            });
+            return { employeeId: id, employeeCode: g.employeeCode, guardName: `${g.firstName} ${g.lastName}`, sites };
+        });
+        // ── Blocker classification ─────────────────────────────────────
+        // Run-level blockers make every calculation wrong (config, database);
+        // per-guard blockers mean THAT guard is skipped while the rest proceed.
+        const runLevel = issues.filter((i) => !i.employeeCode);
+        const perGuardIssues = issues.filter((i) => i.employeeCode);
+        const blockedGuards = new Set(perGuardIssues.map((i) => i.employeeCode));
+        const grouped = new Map();
+        for (const i of perGuardIssues) {
+            const g = grouped.get(i.code);
+            if (g) {
+                g.count += 1;
+                g.guards.push({ employeeCode: i.employeeCode, message: i.message });
+            }
+            else
+                grouped.set(i.code, { code: i.code, message: i.message, count: 1, guards: [{ employeeCode: i.employeeCode, message: i.message }] });
+        }
+        const guardIssues = Array.from(grouped.values()).sort((a, b) => b.count - a.count);
+        return {
+            periodKey,
+            ready: !issues.length,
+            guardCount: guards.length,
+            issues,
+            lock,
+            // New Part-2 fields: how many guards can be calculated right now, and
+            // exactly which blockers stop the whole run vs skip individual guards.
+            readyCount: blockedGuards.size ? guards.length - blockedGuards.size : guards.length,
+            runLevel: runLevel.map((i) => ({ code: i.code, message: i.message })),
+            guardIssues: guardIssues.map((g) => ({
+                code: g.code,
+                message: g.message.split('.')[0],
+                count: g.count,
+                guards: g.guards,
+            })),
+            rows,
+        };
+    }
     // ───────────────────────────────────────────────────────────────────
     // Reads
     // ───────────────────────────────────────────────────────────────────
-    /** Status-guarded recalculation of an existing run by its id. */
+    /** Status-guarded recalculation of an existing run by its id (keeps the run's site scope). */
     static async recalculate(runId, userId, auditCtx) {
         const run = await this.loadRun(runId);
         if (!EDITABLE_STATUSES.includes(run.status)) {
             throw ApiError_1.ApiError.conflict(`Payroll for ${run.periodKey} is ${run.status}. RETURN it for correction before recalculating.`);
         }
-        return this.calculate(run.periodKey, userId, auditCtx);
+        return this.calculate(run.periodKey, userId, auditCtx, { siteId: run.scopeSiteId ? run.scopeSiteId.toString() : null, mode: 'full' });
     }
     static async listRuns(filters = {}) {
         const query = {};
@@ -368,6 +543,8 @@ class GuardPayrollRunService {
         if (!run)
             throw ApiError_1.ApiError.notFound('Guard payroll run not found');
         let records = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).sort({ 'snapshot.employeeCode': 1 });
+        // Partial-run info: guards in the run's scope without a record yet.
+        const partial = await this.computePartial(run);
         // Optional site filter (primary site matches, ObjectId or embedded doc).
         if (siteId && siteId !== 'ALL') {
             records = records.filter((r) => {
@@ -390,7 +567,58 @@ class GuardPayrollRunService {
                     percentageOfStandard: (0, guardPayrollEngine_1.round2)(primaryHours / r.primarySite.standardMonthlyHours * 100),
                     hasAttendance: normalHours + sundayHours + holidayHours > 0, suggestedAmount: null };
             }) };
-        return { run, records, attendance };
+        return { run, records, attendance, partial, skipped: run.problems };
+    }
+    /**
+     * Partial-run census for the run detail view: how many guards belong to the
+     * run's site scope, how many of them are calculated, skipped, and simply not
+     * included yet ("Calculate remaining" candidates). Read-only.
+     */
+    static async computePartial(run) {
+        const { start, end } = monthWindow(run.periodKey);
+        const guards = await Employee_1.Employee.find({ category: types_1.EmployeeCategory.GUARD, status: { $in: [types_1.EmployeeStatus.ACTIVE, types_1.EmployeeStatus.CONTRACTED] } }).select('_id').lean();
+        const ids = guards.map((g) => g._id);
+        const assignments = await PrimarySiteAssignment_1.PrimarySiteAssignment.find({ guardId: { $in: ids }, effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] }).select('guardId siteId isPrimary').lean();
+        const scopeSiteKey = run.scopeSiteId ? String(run.scopeSiteId) : null;
+        const inScope = new Set();
+        const byGuard = new Map();
+        for (const a of assignments) {
+            const key = String(a.guardId);
+            if (!byGuard.has(key))
+                byGuard.set(key, []);
+            byGuard.get(key).push(a);
+        }
+        for (const g of guards) {
+            const owned = byGuard.get(String(g._id)) || [];
+            if (scopeSiteKey) {
+                const primary = owned.find((a) => a.isPrimary && (a.siteId?._id || a.siteId).toString() === scopeSiteKey && (!a.effectiveTo || new Date(a.effectiveTo) >= start));
+                if (primary)
+                    inScope.add(String(g._id));
+            }
+            else {
+                inScope.add(String(g._id));
+            }
+        }
+        const allRecords = await GuardPayrollRecord_1.GuardPayrollRecord.find({ runId: run._id }).select('employeeId').lean();
+        const recordIds = new Set(allRecords.map((r) => String(r.employeeId)));
+        let calculated = 0;
+        let missing = 0;
+        for (const id of inScope) {
+            if (recordIds.has(id))
+                calculated += 1;
+            else
+                missing += 1;
+        }
+        const skipped = run.problems.filter((p) => inScope.has(String(p.employeeId))).length;
+        return {
+            scopeSiteId: scopeSiteKey,
+            scopeSiteName: run.scopeSiteName || '',
+            guardsInScope: inScope.size,
+            calculated,
+            skipped,
+            missing,
+            partial: missing > 0,
+        };
     }
     static async getRecord(recordId) {
         if (!recordId || !mongoose_1.default.Types.ObjectId.isValid(recordId)) {
@@ -454,17 +682,14 @@ class GuardPayrollRunService {
     static async submitTransactional(runId, userId, auditCtx) {
         const run = await this.loadRun(runId);
         this.assertStatus(run, [types_1.PayrollRecordStatus.CALCULATED], 'submit');
-        if (run.problems.length > 0) {
-            // Informational notices (e.g. a guard legitimately holding several site
-            // assignments) must not freeze the whole run. Only blocking codes do.
-            const BLOCKING_CODES = new Set(['NO_PRIMARY_SITE', 'MULTIPLE_PRIMARY_SITES', 'PRIMARY_SITE_CHANGE', 'NO_SITE_COMPENSATION', 'NO_ADDITIONAL_SITE_COMPENSATION', 'MISSING_STATUTORY_CONFIG', 'MISSING_PENSION_ENROLLMENT']);
-            const blocking = run.problems.filter((p) => BLOCKING_CODES.has(p.code));
-            if (blocking.length > 0) {
-                throw ApiError_1.ApiError.badRequest(`Resolve ${blocking.length} blocking payroll problem(s) before submitting: ${blocking
-                    .slice(0, 3)
-                    .map((p) => `${p.guardName} (${p.code})`)
-                    .join(', ')}${blocking.length > 3 ? '…' : ''}`);
-            }
+        // Per-guard blockers (run.problems) are the saved skipped list: they do NOT
+        // block submission. A partial run can move through the chain; the "Partial"
+        // badge stays visible until every guard in scope has a record.
+        run.problems = run.problems.filter((p) => !String(p.code).startsWith('NO_ADDITIONAL_SITE_COMPENSATION'));
+        if (!run.totals.guards)
+            throw ApiError_1.ApiError.badRequest('No guard payroll records to submit. Complete setup and attendance, then calculate payroll.');
+        if (!run.inputFingerprint || run.inputFingerprint !== await this.inputFingerprint(run.periodKey)) {
+            throw ApiError_1.ApiError.conflict('Payroll inputs changed since calculation. Review attendance, assignments, rates and deductions, then recalculate before submitting.');
         }
         await this.assertStatusAtSave(runId, [types_1.PayrollRecordStatus.CALCULATED], 'submit');
         run.status = types_1.PayrollRecordStatus.SUBMITTED;

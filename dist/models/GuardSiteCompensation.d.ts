@@ -17,9 +17,23 @@ import mongoose, { Document } from 'mongoose';
  *   Basic Salary           = Remaining − Transport
  *   Basic Hourly Rate      = Basic Salary / 208
  */
+/**
+ * Optional PER-SITE formula overrides. Any missing number falls back to the
+ * global GuardPayrollConfig singleton, so existing sites change nothing.
+ * Stored on the effective-dated compensation row so history stays accurate:
+ * past payroll snapshots the resolved values it actually used.
+ */
+export interface ISiteFormulaOverride {
+    transportPercent?: number;
+    standardMonthlyHours?: number;
+    sundayStructuralHours?: number;
+    basicHourlyDivisor?: number;
+}
 export interface IGuardSiteCompensation extends Document {
     siteId: mongoose.Types.ObjectId;
     compensationAmount: number;
+    /** Optional per-site formula (divisors / transport %). Missing values fall back to global config. */
+    formula?: ISiteFormulaOverride;
     effectiveFrom: Date;
     /** null/undefined while this row is the current one. */
     effectiveTo?: Date | null;
@@ -27,6 +41,16 @@ export interface IGuardSiteCompensation extends Document {
     notes?: string;
     createdBy?: mongoose.Types.ObjectId;
     updatedBy?: mongoose.Types.ObjectId;
+    /** Audit trail for same-day amendments of the current row. */
+    changeHistory: {
+        previousAmount: number;
+        newAmount: number;
+        previousFormula?: ISiteFormulaOverride | null;
+        newFormula?: ISiteFormulaOverride | null;
+        reason?: string;
+        changedBy?: mongoose.Types.ObjectId;
+        changedAt: Date;
+    }[];
     createdAt: Date;
     updatedAt: Date;
 }

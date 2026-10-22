@@ -16,7 +16,12 @@ const AuditService_1 = require("../../../core/audit/AuditService");
 const guardPayrollLock_service_1 = require("../../guardPayroll/guardPayrollLock.service");
 const monthlyHours_helpers_1 = require("./monthlyHours.helpers");
 const MAX_MONTHLY_HOURS = 744; // sanity cap (longest month = 31 × 24h)
-const ymKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`;
+const ymKey = (year, month) => {
+    if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) {
+        throw ApiError_1.ApiError.badRequest('Select a valid payroll year (2000–2100) and month (1–12).');
+    }
+    return `${year}-${String(month).padStart(2, '0')}`;
+};
 /**
  * MONTHLY TOTAL HOURS — the second attendance input mode.
  *

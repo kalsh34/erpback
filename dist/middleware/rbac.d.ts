@@ -11,6 +11,8 @@ export declare function computeEffectivePermissions(user: {
     moduleGrants?: string[] | null;
     moduleDenies?: string[] | null;
 }): Permission[];
+/** Permissions the role is never allowed to hold, regardless of grants. */
+export declare function getMandatoryDeniedPermissions(role: UserRole): Permission[];
 /** Union of the hardcoded role map and the module registry (same rule `authorize` uses). */
 export declare function getPermissionsForRole(role: UserRole): Permission[];
 /** Programmatic permission check (used for configurable rules such as

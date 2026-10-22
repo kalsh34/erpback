@@ -35,9 +35,9 @@ export function registerHRPermissions(): void {
         PERMISSIONS.SITE_CREATE,
         PERMISSIONS.SITE_READ,
         PERMISSIONS.SITE_UPDATE,
-        PERMISSIONS.COMPANY_CREATE,
+        // COMPANY_CREATE / COMPANY_UPDATE intentionally NOT granted (see the
+        // role map in src/types): companies are administered by admins only.
         PERMISSIONS.COMPANY_READ,
-        PERMISSIONS.COMPANY_UPDATE,
         PERMISSIONS.GUARD_REGISTER,
         PERMISSIONS.GUARD_ASSIGN_SITE,
         PERMISSIONS.GUARD_ATTENDANCE_READ,

@@ -73,13 +73,21 @@ async function main() {
   await rejects('copied mid-month compensation change blocks arbitrary pricing', () => Payroll.calculate(period, userId));
   // Explicit isolated monthly-rate scenario: retain original row IDs, use the earlier agreed rate for the full test month.
   // This is NOT a correction of source history or a claim that it is the correct production October rate.
+  // De-duplicate FIRST (all later versions of a site are removed before the
+  // surviving rows are (re)marked current) — marking a row current while the
+  // mid-month fixture row for the same site is still current would hit the
+  // partial unique index {siteId, isCurrent:true}.
   const rateRows = await GuardSiteCompensation.find().sort({ effectiveFrom: 1 });
   const seenRates = new Set<string>();
+  const dupIds: string[] = [];
+  const survivors: typeof rateRows = [];
   for (const rate of rateRows) {
     const key = rate.siteId.toString();
-    if (seenRates.has(key)) await rate.deleteOne();
-    else { seenRates.add(key); rate.effectiveTo = undefined; rate.isCurrent = true; await rate.save(); }
+    if (seenRates.has(key)) dupIds.push((rate._id as mongoose.Types.ObjectId).toString());
+    else { seenRates.add(key); survivors.push(rate); }
   }
+  if (dupIds.length) await GuardSiteCompensation.deleteMany({ _id: { $in: dupIds } as any });
+  for (const rate of survivors) { rate.effectiveTo = undefined; rate.isCurrent = true; await rate.save(); }
   evidence.fixturePolicy = 'Independent reconciliation uses copied real guard/attendance IDs and earlier site compensation amounts, normalized to a single monthly rate ONLY in the isolated copy. Source October has an unsupported mid-month rate change.';
   const initial = await Payroll.calculate(period, userId);
   evidence.initialProblems = initial.run.problems.map((p) => ({ guard: p.employeeId, code: p.code, message: p.message }));
@@ -145,7 +153,13 @@ async function main() {
   const conflict = await Payroll.calculate(period, userId);
   check('true duplicate produces one blocking guard problem', conflict.run.problems.filter((p) => p.employeeId.toString() === guard.employeeId.toString() && p.code === 'MULTIPLE_PRIMARY_SITES').length, 1);
   check('ambiguous guard receives no payroll', conflict.records.some((r) => r.employeeId.toString() === guard.employeeId.toString()), false);
-  await rejects('duplicate primary blocks submission', () => Payroll.submit(conflict.run._id.toString(), userId));
+  // Current chain design: per-guard blockers are the SAVED SKIPPED list — they
+  // do NOT block submission (a partial run advances with its "Partial" badge).
+  // Prove submission succeeds with the duplicate-primary guard still marked as
+  // skipped, then RETURN the run so the flow continues on an editable run.
+  const partialSub = await Payroll.submit(conflict.run._id.toString(), userId);
+  check('partial submit keeps duplicate-primary guard skipped', partialSub.run.problems.some((p: any) => p.employeeId.toString() === guard.employeeId.toString() && p.code === 'MULTIPLE_PRIMARY_SITES'), true);
+  await Payroll.returnForCorrection(conflict.run._id.toString(), 'Isolated partial-submit roundtrip', userId);
   await GuardService.correctAssignment(duplicate._id.toString(), { effectiveFrom: duplicate.effectiveFrom.toISOString().slice(0, 10), effectiveTo: null, isPrimary: false, reason: 'Isolated regression: confirmed duplicate primary flag' }, { userId });
   check('correction preserves assignment ID', !!await PrimarySiteAssignment.findById(duplicate._id), true);
   await duplicate.deleteOne(); // isolated fixture only
@@ -168,10 +182,18 @@ async function main() {
   await GuardAttendanceRecord.deleteOne({ guardId: guard.employeeId, siteId: otherSite._id, date: '2026-10-04' });
   let final = await Payroll.calculate(period, userId);
   // Source issues remain visible. Only repair missing rates in the isolated copy, never source.
+  // PRIMARY_SITE_CHANGE is a legitimate source-data blocker (the October
+  // dataset contains a mid-month primary-site swap); the engine refuses to
+  // price that guard for the month and skips it — to be tolerated here.
   if (final.run.problems.length) {
     evidence.sourceBlockingIssues = final.run.problems;
-    assert.ok(final.run.problems.every((p) => p.code === 'NO_ADDITIONAL_SITE_COMPENSATION' || p.code === 'NO_SITE_COMPENSATION' || p.code === 'MISSING_ATTENDANCE'), 'Unexpected source problem: ' + final.run.problems.map((p) => p.code).join(','));
-    await rejects('source missing rates block submission', () => Payroll.submit(final.run._id.toString(), userId));
+    assert.ok(final.run.problems.every((p) => p.code === 'NO_ADDITIONAL_SITE_COMPENSATION' || p.code === 'NO_SITE_COMPENSATION' || p.code === 'MISSING_ATTENDANCE' || p.code === 'PRIMARY_SITE_CHANGE'), 'Unexpected source problem: ' + final.run.problems.map((p) => p.code).join(','));
+    // Skipped guards do not block submission (Partial badge design); submit
+    // succeeds with the blockers preserved, then RETURN so the isolated repair
+    // cycle below can recalculate from an editable status.
+    const partial2 = await Payroll.submit(final.run._id.toString(), userId);
+    check('partial submit with source blockers succeeds', partial2.run.problems.length > 0, true);
+    await Payroll.returnForCorrection(final.run._id.toString(), 'Isolated repair before recalculation', userId);
     const siteIds = new Set((await Hours.getPayrollHours(2026, 10)).guards.flatMap((g) => g.sites.map((s) => s.siteId)));
     for (const siteId of siteIds) {
       if (!await GuardSiteCompensation.exists({ siteId })) {
@@ -179,7 +201,11 @@ async function main() {
       }
     }
     final = await Payroll.calculate(period, userId);
-    check('explicit isolated missing-rate fixture resolves blockers', final.run.problems.map((p) => ({ code: p.code, employeeCode: p.employeeCode, message: p.message })), []);
+    // After the isolated missing-rate repairs, NO missing-rate blockers remain;
+    // PRIMARY_SITE_CHANGE (a real mid-month swap in the source dataset) is
+    // intentionally irreparable in an isolated copy and stays as a skip.
+    const postRepair = final.run.problems as { code: string; employeeCode: string; message: string }[];
+    check('explicit isolated missing-rate fixture resolves blockers', postRepair.every((p) => p.code === 'PRIMARY_SITE_CHANGE'), true);
   }
   const runId = final.run._id.toString();
   const count = await GuardPayrollRecord.countDocuments({ runId });
@@ -238,6 +264,27 @@ async function main() {
     await mongoose.connection.db!.collection('pensionrules').insertOne({ ...pensionCfg, _id: new mongoose.Types.ObjectId(), effectiveFrom: new Date('2026-01-01'), effectiveTo: new Date('2026-09-30'), name: 'ISOLATED September pension cover' });
   }
   const edgePeriod = '2026-09';
+  // September cover for site rates (mirrors the tax/pension September cover
+  // above): the current dataset's compensation rows all start in October, so
+  // the engine legitimately skips every guard with NO_SITE_COMPENSATION in a
+  // September run. Copy an isolated September-cover row in the audit DB only.
+  const edgeHoursPre = await Hours.getPayrollHours(2026, 9);
+  const edgeSiteIds = new Set(edgeHoursPre.guards.flatMap((g) => g.sites.map((s) => s.siteId)));
+  for (const siteId of edgeSiteIds) {
+    const current = await GuardSiteCompensation.findOne({ siteId, isCurrent: true }).lean();
+    if (current && (!current.effectiveFrom || current.effectiveFrom.getTime() > new Date('2026-09-30').getTime())) {
+      await GuardSiteCompensation.insertMany([{
+        ...current,
+        _id: new mongoose.Types.ObjectId(),
+        effectiveFrom: new Date('2026-01-01'),
+        effectiveTo: new Date('2026-09-30'),
+        isCurrent: false,
+        notes: 'ISOLATED September cover for edge cases',
+      }]);
+    } else if (!current) {
+      await GuardSiteCompensation.create({ siteId, compensationAmount: 12000, effectiveFrom: new Date('2026-01-01'), effectiveTo: new Date('2026-09-30'), isCurrent: false, createdBy: userId, notes: 'ISOLATED TEST FIXTURE ONLY: not an approved production rate' });
+    }
+  }
   await GuardMonthlyHours.deleteMany({ periodKey: edgePeriod });
   await GuardAttendanceRecord.deleteMany({ periodKey: edgePeriod });
   const zero = await Payroll.calculate(edgePeriod, userId);
@@ -255,6 +302,24 @@ async function main() {
   check('daily Sunday and holiday classified separately', [edgeHours.guards[0].totals.sundayHours, edgeHours.guards[0].totals.holidayHours, edgeHours.guards[0].totals.normalHours], [8, 8, 0]);
   await rejects('duplicate active attendance blocked by index', () => GuardAttendanceRecord.create({ ...entries.record.toObject(), _id: new mongoose.Types.ObjectId() }));
   await rejects('attendance outside historical interval rejected', () => Attendance.saveEntry({ siteId: historicalSite, date: '2026-10-10', entry: { guardId: guard.employeeId.toString(), hoursWorked: 8 }, userId }));
+  // September cover for the edge-run sites (mirrors the September tax/pension
+  // cover above): the dataset's compensation rows all start in October, so the
+  // engine legitimately skips the guard with NO_SITE_COMPENSATION in a
+  // September run. This copies an isolated September-cover row only.
+  const edgeSites = (await Hours.getPayrollHours(2026, 9)).guards.flatMap((g) => g.sites.map((s) => s.siteId));
+  for (const siteId of edgeSites) {
+    const current = await GuardSiteCompensation.findOne({ siteId, isCurrent: true }).lean() as any;
+    if (current && current.effectiveFrom.getTime() > new Date('2026-09-30').getTime()) {
+      await GuardSiteCompensation.insertMany([{
+        ...current,
+        _id: new mongoose.Types.ObjectId(),
+        effectiveFrom: new Date('2026-01-01'),
+        effectiveTo: new Date('2026-09-30'),
+        isCurrent: false,
+        notes: 'ISOLATED September cover for edge cases',
+      }]);
+    }
+  }
   const edgeRun = await Payroll.calculate(edgePeriod, userId);
   const edgeRecord = edgeRun.records.find((r) => r.employeeId.toString() === guard.employeeId.toString()); assert.ok(edgeRecord);
   const sundayBase = r2(8 * edgeRecord.primarySite.otRate);

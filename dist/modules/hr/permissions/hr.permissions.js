@@ -36,9 +36,9 @@ function registerHRPermissions() {
                 types_1.PERMISSIONS.SITE_CREATE,
                 types_1.PERMISSIONS.SITE_READ,
                 types_1.PERMISSIONS.SITE_UPDATE,
-                types_1.PERMISSIONS.COMPANY_CREATE,
+                // COMPANY_CREATE / COMPANY_UPDATE intentionally NOT granted (see the
+                // role map in src/types): companies are administered by admins only.
                 types_1.PERMISSIONS.COMPANY_READ,
-                types_1.PERMISSIONS.COMPANY_UPDATE,
                 types_1.PERMISSIONS.GUARD_REGISTER,
                 types_1.PERMISSIONS.GUARD_ASSIGN_SITE,
                 types_1.PERMISSIONS.GUARD_ATTENDANCE_READ,

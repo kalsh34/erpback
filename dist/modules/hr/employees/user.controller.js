@@ -37,6 +37,7 @@ exports.UserController = void 0;
 const User_1 = require("../../../models/User");
 const ApiError_1 = require("../../../common/ApiError");
 const types_1 = require("../../../types");
+const Employee_1 = require("../../../models/Employee");
 const rbac_1 = require("../../../middleware/rbac");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
@@ -93,15 +94,39 @@ class UserController {
     }
     static async create(req, res, next) {
         try {
-            const { email, password, firstName, lastName, role, moduleGrants, moduleDenies } = req.body;
+            const { email, password, firstName, lastName, role, employeeId, moduleGrants, moduleDenies } = req.body;
             const existing = await User_1.User.findOne({ email });
             if (existing)
                 throw ApiError_1.ApiError.conflict('Email already exists');
+            // A guard login must belong to a guard staff record: attendance, shifts and
+            // patrol scans are all tied to that employee.
+            let linkedEmployeeId = null;
+            if (role === types_1.UserRole.GUARD) {
+                if (!employeeId)
+                    throw ApiError_1.ApiError.badRequest('Select the guard staff record this account belongs to');
+                const employee = await Employee_1.Employee.findById(employeeId);
+                if (!employee || employee.category !== types_1.EmployeeCategory.GUARD) {
+                    throw ApiError_1.ApiError.badRequest('The selected staff record is not a guard');
+                }
+                const alreadyLinked = await User_1.User.findOne({ employeeId });
+                if (alreadyLinked)
+                    throw ApiError_1.ApiError.conflict('This guard already has a login account');
+                linkedEmployeeId = employeeId;
+            }
             const grants = sanitizeModuleKeys(moduleGrants);
             const denies = sanitizeModuleKeys(moduleDenies);
             const bcrypt = await Promise.resolve().then(() => __importStar(require('bcryptjs')));
             const hashedPassword = await bcrypt.hash(password, 12);
-            const user = await User_1.User.create({ email, password: hashedPassword, firstName, lastName, role, moduleGrants: grants, moduleDenies: denies });
+            const user = await User_1.User.create({
+                email,
+                password: hashedPassword,
+                firstName,
+                lastName,
+                role,
+                employeeId: linkedEmployeeId,
+                moduleGrants: grants,
+                moduleDenies: denies,
+            });
             AuditService_1.AuditService.log({
                 userId: req.user?.userId || '',
                 action: 'USER_CREATE',

@@ -1,5 +1,13 @@
 import { ISite } from '../../../models/Site';
+import mongoose from 'mongoose';
 export declare class SiteService {
+    /**
+     * DEF-H1: a site may only reference a company that actually exists.
+     * - `companyId` absent/empty/null           → stays null (site without parent)
+     * - not a well-formed ObjectId (malformed)  → 400, nothing is written
+     * - well-formed but no such Company row     → 404, nothing is written
+     */
+    static validateCompanyId(companyId: unknown): Promise<void>;
     static getAll(query: {
         page?: number;
         limit?: number;
@@ -8,8 +16,8 @@ export declare class SiteService {
         sort?: string;
         dir?: string;
     }): Promise<{
-        data: (import("mongoose").Document<unknown, {}, ISite, {}, {}> & ISite & Required<{
-            _id: import("mongoose").Types.ObjectId;
+        data: (mongoose.Document<unknown, {}, ISite, {}, {}> & ISite & Required<{
+            _id: mongoose.Types.ObjectId;
         }> & {
             __v: number;
         })[];

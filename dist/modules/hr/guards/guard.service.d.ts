@@ -30,6 +30,7 @@ export declare class GuardService {
     static assignSite(data: {
         guardId: string;
         siteId: string;
+        effectiveFrom?: string;
         role?: 'GUARD' | 'SUPERVISOR';
     }, auditCtx?: {
         userId: string;

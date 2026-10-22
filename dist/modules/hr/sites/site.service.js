@@ -1,7 +1,12 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SiteService = void 0;
 const Site_1 = require("../../../models/Site");
+const Company_1 = require("../../../models/Company");
+const mongoose_1 = __importDefault(require("mongoose"));
 const SitePriceHistory_1 = require("../../../models/SitePriceHistory");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
@@ -25,6 +30,26 @@ const SORTABLE = {
     createdAt: 'createdAt',
 };
 class SiteService {
+    /**
+     * DEF-H1: a site may only reference a company that actually exists.
+     * - `companyId` absent/empty/null           → stays null (site without parent)
+     * - not a well-formed ObjectId (malformed)  → 400, nothing is written
+     * - well-formed but no such Company row     → 404, nothing is written
+     */
+    static async validateCompanyId(companyId) {
+        if (companyId === undefined || companyId === null || companyId === '')
+            return;
+        const raw = String(companyId).trim();
+        if (raw === '')
+            return;
+        if (!mongoose_1.default.isValidObjectId(raw) || !/^[0-9a-fA-F]{24}$/.test(raw)) {
+            throw ApiError_1.ApiError.badRequest(`companyId '${raw}' is not a valid company id (expected a 24-character ObjectId)`);
+        }
+        const exists = await Company_1.Company.exists({ _id: raw });
+        if (!exists) {
+            throw ApiError_1.ApiError.notFound(`Company '${raw}' does not exist — create the company before referencing it`);
+        }
+    }
     static async getAll(query) {
         const { page = 1, limit = 20, status, search, sort = 'createdAt', dir = 'desc' } = query;
         const skip = (page - 1) * limit;
@@ -67,6 +92,8 @@ class SiteService {
         const existing = await Site_1.Site.findOne({ siteCode: data.siteCode });
         if (existing)
             throw ApiError_1.ApiError.conflict('Site code already exists');
+        // Validate BEFORE creating anything — no partial records on failure.
+        await SiteService.validateCompanyId(data.companyId);
         const site = await Site_1.Site.create(data);
         if (auditCtx) {
             AuditService_1.AuditService.log({
@@ -87,6 +114,8 @@ class SiteService {
         if (!old)
             throw ApiError_1.ApiError.notFound('Site not found');
         const oldValues = old.toObject();
+        // Same company-reference validation applies when a site is repointed.
+        await SiteService.validateCompanyId(data.companyId);
         // Reactivating from INACTIVE clears the deactivation stamp
         const wasInactive = old.status === types_1.SiteStatus.INACTIVE;
         const willReactivate = wasInactive && !!data.status && data.status !== types_1.SiteStatus.INACTIVE;

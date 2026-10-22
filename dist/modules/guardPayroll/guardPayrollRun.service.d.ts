@@ -5,6 +5,13 @@ interface AuditCtx {
     ip?: string;
     ua?: string;
 }
+/** Calculate-options: optional primary-site scope and add-only ('remaining') mode. */
+export interface CalculateOptions {
+    /** Only calculate guards whose primary site is this site ('ALL'/null = every site). */
+    siteId?: string | null;
+    /** full = replace scoped records; remaining = insert only guards with no record yet. */
+    mode?: 'full' | 'remaining';
+}
 /**
  * GUARD PAYROLL RUN SERVICE — high-performance, batch-calculated orchestrator.
  */
@@ -12,7 +19,7 @@ export declare class GuardPayrollRunService {
     /**
      * Create or recalculate the run for a month using batch queries and bulk insert.
      */
-    static calculate(periodKey: string, userId: string, auditCtx?: AuditCtx): Promise<{
+    static calculate(periodKey: string, userId: string, auditCtx?: AuditCtx, opts?: CalculateOptions): Promise<{
         run: mongoose.Document<unknown, {}, IGuardPayrollRun, {}, {}> & IGuardPayrollRun & Required<{
             _id: mongoose.Types.ObjectId;
         }> & {
@@ -81,9 +88,73 @@ export declare class GuardPayrollRunService {
                 suggestedAmount: null;
             }[];
         };
+        partial: {
+            scopeSiteId: string | null;
+            scopeSiteName: string;
+            guardsInScope: number;
+            calculated: number;
+            skipped: number;
+            missing: number;
+            partial: boolean;
+        };
+        skipped: {
+            employeeId: mongoose.Types.ObjectId;
+            employeeCode?: string;
+            guardName?: string;
+            code: string;
+            message: string;
+        }[];
     }>;
     private static calculateTransactional;
-    /** Status-guarded recalculation of an existing run by its id. */
+    /** Stable digest of authoritative inputs; an editable calculation may become stale. */
+    private static inputFingerprint;
+    /** Read-only period preflight, using the same canonical site-hours and effective rates as calculation. */
+    static readiness(periodKey: string): Promise<{
+        periodKey: string;
+        ready: boolean;
+        guardCount: number;
+        issues: {
+            code: string;
+            employeeCode?: string;
+            message: string;
+        }[];
+        lock: {
+            locked: boolean;
+            runId: string | null;
+            runStatus: PayrollRecordStatus | null;
+        };
+        readyCount: number;
+        runLevel: {
+            code: string;
+            message: string;
+        }[];
+        guardIssues: {
+            code: string;
+            message: string;
+            count: number;
+            guards: {
+                employeeCode: string;
+                message: string;
+            }[];
+        }[];
+        rows: {
+            employeeId: string;
+            employeeCode: string;
+            guardName: string;
+            sites: {
+                siteId: any;
+                siteName: any;
+                siteCode: any;
+                isPrimary: boolean;
+                compensationAmount: any;
+                normalHours: number;
+                sundayHours: number;
+                holidayHours: number;
+                source: string;
+            }[];
+        }[];
+    }>;
+    /** Status-guarded recalculation of an existing run by its id (keeps the run's site scope). */
     static recalculate(runId: string, userId: string, auditCtx?: AuditCtx): Promise<{
         run: mongoose.Document<unknown, {}, IGuardPayrollRun, {}, {}> & IGuardPayrollRun & Required<{
             _id: mongoose.Types.ObjectId;
@@ -153,6 +224,22 @@ export declare class GuardPayrollRunService {
                 suggestedAmount: null;
             }[];
         };
+        partial: {
+            scopeSiteId: string | null;
+            scopeSiteName: string;
+            guardsInScope: number;
+            calculated: number;
+            skipped: number;
+            missing: number;
+            partial: boolean;
+        };
+        skipped: {
+            employeeId: mongoose.Types.ObjectId;
+            employeeCode?: string;
+            guardName?: string;
+            code: string;
+            message: string;
+        }[];
     }>;
     static listRuns(filters?: {
         periodKey?: string;
@@ -231,7 +318,29 @@ export declare class GuardPayrollRunService {
                 suggestedAmount: null;
             }[];
         };
+        partial: {
+            scopeSiteId: string | null;
+            scopeSiteName: string;
+            guardsInScope: number;
+            calculated: number;
+            skipped: number;
+            missing: number;
+            partial: boolean;
+        };
+        skipped: {
+            employeeId: mongoose.Types.ObjectId;
+            employeeCode?: string;
+            guardName?: string;
+            code: string;
+            message: string;
+        }[];
     }>;
+    /**
+     * Partial-run census for the run detail view: how many guards belong to the
+     * run's site scope, how many of them are calculated, skipped, and simply not
+     * included yet ("Calculate remaining" candidates). Read-only.
+     */
+    private static computePartial;
     static getRecord(recordId: string): Promise<mongoose.Document<unknown, {}, import("../../models/GuardPayrollRecord").IGuardPayrollRecord, {}, {}> & import("../../models/GuardPayrollRecord").IGuardPayrollRecord & Required<{
         _id: mongoose.Types.ObjectId;
     }> & {
@@ -328,6 +437,22 @@ export declare class GuardPayrollRunService {
                 suggestedAmount: null;
             }[];
         };
+        partial: {
+            scopeSiteId: string | null;
+            scopeSiteName: string;
+            guardsInScope: number;
+            calculated: number;
+            skipped: number;
+            missing: number;
+            partial: boolean;
+        };
+        skipped: {
+            employeeId: mongoose.Types.ObjectId;
+            employeeCode?: string;
+            guardName?: string;
+            code: string;
+            message: string;
+        }[];
     }>;
     private static submitTransactional;
     /** SUBMITTED → CHECKED. */
@@ -400,6 +525,22 @@ export declare class GuardPayrollRunService {
                 suggestedAmount: null;
             }[];
         };
+        partial: {
+            scopeSiteId: string | null;
+            scopeSiteName: string;
+            guardsInScope: number;
+            calculated: number;
+            skipped: number;
+            missing: number;
+            partial: boolean;
+        };
+        skipped: {
+            employeeId: mongoose.Types.ObjectId;
+            employeeCode?: string;
+            guardName?: string;
+            code: string;
+            message: string;
+        }[];
     }>;
     private static checkTransactional;
     /** CHECKED → APPROVED. Settles loan/advance balances for the deductions taken. */
@@ -472,6 +613,22 @@ export declare class GuardPayrollRunService {
                 suggestedAmount: null;
             }[];
         };
+        partial: {
+            scopeSiteId: string | null;
+            scopeSiteName: string;
+            guardsInScope: number;
+            calculated: number;
+            skipped: number;
+            missing: number;
+            partial: boolean;
+        };
+        skipped: {
+            employeeId: mongoose.Types.ObjectId;
+            employeeCode?: string;
+            guardName?: string;
+            code: string;
+            message: string;
+        }[];
     }>;
     private static approveTransactional;
     /**
@@ -547,6 +704,22 @@ export declare class GuardPayrollRunService {
                 suggestedAmount: null;
             }[];
         };
+        partial: {
+            scopeSiteId: string | null;
+            scopeSiteName: string;
+            guardsInScope: number;
+            calculated: number;
+            skipped: number;
+            missing: number;
+            partial: boolean;
+        };
+        skipped: {
+            employeeId: mongoose.Types.ObjectId;
+            employeeCode?: string;
+            guardName?: string;
+            code: string;
+            message: string;
+        }[];
     }>;
     private static returnTransactional;
     /** APPROVED → PAID. Final — the run is never re-opened after payment. */
@@ -619,6 +792,22 @@ export declare class GuardPayrollRunService {
                 suggestedAmount: null;
             }[];
         };
+        partial: {
+            scopeSiteId: string | null;
+            scopeSiteName: string;
+            guardsInScope: number;
+            calculated: number;
+            skipped: number;
+            missing: number;
+            partial: boolean;
+        };
+        skipped: {
+            employeeId: mongoose.Types.ObjectId;
+            employeeCode?: string;
+            guardName?: string;
+            code: string;
+            message: string;
+        }[];
     }>;
     /**
      * Every bank present in a combined staff + guard payroll month (deduped

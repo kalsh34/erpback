@@ -49,7 +49,7 @@ const shiftTemplateSchema = new mongoose_1.Schema({
     active: { type: Boolean, default: true },
     color: { type: String, default: '#3B82F6' },
 }, { timestamps: true });
-shiftTemplateSchema.index({ name: 1 });
+// name already declares its unique index on the schema path.
 shiftTemplateSchema.index({ siteId: 1 });
 exports.ShiftTemplate = mongoose_1.default.model('ShiftTemplate', shiftTemplateSchema);
 //# sourceMappingURL=ShiftTemplate.js.map

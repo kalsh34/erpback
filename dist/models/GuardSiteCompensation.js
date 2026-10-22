@@ -49,11 +49,32 @@ const guardSiteCompensationSchema = new mongoose_1.Schema({
     effectiveFrom: { type: Date, required: true },
     effectiveTo: { type: Date, default: null },
     isCurrent: { type: Boolean, default: true },
+    formula: {
+        type: {
+            transportPercent: { type: Number, min: 0, max: 100 },
+            standardMonthlyHours: { type: Number, min: 1, max: 744 },
+            sundayStructuralHours: { type: Number, min: 0, max: 200 },
+            basicHourlyDivisor: { type: Number, min: 1, max: 744 },
+        },
+        default: null,
+    },
     notes: { type: String, trim: true },
     createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
+    changeHistory: [{
+            previousAmount: { type: Number, required: true },
+            newAmount: { type: Number, required: true },
+            previousFormula: { type: mongoose_1.Schema.Types.Mixed, default: null },
+            newFormula: { type: mongoose_1.Schema.Types.Mixed, default: null },
+            reason: { type: String, trim: true },
+            changedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
+            changedAt: { type: Date, default: Date.now },
+        }],
 }, { timestamps: true });
 guardSiteCompensationSchema.index({ siteId: 1, effectiveFrom: -1 });
 guardSiteCompensationSchema.index({ siteId: 1, isCurrent: 1 });
+// Hard rule: ONE current compensation rate per site. A rate may belong to one
+// site only — a site can never carry two current rows (DB-enforced).
+guardSiteCompensationSchema.index({ siteId: 1 }, { unique: true, partialFilterExpression: { isCurrent: true } });
 exports.GuardSiteCompensation = mongoose_1.default.model('GuardSiteCompensation', guardSiteCompensationSchema);
 //# sourceMappingURL=GuardSiteCompensation.js.map

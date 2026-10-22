@@ -34,6 +34,7 @@ const department_routes_1 = __importDefault(require("./modules/hr/organization/d
 const position_routes_1 = __importDefault(require("./modules/hr/organization/position.routes"));
 const payGrade_routes_1 = __importDefault(require("./modules/hr/organization/payGrade.routes"));
 const file_routes_1 = __importDefault(require("./modules/hr/files/file.routes"));
+const import_routes_1 = __importDefault(require("./modules/hr/import/import.routes"));
 const staffPayroll_routes_1 = __importDefault(require("./modules/staffPayroll/staffPayroll.routes"));
 const guardPayroll_routes_1 = __importDefault(require("./modules/guardPayroll/guardPayroll.routes"));
 const payrollCommon_routes_1 = __importDefault(require("./modules/payrollCommon/payrollCommon.routes"));
@@ -42,7 +43,7 @@ const index_2 = __importDefault(require("./modules/sales-crm/index"));
 const index_3 = __importDefault(require("./modules/procurement/index"));
 const index_4 = __importDefault(require("./modules/manufacturing/index"));
 const index_5 = __importDefault(require("./modules/projects/index"));
-const index_6 = __importDefault(require("./modules/fleet/index"));
+const fleet_routes_1 = __importDefault(require("./modules/fleet/fleet.routes"));
 const app = (0, express_1.default)();
 // CORS_ORIGIN accepts a comma separated list of the frontend origins allowed to
 // call this API, e.g. CORS_ORIGIN=https://my-frontend.onrender.com,http://localhost:3000
@@ -53,7 +54,7 @@ const corsOrigins = env_1.config.corsOrigin
     .filter(Boolean);
 const allowAnyOrigin = corsOrigins.length === 0 || corsOrigins.includes('*');
 app.use((0, cors_1.default)(allowAnyOrigin ? {} : { origin: corsOrigins }));
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '10mb' }));
 app.use((0, morgan_1.default)('dev'));
 app.use(requestLogger_1.requestLogger);
 app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
@@ -84,6 +85,7 @@ app.use('/api/departments', department_routes_1.default);
 app.use('/api/positions', position_routes_1.default);
 app.use('/api/pay-grades', payGrade_routes_1.default);
 app.use('/api/files', file_routes_1.default);
+app.use('/api/imports', import_routes_1.default);
 // Payroll v2 — separate systems. Logic to be defined by the owner.
 app.use('/api/staff-payroll', staffPayroll_routes_1.default);
 app.use('/api/office-payroll', staffPayroll_routes_1.default);
@@ -94,7 +96,7 @@ app.use('/api/v2/sales-crm', index_2.default);
 app.use('/api/v2/procurement', index_3.default);
 app.use('/api/v2/manufacturing', index_4.default);
 app.use('/api/v2/projects', index_5.default);
-app.use('/api/v2/fleet', index_6.default);
+app.use('/api/v2/fleet', fleet_routes_1.default);
 app.use((_req, res) => {
     res.status(404).json({ success: false, message: 'Route not found' });
 });

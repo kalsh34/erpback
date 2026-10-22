@@ -175,20 +175,21 @@ export declare class GuardAttendanceService {
             maxDailyHours: number;
             expectedDailyHours: number;
         };
+        ready: boolean;
         guardsWithAttendance: number;
         missingAttendance: {
-            _id: import("mongoose").Types.ObjectId;
+            _id: string;
             employeeCode: string;
             firstName: string;
             lastName: string;
-            status: EmployeeStatus;
         }[];
         issues: {
-            guard: any;
+            guard: {
+                employeeCode: string | undefined;
+            };
             type: string;
             message: string;
         }[];
-        ready: boolean;
     }>;
     /** Raw records for a date range (audit/history view). */
     static listRecords(filters: {

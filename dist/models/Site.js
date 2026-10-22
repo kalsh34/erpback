@@ -67,7 +67,7 @@ const siteSchema = new mongoose_1.Schema({
     address: { type: String, trim: true },
     deactivatedAt: { type: Date, default: undefined },
 }, { timestamps: true });
-siteSchema.index({ siteCode: 1 });
+// siteCode already declares its unique index on the schema path.
 siteSchema.index({ status: 1 });
 exports.Site = mongoose_1.default.model('Site', siteSchema);
 //# sourceMappingURL=Site.js.map

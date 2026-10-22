@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { IGuardSiteCompensation } from '../../models/GuardSiteCompensation';
+import { IGuardSiteCompensation, ISiteFormulaOverride } from '../../models/GuardSiteCompensation';
 declare const DAY_MS: number;
 /**
  * SITE COMPENSATION SERVICE — effective-dated agreed compensation per site.
@@ -9,13 +9,15 @@ declare const DAY_MS: number;
  * lookups always resolve the row that was in force for the payroll month.
  */
 export declare class SiteCompensationService {
-    /** Full history for one site (newest first). */
-    static listForSite(siteId: string): Promise<(mongoose.Document<unknown, {}, IGuardSiteCompensation, {}, {}> & IGuardSiteCompensation & Required<{
-        _id: mongoose.Types.ObjectId;
-    }> & {
-        __v: number;
+    /** Effective formula numbers for one compensation row (per-site overrides · global config fallback). */
+    static formulaFor(row: IGuardSiteCompensation): Promise<ISiteFormulaOverride>;
+    /** Batched per-site formula numbers: Map<siteIdString, ISiteFormulaOverride>. */
+    static formulaForSites(rows: IGuardSiteCompensation[]): Promise<Map<string, ISiteFormulaOverride>>;
+    /** Full history for one site (newest first), formula values resolved. */
+    static listForSite(siteId: string): Promise<(IGuardSiteCompensation & {
+        formula: ISiteFormulaOverride;
     })[]>;
-    /** All sites' compensations (optionally only current rows), site populated. */
+    /** All sites' compensations (optionally only current rows), site populated, formula values resolved. */
     static listAll(opts?: {
         currentOnly?: boolean;
         siteId?: string;
@@ -23,6 +25,8 @@ export declare class SiteCompensationService {
         _id: mongoose.Types.ObjectId;
     }> & {
         __v: number;
+    } & {
+        formula: ISiteFormulaOverride;
     })[]>;
     /**
      * Record a new compensation amount for a site. The previous current row is
@@ -33,6 +37,8 @@ export declare class SiteCompensationService {
         compensationAmount: number;
         effectiveFrom: string;
         notes?: string;
+        formula?: ISiteFormulaOverride | null;
+        reason?: string;
         userId: string;
     }): Promise<mongoose.Document<unknown, {}, IGuardSiteCompensation, {}, {}> & IGuardSiteCompensation & Required<{
         _id: mongoose.Types.ObjectId;

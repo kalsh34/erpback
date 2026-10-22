@@ -15,3 +15,4 @@ export const errorHandler = (err: Error, _req: Request, res: Response, _next: Ne
     error: statusCode === 500 && process.env.NODE_ENV === 'development' ? err.stack : undefined,
   });
 };
+ 

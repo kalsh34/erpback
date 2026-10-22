@@ -14,6 +14,7 @@ const StaffPayrollRecord_1 = require("../../models/StaffPayrollRecord");
 const AuditLog_1 = require("../../models/AuditLog");
 const User_1 = require("../../models/User");
 const types_1 = require("../../types");
+const reportScopes_1 = require("./reportScopes");
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Latest ACTIVE contract per employee (join date = contract start, then hire date). */
@@ -34,7 +35,8 @@ function contractLookup(stage) {
 }
 class ModuleReportsService {
     // ── HR ─────────────────────────────────────────────────────────────
-    static async hrReport(q) {
+    static async hrReport(q, requestedBy) {
+        (0, reportScopes_1.assertReportScope)(requestedBy, 'hr');
         const match = {};
         if (q.category)
             match.category = q.category;
@@ -98,7 +100,8 @@ class ModuleReportsService {
         };
     }
     // ── Sites ──────────────────────────────────────────────────────────
-    static async sitesReport(q) {
+    static async sitesReport(q, requestedBy) {
+        (0, reportScopes_1.assertReportScope)(requestedBy, 'sites');
         const match = {};
         if (q.status)
             match.status = q.status;
@@ -146,7 +149,8 @@ class ModuleReportsService {
         return { report: 'SITES', generatedAt: new Date(), filters: q, summary, rows };
     }
     // ── Guards ─────────────────────────────────────────────────────────
-    static async guardsReport(q) {
+    static async guardsReport(q, requestedBy) {
+        (0, reportScopes_1.assertReportScope)(requestedBy, 'guards');
         const match = { category: types_1.EmployeeCategory.GUARD };
         if (q.status)
             match.status = q.status;
@@ -239,7 +243,8 @@ class ModuleReportsService {
         return { report: 'GUARDS', generatedAt: new Date(), filters: q, summary, rows };
     }
     // ── Guard attendance ───────────────────────────────────────────────
-    static async guardAttendanceReport(q) {
+    static async guardAttendanceReport(q, requestedBy) {
+        (0, reportScopes_1.assertReportScope)(requestedBy, 'guard-attendance');
         const match = {};
         if (q.month)
             match.periodKey = q.month;
@@ -291,7 +296,8 @@ class ModuleReportsService {
         };
     }
     // ── Staff attendance ───────────────────────────────────────────────
-    static async staffAttendanceReport(q) {
+    static async staffAttendanceReport(q, requestedBy) {
+        (0, reportScopes_1.assertReportScope)(requestedBy, 'staff-attendance');
         const match = {};
         if (q.month)
             match.periodKey = q.month;
@@ -341,7 +347,8 @@ class ModuleReportsService {
         };
     }
     // ── Payroll (guard or staff) ───────────────────────────────────────
-    static async payrollReport(q) {
+    static async payrollReport(q, requestedBy) {
+        (0, reportScopes_1.assertReportScope)(requestedBy, 'payroll');
         const isGuard = (q.module || 'GUARD') !== 'STAFF';
         const match = {};
         if (q.periodKey)
@@ -407,7 +414,7 @@ class ModuleReportsService {
                             },
                         },
                     },
-                    siteName: isGuard ? { $arrayElemAt: ['$site.siteName', 0] } : { $arrayElemAt: ['$snapshot.department', 0] },
+                    siteName: isGuard ? { $arrayElemAt: ['$site.siteName', 0] } : '$snapshot.department',
                 },
             },
             ...searchPost,
@@ -448,7 +455,8 @@ class ModuleReportsService {
         return { report: isGuard ? 'PAYROLL_GUARD' : 'PAYROLL_STAFF', generatedAt: new Date(), filters: q, summary, rows };
     }
     // ── Audit trail ────────────────────────────────────────────────────
-    static async auditReport(q) {
+    static async auditReport(q, requestedBy) {
+        (0, reportScopes_1.assertReportScope)(requestedBy, 'audit');
         const match = {};
         if (q.action)
             match.action = { $regex: escapeRegex(q.action), $options: 'i' };
@@ -506,7 +514,8 @@ class ModuleReportsService {
         };
     }
     // ── Users (administration) ─────────────────────────────────────────
-    static async usersReport(q) {
+    static async usersReport(q, requestedBy) {
+        (0, reportScopes_1.assertReportScope)(requestedBy, 'users');
         const match = {};
         if (q.role)
             match.role = q.role;

@@ -50,7 +50,7 @@ const userSchema = new mongoose_1.Schema({
     isActive: { type: Boolean, default: true },
     lastLogin: { type: Date },
 }, { timestamps: true });
-userSchema.index({ email: 1 });
+// email already declares its unique index on the schema path.
 userSchema.index({ role: 1 });
 exports.User = mongoose_1.default.model('User', userSchema);
 //# sourceMappingURL=User.js.map

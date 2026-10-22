@@ -83,7 +83,7 @@ employeeSchema.virtual('fullName').get(function () {
     return [this.firstName, this.middleName, this.lastName].filter(Boolean).join(' ');
 });
 employeeSchema.set('toJSON', { virtuals: true });
-employeeSchema.index({ employeeCode: 1 });
+// employeeCode already declares its unique index on the schema path.
 employeeSchema.index({ category: 1 });
 employeeSchema.index({ status: 1 });
 employeeSchema.index({ lastName: 1, firstName: 1 });

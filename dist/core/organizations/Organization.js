@@ -54,7 +54,7 @@ const organizationSchema = new mongoose_1.Schema({
     nextEmployeeCode: { type: Number, default: 100 },
     isActive: { type: Boolean, default: true },
 }, { timestamps: true });
-organizationSchema.index({ code: 1 });
+// code already declares its unique index on the schema path.
 organizationSchema.index({ type: 1 });
 organizationSchema.index({ companyId: 1 });
 organizationSchema.index({ parentId: 1 });

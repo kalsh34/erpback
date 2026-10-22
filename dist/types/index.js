@@ -3,7 +3,7 @@
 // Vital Security PLC — Payroll System — Shared Types
 // ============================================================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ROLE_PERMISSIONS = exports.MODULE_ACCESS_KEYS = exports.MODULE_ACCESS = exports.PERMISSIONS = exports.PensionTaxBase = exports.DeductionStatus = exports.EmployeeDeductionType = exports.PaymentMethod = exports.StaffAttendanceStatus = exports.RotationGuardStatus = exports.RotationLifecycle = exports.RotationStatus = exports.ShiftAssignmentSource = exports.GuardAttendanceStatus = exports.AttendanceSource = exports.PayrollRecordStatus = exports.CompanyStatus = exports.SiteStatus = exports.SiteType = exports.EmploymentType = exports.GuardPosition = exports.Gender = exports.EmployeeStatus = exports.EmployeeCategory = exports.UserRole = void 0;
+exports.ROLE_MANDATORY_DENIES = exports.ROLE_PERMISSIONS = exports.MODULE_ACCESS_KEYS = exports.MODULE_ACCESS = exports.PERMISSIONS = exports.PensionTaxBase = exports.DeductionStatus = exports.EmployeeDeductionType = exports.PaymentMethod = exports.StaffAttendanceStatus = exports.RotationGuardStatus = exports.RotationLifecycle = exports.RotationStatus = exports.ShiftAssignmentSource = exports.GuardAttendanceStatus = exports.AttendanceSource = exports.PayrollRecordStatus = exports.CompanyStatus = exports.SiteStatus = exports.SiteType = exports.EmploymentType = exports.GuardPosition = exports.Gender = exports.EmployeeStatus = exports.EmployeeCategory = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["SUPER_ADMIN"] = "SUPER_ADMIN";
@@ -219,6 +219,10 @@ exports.PERMISSIONS = {
     CONTRACT_UPDATE: 'contract.update',
     GUARANTOR_READ: 'guarantor.read',
     GUARANTOR_MANAGE: 'guarantor.manage',
+    FLEET_READ: 'fleet.read',
+    FLEET_MANAGE: 'fleet.manage',
+    FLEET_ASSIGN: 'fleet.assign',
+    FLEET_REPORT: 'fleet.report',
 };
 /**
  * MODULE ACCESS REGISTRY — the modules an admin can grant or deny per user.
@@ -308,6 +312,16 @@ exports.MODULE_ACCESS = [
     },
     { key: 'recruitment', label: 'Recruitment', permissions: [exports.PERMISSIONS.CANDIDATE_READ, exports.PERMISSIONS.CANDIDATE_MANAGE] },
     { key: 'performance', label: 'Performance', permissions: [exports.PERMISSIONS.PERFORMANCE_READ, exports.PERMISSIONS.PERFORMANCE_MANAGE] },
+    {
+        key: 'fleet',
+        label: 'Fleet Management',
+        permissions: [
+            exports.PERMISSIONS.FLEET_READ,
+            exports.PERMISSIONS.FLEET_MANAGE,
+            exports.PERMISSIONS.FLEET_ASSIGN,
+            exports.PERMISSIONS.FLEET_REPORT,
+        ],
+    },
 ];
 exports.MODULE_ACCESS_KEYS = exports.MODULE_ACCESS.map((m) => m.key);
 // --- Role -> Permission Mapping ---
@@ -412,9 +426,9 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.SITE_CREATE,
         exports.PERMISSIONS.SITE_READ,
         exports.PERMISSIONS.SITE_UPDATE,
-        exports.PERMISSIONS.COMPANY_CREATE,
+        // COMPANY_CREATE / COMPANY_UPDATE intentionally NOT granted: companies are
+        // administered by admins only (HR manages employees/sites, not companies).
         exports.PERMISSIONS.COMPANY_READ,
-        exports.PERMISSIONS.COMPANY_UPDATE,
         exports.PERMISSIONS.GUARD_REGISTER,
         exports.PERMISSIONS.GUARD_ASSIGN_SITE,
         exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
@@ -448,8 +462,9 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.USER_READ,
         exports.PERMISSIONS.EMPLOYEE_READ,
         exports.PERMISSIONS.SITE_READ,
+        // COMPANY_UPDATE intentionally NOT granted: Finance must not administer or
+        // delete companies (company administration belongs to admins).
         exports.PERMISSIONS.COMPANY_READ,
-        exports.PERMISSIONS.COMPANY_UPDATE,
         exports.PERMISSIONS.GUARD_ATTENDANCE_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_READ,
         exports.PERMISSIONS.GUARD_PAYROLL_RATES,
@@ -543,7 +558,22 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.ROTATION_READ,
         exports.PERMISSIONS.CONTRACT_READ,
         exports.PERMISSIONS.GUARANTOR_READ,
-        exports.PERMISSIONS.ROTATION_APPROVE,
+        // ROTATION_APPROVE intentionally NOT granted: the CEO role is strictly
+        // read-only (no business mutations of any kind, rotations included).
     ],
+};
+/**
+ * Permissions that are MANDATORY exclusions for a role: the role map omits
+ * them intentionally (see the COMPANY_* comments above) and per-user module
+ * grants must never be able to restore them. computeEffectivePermissions
+ * applies these as a final filter — whole-module grant bundles (e.g. the
+ * `company` bundle, which legitimately hands COMPANY_CREATE/UPDATE to
+ * Operations) cannot punch through role-level restrictions.
+ */
+exports.ROLE_MANDATORY_DENIES = {
+    // HR manages employees/sites; companies are administered by admins only.
+    [UserRole.HR_ADMIN]: [exports.PERMISSIONS.COMPANY_CREATE, exports.PERMISSIONS.COMPANY_UPDATE],
+    // Finance must not administer or delete companies.
+    [UserRole.FINANCE_OFFICER]: [exports.PERMISSIONS.COMPANY_CREATE, exports.PERMISSIONS.COMPANY_UPDATE],
 };
 //# sourceMappingURL=index.js.map

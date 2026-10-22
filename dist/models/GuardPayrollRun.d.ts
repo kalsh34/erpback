@@ -16,6 +16,12 @@ export interface IGuardPayrollRun extends Document {
     status: PayrollRecordStatus;
     calculatedBy?: mongoose.Types.ObjectId;
     calculatedAt?: Date;
+    inputFingerprint?: string;
+    /** Primary-site scope the run was calculated for (null = all sites). */
+    scopeSiteId?: mongoose.Types.ObjectId | null;
+    scopeSiteName?: string;
+    /** How the last calculation treated existing records: replace (full) or add-only (remaining). */
+    lastCalcMode?: 'full' | 'remaining';
     submittedBy?: mongoose.Types.ObjectId;
     submittedAt?: Date;
     checkedBy?: mongoose.Types.ObjectId;
