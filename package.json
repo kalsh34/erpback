@@ -15,6 +15,7 @@
     "check:staff-payroll": "ts-node --transpile-only tests/staffPayrollEngine.check.ts",
     "seed": "infisical run --env=dev -- ts-node-dev --transpile-only src/seed.ts",
     "seed:local": "ts-node-dev --transpile-only src/seed.ts",
+    "import:guards": "ts-node --transpile-only src/scripts/importGuardsExcel.ts",
     "check:routes": "ts-node --transpile-only tests/listRoutes.check.ts"
   },
   "dependencies": {
@@ -27,7 +28,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.6.0",
     "morgan": "^1.10.0",
-    "multer": "^2.3.0"
+    "multer": "^2.3.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
