@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { GuardService } from './guard.service';
+import { GuardImportService } from './guardImport.service';
 import { AuthUser } from '../../../middleware/auth';
 
 interface AuthenticatedRequest extends Request {
@@ -116,6 +117,39 @@ export class GuardController {
         ua: req.get('user-agent'),
       });
       res.json({ success: true, data: assignment });
+    } catch (error) { next(error); }
+  }
+
+  static async previewImport(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      if (!req.file || !req.file.buffer) {
+        res.status(400).json({ success: false, message: 'No spreadsheet file uploaded' });
+        return;
+      }
+      const preview = await GuardImportService.previewSheet(req.file.buffer);
+      res.json({ success: true, data: preview });
+    } catch (error) { next(error); }
+  }
+
+  static async executeImport(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      let rows = req.body.rows;
+      if (!rows && req.file && req.file.buffer) {
+        const preview = await GuardImportService.previewSheet(req.file.buffer);
+        rows = preview.rows;
+      }
+
+      if (!rows || !Array.isArray(rows) || rows.length === 0) {
+        res.status(400).json({ success: false, message: 'No guard rows to import' });
+        return;
+      }
+
+      const result = await GuardImportService.executeImport(rows, {
+        userId: req.user?.userId || '',
+        ip: req.ip,
+        ua: req.get('user-agent'),
+      });
+      res.status(201).json({ success: true, data: result });
     } catch (error) { next(error); }
   }
 }
