@@ -1,4 +1,7 @@
 import { Site, ISite } from '../../../models/Site';
+import { Company } from '../../../models/Company';
+import mongoose from 'mongoose';
+import { SitePriceHistory } from '../../../models/SitePriceHistory';
 import { PrimarySiteAssignment } from '../../../models/PrimarySiteAssignment';
 import { ShiftAssignment } from '../../../models/ShiftAssignment';
 import { ApiError } from '../../../common/ApiError';
@@ -23,6 +26,25 @@ const SORTABLE: Record<string, string> = {
 };
 
 export class SiteService {
+  /**
+   * DEF-H1: a site may only reference a company that actually exists.
+   * - `companyId` absent/empty/null           → stays null (site without parent)
+   * - not a well-formed ObjectId (malformed)  → 400, nothing is written
+   * - well-formed but no such Company row     → 404, nothing is written
+   */
+  static async validateCompanyId(companyId: unknown): Promise<void> {
+    if (companyId === undefined || companyId === null || companyId === '') return;
+    const raw = String(companyId).trim();
+    if (raw === '') return;
+    if (!mongoose.isValidObjectId(raw) || !/^[0-9a-fA-F]{24}$/.test(raw)) {
+      throw ApiError.badRequest(`companyId '${raw}' is not a valid company id (expected a 24-character ObjectId)`);
+    }
+    const exists = await Company.exists({ _id: raw });
+    if (!exists) {
+      throw ApiError.notFound(`Company '${raw}' does not exist — create the company before referencing it`);
+    }
+  }
+
   static async getAll(query: { page?: number; limit?: number; status?: string; search?: string; sort?: string; dir?: string }) {
     const { page = 1, limit = 20, status, search, sort = 'createdAt', dir = 'desc' } = query;
     const skip = (page - 1) * limit;
@@ -56,8 +78,14 @@ export class SiteService {
   }
 
   static async create(data: Partial<ISite>, auditCtx?: { userId: string; ip?: string; ua?: string }): Promise<ISite> {
+    if (!data || typeof data !== 'object') throw ApiError.badRequest('A request body is required');
+    if (!data.siteCode || !String(data.siteCode).trim()) throw ApiError.badRequest('siteCode is required');
+    if (!data.siteName || !String(data.siteName).trim()) throw ApiError.badRequest('siteName is required');
+    if (!data.location || !String(data.location).trim()) throw ApiError.badRequest('location is required');
     const existing = await Site.findOne({ siteCode: data.siteCode });
     if (existing) throw ApiError.conflict('Site code already exists');
+    // Validate BEFORE creating anything — no partial records on failure.
+    await SiteService.validateCompanyId(data.companyId);
     const site = await Site.create(data);
 
     if (auditCtx) {
@@ -80,6 +108,8 @@ export class SiteService {
     const old = await Site.findById(id);
     if (!old) throw ApiError.notFound('Site not found');
     const oldValues = old.toObject();
+    // Same company-reference validation applies when a site is repointed.
+    await SiteService.validateCompanyId(data.companyId);
 
     // Reactivating from INACTIVE clears the deactivation stamp
     const wasInactive = old.status === SiteStatus.INACTIVE;
@@ -93,6 +123,27 @@ export class SiteService {
 
     const site = await Site.findByIdAndUpdate(id, update, { new: true, runValidators: true });
     if (!site) throw ApiError.notFound('Site not found');
+
+    // The OLD price is never lost when a site's billing figures are edited:
+    // every change is written to SitePriceHistory (previous -> current), so the
+    // full price timeline stays available in the site view.
+    const oldPrice = Number(old.paymentPrice ?? 0);
+    const newPrice = Number(site.paymentPrice ?? 0);
+    const oldEmployees = Number(old.numberOfEmployees ?? 0);
+    const newEmployees = Number(site.numberOfEmployees ?? 0);
+    if (oldPrice !== newPrice || oldEmployees !== newEmployees) {
+      await SitePriceHistory.create({
+        siteId: id as any,
+        previous: { paymentPrice: oldPrice, numberOfEmployees: oldEmployees },
+        current: { paymentPrice: newPrice, numberOfEmployees: newEmployees },
+        changedBy: auditCtx ? (auditCtx.userId as any) : null,
+      });
+      eventBus.emit('hr.site.priceChanged', {
+        siteId: id,
+        previousPrice: oldPrice,
+        newPrice,
+      });
+    }
 
     if (auditCtx) {
       AuditService.log({

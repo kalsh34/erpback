@@ -13,7 +13,8 @@ import { StaffPayrollRecord } from '../../models/StaffPayrollRecord';
 import { StaffPayrollRun } from '../../models/StaffPayrollRun';
 import { AuditLog } from '../../models/AuditLog';
 import { User } from '../../models/User';
-import { EmployeeCategory, EmployeeStatus } from '../../types';
+import { EmployeeCategory, EmployeeStatus, UserRole } from '../../types';
+import { assertReportScope, ReportKey } from './reportScopes';
 
 const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -49,7 +50,8 @@ export class ModuleReportsService {
   static async hrReport(q: {
     category?: string; status?: string; department?: string; search?: string;
     joinedFrom?: string; joinedTo?: string;
-  }): Promise<ReportResult> {
+  }, requestedBy?: UserRole): Promise<ReportResult> {
+    assertReportScope(requestedBy, 'hr' as ReportKey);
     const match: Record<string, unknown> = {};
     if (q.category) match.category = q.category;
     if (q.status) match.status = q.status;
@@ -113,7 +115,8 @@ export class ModuleReportsService {
   }
 
   // ── Sites ──────────────────────────────────────────────────────────
-  static async sitesReport(q: { status?: string; siteType?: string; search?: string }): Promise<ReportResult> {
+  static async sitesReport(q: { status?: string; siteType?: string; search?: string }, requestedBy?: UserRole): Promise<ReportResult> {
+    assertReportScope(requestedBy, 'sites' as ReportKey);
     const match: Record<string, unknown> = {};
     if (q.status) match.status = q.status;
     if (q.siteType) match.siteType = q.siteType;
@@ -162,7 +165,8 @@ export class ModuleReportsService {
   }
 
   // ── Guards ─────────────────────────────────────────────────────────
-  static async guardsReport(q: { status?: string; siteId?: string; month?: string }): Promise<ReportResult> {
+  static async guardsReport(q: { status?: string; siteId?: string; month?: string }, requestedBy?: UserRole): Promise<ReportResult> {
+    assertReportScope(requestedBy, 'guards' as ReportKey);
     const match: Record<string, unknown> = { category: EmployeeCategory.GUARD };
     if (q.status) match.status = q.status;
 
@@ -259,7 +263,8 @@ export class ModuleReportsService {
   // ── Guard attendance ───────────────────────────────────────────────
   static async guardAttendanceReport(q: {
     month?: string; guardId?: string; siteId?: string; status?: string; limit?: number;
-  }): Promise<ReportResult> {
+  }, requestedBy?: UserRole): Promise<ReportResult> {
+    assertReportScope(requestedBy, 'guard-attendance' as ReportKey);
     const match: Record<string, unknown> = {};
     if (q.month) match.periodKey = q.month;
     if (q.guardId && mongoose.isValidObjectId(q.guardId)) match.guardId = new mongoose.Types.ObjectId(q.guardId);
@@ -312,7 +317,8 @@ export class ModuleReportsService {
   // ── Staff attendance ───────────────────────────────────────────────
   static async staffAttendanceReport(q: {
     month?: string; employeeId?: string; status?: string; department?: string; limit?: number;
-  }): Promise<ReportResult> {
+  }, requestedBy?: UserRole): Promise<ReportResult> {
+    assertReportScope(requestedBy, 'staff-attendance' as ReportKey);
     const match: Record<string, unknown> = {};
     if (q.month) match.periodKey = q.month;
     if (q.employeeId && mongoose.isValidObjectId(q.employeeId)) match.employeeId = new mongoose.Types.ObjectId(q.employeeId);
@@ -363,7 +369,8 @@ export class ModuleReportsService {
   // ── Payroll (guard or staff) ───────────────────────────────────────
   static async payrollReport(q: {
     module?: 'GUARD' | 'STAFF'; periodKey?: string; runStatus?: string; search?: string;
-  }): Promise<ReportResult> {
+  }, requestedBy?: UserRole): Promise<ReportResult> {
+    assertReportScope(requestedBy, 'payroll' as ReportKey);
     const isGuard = (q.module || 'GUARD') !== 'STAFF';
     const match: Record<string, unknown> = {};
     if (q.periodKey) match.periodKey = q.periodKey;
@@ -430,7 +437,7 @@ export class ModuleReportsService {
               },
             },
           },
-          siteName: isGuard ? { $arrayElemAt: ['$site.siteName', 0] } : { $arrayElemAt: ['$snapshot.department', 0] },
+          siteName: isGuard ? { $arrayElemAt: ['$site.siteName', 0] } : '$snapshot.department',
         },
       },
       ...searchPost,
@@ -474,7 +481,8 @@ export class ModuleReportsService {
   // ── Audit trail ────────────────────────────────────────────────────
   static async auditReport(q: {
     action?: string; entity?: string; userId?: string; from?: string; to?: string; limit?: number;
-  }): Promise<ReportResult> {
+  }, requestedBy?: UserRole): Promise<ReportResult> {
+    assertReportScope(requestedBy, 'audit' as ReportKey);
     const match: Record<string, unknown> = {};
     if (q.action) match.action = { $regex: escapeRegex(q.action), $options: 'i' };
     if (q.entity) match.entity = q.entity;
@@ -532,7 +540,8 @@ export class ModuleReportsService {
   }
 
   // ── Users (administration) ─────────────────────────────────────────
-  static async usersReport(q: { role?: string; isActive?: string; search?: string }): Promise<ReportResult> {
+  static async usersReport(q: { role?: string; isActive?: string; search?: string }, requestedBy?: UserRole): Promise<ReportResult> {
+    assertReportScope(requestedBy, 'users' as ReportKey);
     const match: Record<string, unknown> = {};
     if (q.role) match.role = q.role;
     if (q.isActive === 'true') match.isActive = true;

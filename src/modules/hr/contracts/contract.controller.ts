@@ -14,6 +14,13 @@ export class ContractController {
     } catch (error) { next(error); }
   }
 
+  static async getSalaryHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const history = await ContractService.getSalaryHistory(req.params.employeeId);
+      res.json({ success: true, data: history });
+    } catch (error) { next(error); }
+  }
+
   static async getAll(req: any, res: Response, next: NextFunction) {
     try {
       const { page, limit, status, search } = req.query;

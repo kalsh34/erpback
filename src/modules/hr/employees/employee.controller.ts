@@ -30,6 +30,13 @@ export class EmployeeController {
     } catch (error) { next(error); }
   }
 
+  static async getDetail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const detail = await EmployeeService.getDetail(req.params.id);
+      res.json({ success: true, data: detail });
+    } catch (error) { next(error); }
+  }
+
   static async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
       const employee = await EmployeeService.create(req.body, {

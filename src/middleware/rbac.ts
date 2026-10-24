@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ApiError } from '../common/ApiError';
-import { UserRole, ROLE_PERMISSIONS, Permission, MODULE_ACCESS } from '../types';
+import { UserRole, ROLE_PERMISSIONS, ROLE_MANDATORY_DENIES, Permission, MODULE_ACCESS } from '../types';
 import { getRolePermissions } from '../core/permissions/registry';
 
 export const authorize = (...allowedPermissions: Permission[]) => {
@@ -9,12 +9,13 @@ export const authorize = (...allowedPermissions: Permission[]) => {
       return next(ApiError.unauthorized());
     }
 
+
     // authenticate() attaches the EFFECTIVE per-user permissions (role defaults
     // + module grants − module denies). Fall back to the role map for callers
     // that bypass authenticate().
     const userPermissions = req.user.permissions ?? getPermissionsForRole(req.user.role as UserRole);
     const hasPermission = allowedPermissions.some((perm) => userPermissions.includes(perm));
-
+    
     if (!hasPermission) {
       return next(ApiError.forbidden('Insufficient permissions'));
     }
@@ -42,7 +43,20 @@ export function computeEffectivePermissions(user: {
     const mod = MODULE_ACCESS.find((m) => m.key === key);
     if (mod) mod.permissions.forEach((p) => set.delete(p));
   }
+  // Module denies/grants only operate on whole-module bundles, so a single
+  // bundle can mix permissions a role is meant to never hold (e.g. the
+  // `company` bundle carries COMPANY_CREATE/COMPANY_UPDATE, which HR and
+  // Finance roles must not regain). Mandatory exclusions therefore apply
+  // LAST: no combination of grants or denies can ever restore them.
+  for (const forbidden of getMandatoryDeniedPermissions(user.role)) {
+    set.delete(forbidden);
+  }
   return [...set];
+}
+
+/** Permissions the role is never allowed to hold, regardless of grants. */
+export function getMandatoryDeniedPermissions(role: UserRole): Permission[] {
+  return ROLE_MANDATORY_DENIES[role] ?? [];
 }
 
 /** Union of the hardcoded role map and the module registry (same rule `authorize` uses). */

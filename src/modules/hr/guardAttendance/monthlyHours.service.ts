@@ -20,7 +20,12 @@ interface AuditCtx { ip?: string; ua?: string }
 
 const MAX_MONTHLY_HOURS = 744; // sanity cap (longest month = 31 × 24h)
 
-const ymKey = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`;
+const ymKey = (year: number, month: number) => {
+  if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw ApiError.badRequest('Select a valid payroll year (2000–2100) and month (1–12).');
+  }
+  return `${year}-${String(month).padStart(2, '0')}`;
+};
 
 /**
  * MONTHLY TOTAL HOURS — the second attendance input mode.
@@ -29,8 +34,8 @@ const ymKey = (year: number, month: number) => `${year}-${String(month).padStart
  * it into normal / holiday / sunday hours. Holiday and Sunday hours are
  * multiplied by the OT rate in payroll; normal hours are not.
  *
- * When a monthly sheet exists for a guard it takes precedence over the sum
- * of daily records — the two inputs are never silently mixed.
+ * A monthly sheet overrides daily records for that guard + site only.
+ * Other sites retain their own daily fallback, without double-counting.
  */
 export class GuardMonthlyHoursService {
   private static assertBucket(bucket: MonthlyHoursBucket) {
@@ -43,13 +48,16 @@ export class GuardMonthlyHoursService {
       if (round2(v) !== v) throw ApiError.badRequest(`${key} supports at most 2 decimal places`);
       if (v > MAX_MONTHLY_HOURS) throw ApiError.badRequest(`${key} cannot exceed ${MAX_MONTHLY_HOURS}h per month`);
     }
+    if (bucket.normalHours + bucket.holidayHours + bucket.sundayHours > MAX_MONTHLY_HOURS) {
+      throw ApiError.badRequest(`Combined monthly hours cannot exceed ${MAX_MONTHLY_HOURS}h`);
+    }
     if (bucket.normalHours + bucket.holidayHours + bucket.sundayHours <= 0) {
       throw ApiError.badRequest('Enter hours in at least one section (normal, holiday or Sunday)');
     }
   }
 
   /** Guard, site and assignment checks shared by every write. */
-  private static async assertGuardSite(guardId: string, siteId: string) {
+  private static async assertGuardSite(guardId: string, siteId: string, year: number, month: number) {
     const guard = await Employee.findById(guardId);
     if (!guard) throw ApiError.notFound('Guard not found in HR');
     if (guard.category !== EmployeeCategory.GUARD) throw ApiError.badRequest('Employee is not a guard');
@@ -57,11 +65,11 @@ export class GuardMonthlyHoursService {
     const site = await Site.findById(siteId);
     if (!site) throw ApiError.notFound('Site not found');
 
-    const assignment = await PrimarySiteAssignment.findOne({ guardId, siteId });
-    if (!assignment) throw ApiError.badRequest('Guard is not assigned to this site');
-    if (!assignment.isCurrent) {
-      throw ApiError.badRequest('The site assignment has ended — monthly hours can no longer be recorded');
-    }
+    const start = new Date(Date.UTC(year, month - 1, 1));
+    const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+    const assignment = await PrimarySiteAssignment.findOne({ guardId, siteId,
+      effectiveFrom: { $lte: end }, $or: [{ effectiveTo: null }, { effectiveTo: { $gte: start } }] });
+    if (!assignment) throw ApiError.badRequest('No site assignment is effective in the selected month. Correct the historical assignment dates.');
 
     return { guard, site, assignment };
   }
@@ -95,7 +103,7 @@ export class GuardMonthlyHoursService {
       try {
         if (!entry.guardId || !entry.siteId) throw ApiError.badRequest('guardId and siteId are required');
         this.assertBucket(entry);
-        await this.assertGuardSite(entry.guardId, entry.siteId);
+        await this.assertGuardSite(entry.guardId, entry.siteId, params.year, params.month);
 
         const existing = await GuardMonthlyHours.findOne({
           guardId: entry.guardId,
@@ -185,16 +193,17 @@ export class GuardMonthlyHoursService {
       status: GuardAttendanceStatus.ACTIVE,
     }).populate('siteId', 'siteName siteCode');
 
-    const byGuard = new Map<string, Map<string, { siteName: string; totalHours: number; holidayHours: number; normalHours: number }>>();
+    const byGuard = new Map<string, Map<string, { siteName: string; totalHours: number; holidayHours: number; normalHours: number; sundayHours: number }>>();
     for (const rec of records) {
       const gId = rec.guardId.toString();
       const siteDoc: any = rec.siteId;
       const sId = (siteDoc && siteDoc._id ? siteDoc._id : siteDoc).toString();
       if (!byGuard.has(gId)) byGuard.set(gId, new Map());
       const perSite = byGuard.get(gId)!;
-      const bucket = perSite.get(sId) || { siteName: siteDoc?.siteName || 'Site', totalHours: 0, holidayHours: 0, normalHours: 0 };
+      const bucket = perSite.get(sId) || { siteName: siteDoc?.siteName || 'Site', totalHours: 0, holidayHours: 0, normalHours: 0, sundayHours: 0 };
       bucket.totalHours = round2(bucket.totalHours + rec.hoursWorked);
       if (rec.isHoliday) bucket.holidayHours = round2(bucket.holidayHours + rec.hoursWorked);
+      else if (new Date(`${rec.date}T00:00:00.000Z`).getUTCDay() === 0) bucket.sundayHours = round2(bucket.sundayHours + rec.hoursWorked);
       else bucket.normalHours = round2(bucket.normalHours + rec.hoursWorked);
       perSite.set(sId, bucket);
     }
@@ -209,7 +218,10 @@ export class GuardMonthlyHoursService {
   static async getMonthlySheet(year: number, month: number, siteId?: string) {
     const periodKey = ymKey(year, month);
 
-    const assignmentFilter: Record<string, unknown> = { isCurrent: true };
+    const assignmentFilter: Record<string, unknown> = {
+      effectiveFrom: { $lte: new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)) },
+      $or: [{ effectiveTo: null }, { effectiveTo: { $gte: new Date(Date.UTC(year, month - 1, 1)) } }],
+    };
     if (siteId) assignmentFilter.siteId = siteId;
     const assignments = await PrimarySiteAssignment.find(assignmentFilter)
       .populate('siteId', 'siteName siteCode')
@@ -230,7 +242,13 @@ export class GuardMonthlyHoursService {
       sheetByGuardSite.set(`${sheet.guardId.toString()}:${sheet.siteId.toString()}`, sheet);
     }
 
+    const seenAssignments = new Set<string>();
     const rows = assignments
+      .filter((assignment) => {
+        const key = `${assignment.guardId}:${(assignment.siteId as any)?._id || assignment.siteId}`;
+        if (seenAssignments.has(key)) return false;
+        seenAssignments.add(key); return true;
+      })
       .map((assignment) => {
         const gId = assignment.guardId.toString();
         // siteId may be a populated document or a bare ObjectId — handle both.
@@ -284,7 +302,7 @@ export class GuardMonthlyHoursService {
               }
             : null,
           daily: daily
-            ? { totalHours: daily.totalHours, holidayHours: daily.holidayHours, normalHours: daily.normalHours }
+            ? { totalHours: daily.totalHours, holidayHours: daily.holidayHours, normalHours: daily.normalHours, sundayHours: daily.sundayHours }
             : null,
           warnings,
         };
@@ -318,7 +336,7 @@ export class GuardMonthlyHoursService {
     if (guardId) sheetFilter.guardId = guardId;
     const sheets = await GuardMonthlyHours.find(sheetFilter);
 
-    const guardsWithSheets = new Set(sheets.map((s) => s.guardId.toString()));
+    const sitesWithSheets = new Set(sheets.map((s) => `${s.guardId}:${s.siteId}`));
     // DAILY FALLBACK — Sunday hours are classified from the calendar date
     // ($dayOfWeek 1 = Sunday). GuardAttendanceRecord.date is a "YYYY-MM-DD"
     // string; $toDate parses it as UTC midnight, so the weekday is exact.
@@ -355,9 +373,9 @@ export class GuardMonthlyHoursService {
           },
         },
       },
-    ])).filter((r) => !guardsWithSheets.has(r._id.guardId.toString()));
+    ])).filter((r) => !sitesWithSheets.has(`${r._id.guardId}:${r._id.siteId}`));
 
-    const siteDocs = await Site.find({ _id: { $in: sheets.map((s) => s.siteId) } }).select('siteName siteCode');
+    const siteDocs = await Site.find({ _id: { $in: [...sheets.map((s) => s.siteId), ...dailyRows.map((r) => r._id.siteId)] } }).select('siteName siteCode');
     const siteById = new Map(siteDocs.map((s) => [s._id.toString(), s]));
 
     const byGuard = new Map<string, {
@@ -403,6 +421,7 @@ export class GuardMonthlyHoursService {
     for (const row of dailyRows) {
       pushSite(row._id.guardId.toString(), {
         siteId: row._id.siteId.toString(),
+        siteName: siteById.get(row._id.siteId.toString())?.siteName,
         normalHours: round2(row.normalHours),
         holidayHours: round2(row.holidayHours),
         sundayHours: round2(row.sundayHours || 0),

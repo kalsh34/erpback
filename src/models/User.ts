@@ -40,7 +40,7 @@ const userSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-userSchema.index({ email: 1 });
+// email already declares its unique index on the schema path.
 userSchema.index({ role: 1 });
 
 export const User = mongoose.model<IUser>('User', userSchema);

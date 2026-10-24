@@ -38,7 +38,7 @@ const organizationSchema = new Schema<IOrganization>(
   { timestamps: true }
 );
 
-organizationSchema.index({ code: 1 });
+// code already declares its unique index on the schema path.
 organizationSchema.index({ type: 1 });
 organizationSchema.index({ companyId: 1 });
 organizationSchema.index({ parentId: 1 });

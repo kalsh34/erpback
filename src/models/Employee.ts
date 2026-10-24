@@ -32,6 +32,9 @@ export interface IEmployee extends Document {
     changedBy?: mongoose.Types.ObjectId;
     changedAt: Date;
   }[];
+  /** Stamped when the employee is set to TERMINATED (see EmployeeService.changeStatus). */
+  terminationDate?: Date;
+  terminationReason?: string;
   guardInfo?: {
     employmentType: EmploymentType;
     idCardNumber?: string;
@@ -77,6 +80,8 @@ const employeeSchema = new Schema<IEmployee>(
       changedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
       changedAt: { type: Date, default: Date.now },
     }],
+    terminationDate: { type: Date, default: undefined },
+    terminationReason: { type: String, trim: true, default: undefined },
     guardInfo: {
       employmentType: { type: String, enum: Object.values(EmploymentType) },
       idCardNumber: { type: String, trim: true },
@@ -91,7 +96,7 @@ employeeSchema.virtual('fullName').get(function () {
 
 employeeSchema.set('toJSON', { virtuals: true });
 
-employeeSchema.index({ employeeCode: 1 });
+// employeeCode already declares its unique index on the schema path.
 employeeSchema.index({ category: 1 });
 employeeSchema.index({ status: 1 });
 employeeSchema.index({ lastName: 1, firstName: 1 });

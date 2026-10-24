@@ -5,11 +5,13 @@ import { ensureDefaultAdmin } from './bootstrap/ensureDefaultAdmin';
 import { registerHRPermissions } from './modules/hr/permissions/hr.permissions';
 import { registerPayrollPermissions } from './modules/hr/permissions/payroll.permissions';
 import { registerCorePermissions } from './core/permissions/core.permissions';
+import { registerFleetPermissions } from './modules/fleet/fleet.permissions';
 
 const registerAllPermissions = () => {
   registerCorePermissions();
   registerHRPermissions();
   registerPayrollPermissions();
+  registerFleetPermissions();
   console.log('[PERMISSIONS] All module permissions registered');
 };
 

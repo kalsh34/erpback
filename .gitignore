@@ -15,3 +15,22 @@ node_modules/
 # os junk
 Thumbs.db
 .DS_Store
+
+# Dependencies
+node_modules/
+
+# Temporary MongoDB databases
+.tmp-*/
+.qa-credentials.json
+.qa-testdata.json
+
+# QA output
+.qa-artifacts/
+
+# Backups
+backup/
+
+# Environment secrets
+.env
+.env.*
+!.env.example

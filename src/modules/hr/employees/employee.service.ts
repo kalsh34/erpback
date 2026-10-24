@@ -4,6 +4,10 @@ import { EmployeeCategory, EmployeeStatus } from '../../../types';
 import { AuditService } from '../../../core/audit/AuditService';
 import { eventBus } from '../../../core/events/EventBus';
 import { getActivationRequirements, describeMissingRequirements } from './activation';
+import { Contract } from '../../../models/Contract';
+import { SalaryHistory } from '../../../models/SalaryHistory';
+import { Guarantor } from '../../../models/Guarantor';
+import { FileAttachment } from '../../../core/files/FileAttachment';
 
 export class EmployeeService {
   static async getAll(query: { page?: number; limit?: number; category?: EmployeeCategory; status?: EmployeeStatus; search?: string }) {
@@ -64,7 +68,25 @@ export class EmployeeService {
     return employee;
   }
 
+  /**
+   * Full employee profile for the detail sidebar: employee + their active
+   * contract (wage/allowance history), the contract salary history, guarantors
+   * on file and any documents/uploads.
+   */
+  static async getDetail(id: string) {
+    const employee = await this.getById(id);
+    const [contract, contractHistory, guarantors, files] = await Promise.all([
+      Contract.findOne({ employeeId: id, status: 'ACTIVE' }).sort({ contractStartDate: -1 }),
+      SalaryHistory.find({ employeeId: id }).sort({ effectiveFrom: -1 }).lean(),
+      Guarantor.find({ employeeId: id }).sort({ createdAt: -1 }),
+      FileAttachment.find({ entityType: 'employee', entityId: id }).sort({ createdAt: -1 }).lean(),
+    ]);
+    return { employee, contract, contractHistory, guarantors, documents: employee.documents || [], files };
+  }
+
   static async create(data: Partial<IEmployee>, auditCtx?: { userId: string; ip?: string; ua?: string }): Promise<IEmployee> {
+    if (!data || typeof data !== 'object') throw ApiError.badRequest('A request body is required');
+    if (!data.employeeCode || !String(data.employeeCode).trim()) throw ApiError.badRequest('employeeCode is required');
     const existing = await Employee.findOne({ employeeCode: data.employeeCode });
     if (existing) throw ApiError.conflict('Employee code already exists');
 
@@ -198,6 +220,16 @@ export class EmployeeService {
         changedAt: new Date(),
       },
     ];
+
+    // A termination is a fact to register, not just a status flip: stamp when
+    // and why it happened (and clear the stamps if the employee comes back).
+    if (to === EmployeeStatus.TERMINATED) {
+      employee.terminationDate = new Date();
+      employee.terminationReason = reason;
+    } else if (from === EmployeeStatus.TERMINATED) {
+      employee.terminationDate = undefined;
+      employee.terminationReason = undefined;
+    }
     await employee.save();
 
     if (auditCtx) {

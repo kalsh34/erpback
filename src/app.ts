@@ -30,6 +30,7 @@ import departmentRoutes from './modules/hr/organization/department.routes';
 import positionRoutes from './modules/hr/organization/position.routes';
 import payGradeRoutes from './modules/hr/organization/payGrade.routes';
 import fileRoutes from './modules/hr/files/file.routes';
+import importRoutes from './modules/hr/import/import.routes';
 
 import staffPayrollRoutes from './modules/staffPayroll/staffPayroll.routes';
 import guardPayrollRoutes from './modules/guardPayroll/guardPayroll.routes';
@@ -39,7 +40,7 @@ import salesCrmStub from './modules/sales-crm/index';
 import procurementStub from './modules/procurement/index';
 import manufacturingStub from './modules/manufacturing/index';
 import projectsStub from './modules/projects/index';
-import fleetStub from './modules/fleet/index';
+import fleetRoutes from './modules/fleet/fleet.routes';
 
 const app = express();
 
@@ -53,7 +54,7 @@ const corsOrigins = config.corsOrigin
 const allowAnyOrigin = corsOrigins.length === 0 || corsOrigins.includes('*');
 
 app.use(cors(allowAnyOrigin ? {} : { origin: corsOrigins }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 app.use(requestLogger);
 
@@ -87,6 +88,7 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/positions', positionRoutes);
 app.use('/api/pay-grades', payGradeRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/imports', importRoutes);
 
 // Payroll v2 — separate systems. Logic to be defined by the owner.
 app.use('/api/staff-payroll', staffPayrollRoutes);
@@ -99,7 +101,7 @@ app.use('/api/v2/sales-crm', salesCrmStub);
 app.use('/api/v2/procurement', procurementStub);
 app.use('/api/v2/manufacturing', manufacturingStub);
 app.use('/api/v2/projects', projectsStub);
-app.use('/api/v2/fleet', fleetStub);
+app.use('/api/v2/fleet', fleetRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });

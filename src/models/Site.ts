@@ -72,7 +72,7 @@ const siteSchema = new Schema<ISite>(
   { timestamps: true }
 );
 
-siteSchema.index({ siteCode: 1 });
+// siteCode already declares its unique index on the schema path.
 siteSchema.index({ status: 1 });
 
 export const Site = mongoose.model<ISite>('Site', siteSchema);

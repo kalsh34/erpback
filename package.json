@@ -4,19 +4,13 @@
   "description": "Vital Security PLC Payroll Management System - Backend",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "infisical run --env=dev -- ts-node-dev --respawn --transpile-only src/server.ts",
-    "dev:local": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "postinstall": "npm run build",
     "start": "node dist/server.js",
-    "start:infisical": "infisical run --env=prod -- node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "check:guard-payroll": "ts-node --transpile-only tests/guardPayrollEngine.check.ts",
-    "check:staff-payroll": "ts-node --transpile-only tests/staffPayrollEngine.check.ts",
-    "seed": "infisical run --env=dev -- ts-node-dev --transpile-only src/seed.ts",
-    "seed:local": "ts-node-dev --transpile-only src/seed.ts",
-    "import:guards": "ts-node --transpile-only src/scripts/importGuardsExcel.ts",
-    "check:routes": "ts-node --transpile-only tests/listRoutes.check.ts"
+    "test": "ts-node --transpile-only tests/run.ts",
+    "seed": "ts-node-dev --transpile-only src/seed.ts"
   },
   "dependencies": {
     "@types/multer": "^2.2.0",
@@ -29,7 +23,7 @@
     "mongoose": "^8.6.0",
     "morgan": "^1.10.0",
     "multer": "^2.3.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -15,6 +15,6 @@ const departmentSchema = new Schema<IDepartment>(
   { timestamps: true }
 );
 
-departmentSchema.index({ name: 1 }, { unique: true });
+// name already declares its unique index on the schema path.
 
 export const Department = mongoose.model<IDepartment>('Department', departmentSchema);

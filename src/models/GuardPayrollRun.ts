@@ -17,6 +17,12 @@ export interface IGuardPayrollRun extends Document {
   status: PayrollRecordStatus;
   calculatedBy?: mongoose.Types.ObjectId;
   calculatedAt?: Date;
+  inputFingerprint?: string;
+  /** Primary-site scope the run was calculated for (null = all sites). */
+  scopeSiteId?: mongoose.Types.ObjectId | null;
+  scopeSiteName?: string;
+  /** How the last calculation treated existing records: replace (full) or add-only (remaining). */
+  lastCalcMode?: 'full' | 'remaining';
   submittedBy?: mongoose.Types.ObjectId;
   submittedAt?: Date;
   checkedBy?: mongoose.Types.ObjectId;
@@ -68,6 +74,10 @@ const guardPayrollRunSchema = new Schema<IGuardPayrollRun>(
     },
     calculatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     calculatedAt: { type: Date },
+    inputFingerprint: { type: String },
+    scopeSiteId: { type: Schema.Types.ObjectId, ref: 'Site', default: null },
+    scopeSiteName: { type: String, default: '' },
+    lastCalcMode: { type: String, enum: ['full', 'remaining'], default: 'full' },
     submittedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     submittedAt: { type: Date },
     checkedBy: { type: Schema.Types.ObjectId, ref: 'User' },

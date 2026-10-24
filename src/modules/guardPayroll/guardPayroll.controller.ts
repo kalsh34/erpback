@@ -27,6 +27,12 @@ export class GuardPayrollController {
     } catch (error) { next(error); }
   }
 
+  static async readiness(req: Request, res: Response, next: NextFunction) {
+    try {
+      res.json({ success: true, data: await GuardPayrollRunService.readiness(String(req.query.periodKey || '')) });
+    } catch (error) { next(error); }
+  }
+
   // ── Config ─────────────────────────────────────────────────────────
   static async getConfig(_req: Request, res: Response, next: NextFunction) {
     try {
@@ -98,7 +104,16 @@ export class GuardPayrollController {
         .populate('primarySite.siteId', 'siteName siteCode')
         .sort({ 'snapshot.employeeCode': 1 });
 
-      const mapped = records.map((r) => ({
+      // Optional site filter: filter by primary-site _id (ObjectId or string form).
+      const { siteId } = req.query;
+      const filtered = siteId && siteId !== 'ALL'
+        ? records.filter((r) => {
+            const psid = (r.primarySite as any)?.siteId;
+            const resolved = psid?._id ? String(psid._id) : String(psid || '');
+            return resolved === String(siteId);
+          })
+        : records;
+      const mapped = filtered.map((r) => ({
         ...r.toObject(),
         guardId: {
           _id: r.employeeId,
@@ -129,14 +144,16 @@ export class GuardPayrollController {
     try {
       const periodKey = req.body?.periodKey || req.params?.periodKey;
       if (!periodKey) throw ApiError.badRequest('periodKey (YYYY-MM) is required');
-      res.status(201).json({ success: true, data: await GuardPayrollRunService.calculate(periodKey, userId(req), auditCtx(req)) });
+      // Part 2/1: optional primary-site scope and 'remaining' (add-only) mode.
+      const siteId = (req.body?.siteId as string | undefined) || null;
+      const mode = req.body?.mode === 'remaining' ? 'remaining' : 'full';
+      res.status(201).json({ success: true, data: await GuardPayrollRunService.calculate(periodKey, userId(req), auditCtx(req), { siteId, mode }) });
     } catch (error) { next(error); }
   }
 
   static async recalculateRun(req: Request, res: Response, next: NextFunction) {
     try {
-      const run = await GuardPayrollRunService.getRun(req.params.id);
-      res.json({ success: true, data: await GuardPayrollRunService.calculate(run.run.periodKey, userId(req), auditCtx(req)) });
+      res.json({ success: true, data: await GuardPayrollRunService.recalculate(req.params.id, userId(req), auditCtx(req)) });
     } catch (error) { next(error); }
   }
 
@@ -154,7 +171,7 @@ export class GuardPayrollController {
 
   static async getRun(req: Request, res: Response, next: NextFunction) {
     try {
-      res.json({ success: true, data: await GuardPayrollRunService.getRun(req.params.id) });
+      res.json({ success: true, data: await GuardPayrollRunService.getRun(req.params.id, req.query.siteId as string | undefined) });
     } catch (error) { next(error); }
   }
 
@@ -220,6 +237,14 @@ export class GuardPayrollController {
   }
 
   // ── Exports & Payslip ──────────────────────────────────────────────
+  /** Banks actually in use for a payroll month (staff + guard combined). */
+  static async banksInUse(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { periodKey } = req.query;
+      res.json({ success: true, data: await GuardPayrollRunService.listBanksInUse(periodKey as string | undefined) });
+    } catch (error) { next(error); }
+  }
+
   static async exportBank(req: Request, res: Response, next: NextFunction) {
     try {
       const { bank } = req.query;
@@ -232,7 +257,7 @@ export class GuardPayrollController {
 
   static async exportTax(req: Request, res: Response, next: NextFunction) {
     try {
-      const file = await GuardPayrollRunService.exportTaxReport(req.params.id);
+      const file = await GuardPayrollRunService.exportTaxReport(req.params.id, req.query.taxBranch as string | undefined);
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
       res.send(file.csv);
@@ -241,7 +266,7 @@ export class GuardPayrollController {
 
   static async exportPension(req: Request, res: Response, next: NextFunction) {
     try {
-      const file = await GuardPayrollRunService.exportPensionReport(req.params.id);
+      const file = await GuardPayrollRunService.exportPensionReport(req.params.id, req.query.pensionCenter as string | undefined);
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
       res.send(file.csv);
