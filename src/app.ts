@@ -41,6 +41,7 @@ import procurementStub from './modules/procurement/index';
 import manufacturingStub from './modules/manufacturing/index';
 import projectsStub from './modules/projects/index';
 import fleetRoutes from './modules/fleet/fleet.routes';
+import serviceLibraryRoutes from './modules/marketing/serviceLibrary.routes';
 
 const app = express();
 
@@ -102,6 +103,9 @@ app.use('/api/v2/procurement', procurementStub);
 app.use('/api/v2/manufacturing', manufacturingStub);
 app.use('/api/v2/projects', projectsStub);
 app.use('/api/v2/fleet', fleetRoutes);
+
+// Marketing (Proposal & Proforma) Phase A — reusable service library.
+app.use('/api/marketing/service-library', serviceLibraryRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found' });

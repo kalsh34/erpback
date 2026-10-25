@@ -288,6 +288,10 @@ export const PERMISSIONS = {
   PRODUCT_READ: 'product.read',
   PRODUCT_MANAGE: 'product.manage',
   GRN_MANAGE: 'grn.manage',
+
+  // Marketing (Proposal & Proforma Management) — Phase A: reusable service library.
+  SERVICE_READ: 'service.read',
+  SERVICE_MANAGE: 'service.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -407,6 +411,14 @@ export const MODULE_ACCESS: { key: string; label: string; permissions: Permissio
       PERMISSIONS.FLEET_REPORT,
     ],
   },
+  {
+    key: 'marketing',
+    label: 'Marketing & Proposals',
+    permissions: [
+      PERMISSIONS.SERVICE_READ,
+      PERMISSIONS.SERVICE_MANAGE,
+    ],
+  },
 ];
 
 export const MODULE_ACCESS_KEYS = MODULE_ACCESS.map((m) => m.key);
@@ -493,6 +505,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.PRODUCT_MANAGE,
     PERMISSIONS.GRN_MANAGE,
     PERMISSIONS.BILL_MANAGE,
+    PERMISSIONS.SERVICE_READ,
   ],
   [UserRole.SYSTEM_ADMIN]: [
     PERMISSIONS.USER_CREATE,
@@ -707,6 +720,9 @@ export const ROLE_MANDATORY_DENIES: Partial<Record<UserRole, Permission[]>> = {
   [UserRole.HR_ADMIN]: [PERMISSIONS.COMPANY_CREATE, PERMISSIONS.COMPANY_UPDATE],
   // Finance must not administer or delete companies.
   [UserRole.FINANCE_OFFICER]: [PERMISSIONS.COMPANY_CREATE, PERMISSIONS.COMPANY_UPDATE],
+  // The CEO role is strictly read-only for every business mutation; a whole-module
+  // marketing grant must never restore service-library write access.
+  [UserRole.CEO]: [PERMISSIONS.SERVICE_MANAGE],
 };
 
 // --- Payroll Calculation Types ---
