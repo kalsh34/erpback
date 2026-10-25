@@ -275,6 +275,19 @@ export const PERMISSIONS = {
   FLEET_MANAGE: 'fleet.manage',
   FLEET_ASSIGN: 'fleet.assign',
   FLEET_REPORT: 'fleet.report',
+
+  // Procurement & Purchasing module
+  PURCHASE_READ: 'purchase.read',
+  PURCHASE_CREATE: 'purchase.create',
+  PURCHASE_UPDATE: 'purchase.update',
+  PURCHASE_DELETE: 'purchase.delete',
+  PURCHASE_APPROVE: 'purchase.approve',
+  BILL_MANAGE: 'bill.manage',
+  CONTACT_READ: 'contact.read',
+  CONTACT_MANAGE: 'contact.manage',
+  PRODUCT_READ: 'product.read',
+  PRODUCT_MANAGE: 'product.manage',
+  GRN_MANAGE: 'grn.manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

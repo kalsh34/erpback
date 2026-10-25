@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const po_controller_1 = require("./po.controller");
+const auth_1 = require("../../../middleware/auth");
+const rbac_1 = require("../../../middleware/rbac");
+const types_1 = require("../../../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_READ), po_controller_1.POController.getAll);
+router.get('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_READ), po_controller_1.POController.getById);
+router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_CREATE), po_controller_1.POController.create);
+router.put('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_UPDATE), po_controller_1.POController.update);
+router.post('/:id/submit', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_UPDATE), po_controller_1.POController.submit);
+router.post('/:id/approve', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_APPROVE), po_controller_1.POController.approve);
+router.post('/:id/reject', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_APPROVE), po_controller_1.POController.reject);
+router.post('/:id/send', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_UPDATE), po_controller_1.POController.send);
+router.post('/:id/revise', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_UPDATE), po_controller_1.POController.revise);
+exports.default = router;
+//# sourceMappingURL=po.routes.js.map

@@ -21,6 +21,7 @@ export interface ParsedGuardRow {
   age?: number;
   dateOfBirth?: string;
   education?: string;
+  fingerprint?: boolean;
   address?: string;
   phone?: string;
   hireDate: string;
@@ -126,6 +127,21 @@ function parseExcelDate(val: any): Date {
   return new Date();
 }
 
+/**
+ * Fingerprint column: ✓/✔/√/አዎ/yes/right → true, ✗/✘/x/አይ/no → false,
+ * blank/unrecognised → undefined (not provided in the sheet).
+ */
+function parseFingerprint(val: any): boolean | undefined {
+  const s = cleanString(val).toLowerCase();
+  if (!s) return undefined;
+  if (['✓', '✔', '√', 'አዎ', 'አዎን', 'yes', 'y', 'true', 'right', '1'].includes(s)) return true;
+  if (['x', '✗', '✘', '×', 'አይ', 'አይም', 'no', 'n', 'false', '0'].includes(s)) return false;
+  // A check/cross glyph inside a longer cell still decides the value.
+  if (/[✓✔√]/.test(s)) return true;
+  if (/[✗✘×]/.test(s)) return false;
+  return undefined;
+}
+
 function parseNumber(val: any): number {
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   if (!val) return 0;
@@ -170,8 +186,10 @@ function normalizeHeaderMap(rawRow: Record<string, any>): Record<string, any> {
       normalized['gender'] = val;
     } else if (k.includes('ዕድሜ') || k === 'age') {
       normalized['age'] = val;
-    } else if (k.includes('የት/ደረጃ') || k.includes('ት/ደረጃ') || k.includes('education')) {
+    } else if (k.includes('የት/ደረጃ') || k.includes('ት/ደረጃ') || k.includes('education') || k.includes('educational')) {
       normalized['education'] = val;
+    } else if (k.includes('fingerprint') || k.includes('finger print') || k.includes('finger') || k.includes('የጣት አሻ') || k.includes('ጣት')) {
+      normalized['fingerprint'] = val;
     } else if (k.includes('ክ/ከተማ') || k.includes('subcity') || k.includes('sub city')) {
       normalized['subCity'] = val;
     } else if (k.includes('ወረዳ') || k === 'woreda') {
@@ -338,7 +356,8 @@ export class GuardImportService {
         gender,
         age: age > 0 ? age : undefined,
         dateOfBirth,
-        education: cleanString(row['education']),
+        education: cleanString(row['education']) || undefined,
+        fingerprint: parseFingerprint(row['fingerprint']),
         address: address || undefined,
         phone: phone || undefined,
         hireDate,
@@ -428,6 +447,8 @@ export class GuardImportService {
         gender: item.gender,
         phone: item.phone,
         address: item.address,
+        education: item.education,
+        fingerprint: item.fingerprint,
         dateOfBirth: item.dateOfBirth ? new Date(item.dateOfBirth) : undefined,
         hireDate,
         homeSiteId: site._id,

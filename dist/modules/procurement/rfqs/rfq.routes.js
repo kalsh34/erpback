@@ -1,0 +1,22 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const rfq_controller_1 = require("./rfq.controller");
+const auth_1 = require("../../../middleware/auth");
+const rbac_1 = require("../../../middleware/rbac");
+const types_1 = require("../../../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.get('/compare', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_READ), rfq_controller_1.RFQController.compare);
+router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_READ), rfq_controller_1.RFQController.getAll);
+router.get('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_READ), rfq_controller_1.RFQController.getById);
+router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_CREATE), rfq_controller_1.RFQController.create);
+router.put('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_UPDATE), rfq_controller_1.RFQController.update);
+router.post('/:id/submit', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_UPDATE), rfq_controller_1.RFQController.submit);
+router.post('/:id/send', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_UPDATE), rfq_controller_1.RFQController.send);
+router.post('/:id/quote', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_UPDATE), rfq_controller_1.RFQController.recordQuotation);
+router.post('/:id/approve', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_APPROVE), rfq_controller_1.RFQController.approve);
+router.post('/:id/reject', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_APPROVE), rfq_controller_1.RFQController.reject);
+router.post('/:id/convert-to-po', (0, rbac_1.authorize)(types_1.PERMISSIONS.PURCHASE_CREATE), rfq_controller_1.RFQController.convertToPO);
+exports.default = router;
+//# sourceMappingURL=rfq.routes.js.map

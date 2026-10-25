@@ -228,6 +228,8 @@ router.post('/commit', authorize(PERMISSIONS.EMPLOYEE_CREATE), expressJsonOnly, 
             hireDate: person.hireDate ? new Date(person.hireDate) : undefined,
           };
           if (/^\d{4}-\d{2}-\d{2}$/.test(String(person.hireDate || '')) === false) delete employeeData.hireDate;
+          if (person.education) employeeData.education = person.education;
+          if (person.fingerprint != null) employeeData.fingerprint = person.fingerprint;
           const homeSiteId = await resolveSite(person.siteName);
           if (homeSiteId) employeeData.homeSiteId = homeSiteId as any;
           if (person.age != null && person.age > 0) {

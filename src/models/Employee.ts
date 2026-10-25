@@ -25,6 +25,10 @@ export interface IEmployee extends Document {
   accountNumber?: string;
   salary?: number;
   transportAllowance?: number;
+  /** Educational level, e.g. "Grade 8", "Grade 12", "Diploma", "Degree". */
+  education?: string;
+  /** Whether the person brought/documents their fingerprint at registration. */
+  fingerprint?: boolean;
   statusHistory?: {
     from: EmployeeStatus;
     to: EmployeeStatus;
@@ -73,6 +77,8 @@ const employeeSchema = new Schema<IEmployee>(
     accountNumber: { type: String, trim: true },
     salary: { type: Number, default: 0 },
     transportAllowance: { type: Number, default: 0 },
+    education: { type: String, trim: true },
+    fingerprint: { type: Boolean, default: undefined },
     statusHistory: [{
       from: { type: String, enum: Object.values(EmployeeStatus), required: true },
       to: { type: String, enum: Object.values(EmployeeStatus), required: true },

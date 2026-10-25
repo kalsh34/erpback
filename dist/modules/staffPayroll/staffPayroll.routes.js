@@ -1,0 +1,45 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const staffPayroll_controller_1 = require("./staffPayroll.controller");
+const auth_1 = require("../../middleware/auth");
+const rbac_1 = require("../../middleware/rbac");
+const types_1 = require("../../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+const READ = types_1.PERMISSIONS.OFFICE_PAYROLL_READ;
+const CALCULATE = types_1.PERMISSIONS.OFFICE_PAYROLL_CALCULATE;
+const SUBMIT = types_1.PERMISSIONS.OFFICE_PAYROLL_SUBMIT;
+const CHECK = types_1.PERMISSIONS.OFFICE_PAYROLL_CHECK;
+const APPROVE = types_1.PERMISSIONS.OFFICE_PAYROLL_APPROVE;
+const PAY = types_1.PERMISSIONS.OFFICE_PAYROLL_PAY;
+const RETURN = types_1.PERMISSIONS.OFFICE_PAYROLL_RETURN;
+const ENTER_OT = types_1.PERMISSIONS.OFFICE_PAYROLL_ENTER_OT;
+const RATES = types_1.PERMISSIONS.OFFICE_PAYROLL_RATES;
+router.get('/status', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.status);
+// Runs: calculate, lifecycle, history.
+router.get('/', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.list);
+router.post('/generate/:periodKey', (0, rbac_1.authorize)(CALCULATE), staffPayroll_controller_1.StaffPayrollController.createRun);
+router.post('/runs', (0, rbac_1.authorize)(CALCULATE), staffPayroll_controller_1.StaffPayrollController.createRun);
+router.get('/runs', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.listRuns);
+router.get('/runs/:id', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.getRun);
+router.post('/runs/:id/recalculate', (0, rbac_1.authorize)(CALCULATE), staffPayroll_controller_1.StaffPayrollController.recalculateRun);
+router.post('/runs/:id/submit', (0, rbac_1.authorize)(SUBMIT), staffPayroll_controller_1.StaffPayrollController.submitRun);
+router.post('/runs/:id/check', (0, rbac_1.authorize)(CHECK), staffPayroll_controller_1.StaffPayrollController.checkRun);
+router.post('/runs/:id/approve', (0, rbac_1.authorize)(APPROVE), staffPayroll_controller_1.StaffPayrollController.approveRun);
+router.post('/runs/:id/return', (0, rbac_1.authorize)(RETURN), staffPayroll_controller_1.StaffPayrollController.returnRun);
+router.post('/runs/:id/pay', (0, rbac_1.authorize)(PAY), staffPayroll_controller_1.StaffPayrollController.payRun);
+router.get('/runs/:id/export/bank', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.exportBank);
+router.get('/runs/:id/export/tax', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.exportTax);
+router.get('/runs/:id/export/pension', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.exportPension);
+router.get('/records/:id', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.getRecord);
+router.get('/records/:id/payslip', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.getPayslip);
+// Overtime (enters Gross and Taxable earnings) and bonus (outside the formula).
+router.get('/overtime', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.listOvertime);
+router.post('/overtime', (0, rbac_1.authorize)(ENTER_OT), staffPayroll_controller_1.StaffPayrollController.saveOvertime);
+router.post('/overtime/:id/cancel', (0, rbac_1.authorize)(ENTER_OT), staffPayroll_controller_1.StaffPayrollController.cancelOvertime);
+router.get('/bonuses', (0, rbac_1.authorize)(READ), staffPayroll_controller_1.StaffPayrollController.listBonuses);
+router.post('/bonuses', (0, rbac_1.authorize)(RATES), staffPayroll_controller_1.StaffPayrollController.saveBonus);
+router.post('/bonuses/:id/cancel', (0, rbac_1.authorize)(RATES), staffPayroll_controller_1.StaffPayrollController.cancelBonus);
+exports.default = router;
+//# sourceMappingURL=staffPayroll.routes.js.map

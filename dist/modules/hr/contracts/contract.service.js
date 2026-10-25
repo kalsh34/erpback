@@ -1,0 +1,185 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ContractService = void 0;
+const Contract_1 = require("../../../models/Contract");
+const Employee_1 = require("../../../models/Employee");
+const SalaryHistory_1 = require("../../../models/SalaryHistory");
+const types_1 = require("../../../types");
+const activation_1 = require("../employees/activation");
+const ApiError_1 = require("../../../common/ApiError");
+const AuditService_1 = require("../../../core/audit/AuditService");
+const EventBus_1 = require("../../../core/events/EventBus");
+/** The pay-package fields recorded in SalaryHistory on every change. */
+const PAY_FIELDS = [
+    'wage',
+    'responsibilityAllowance',
+    'teleAllowance',
+    'taxableTransport',
+    'nonTaxableAllowance',
+    'transportAllowance',
+];
+const pickPay = (c) => Object.fromEntries(PAY_FIELDS.map((f) => [f, Number(c?.[f] ?? 0)]));
+/**
+ * DEF-L1: `transportAllowance` is a GUARD-domain field (guard profile / Guard
+ * Payroll context). The staff payroll formula (frozen spreadsheet rule) is fed
+ * ONLY from `taxableTransport` and `nonTaxableAllowance` — a staff contract
+ * that stores a positive transportAllowance silently never affects pay. The
+ * field is therefore explicitly rejected for staff contracts with a clear
+ * message instead of being silently discarded. Guards keep it.
+ */
+const STAFF_TRANSPORT_MESSAGE = 'transportAllowance applies to guard contracts only and is unchanged by Staff Payroll. ' +
+    'For staff contracts use taxableTransport (taxable part) and nonTaxableAllowance (non-taxable part); ' +
+    'set transportAllowance to 0 or omit it.';
+class ContractService {
+    static async getByEmployeeId(employeeId) {
+        return Contract_1.Contract.findOne({ employeeId }).sort({ createdAt: -1 });
+    }
+    /** Full salary-change history for one employee (newest first). */
+    static async getSalaryHistory(employeeId) {
+        return SalaryHistory_1.SalaryHistory.find({ employeeId }).sort({ effectiveFrom: -1, createdAt: -1 }).populate('changedBy', 'firstName lastName');
+    }
+    static async getAll(query) {
+        const { page = 1, limit = 20, status, search } = query;
+        const skip = (page - 1) * limit;
+        const filter = {};
+        if (status)
+            filter.status = status;
+        if (search) {
+            filter.$or = [
+                { contractType: { $regex: search, $options: 'i' } },
+            ];
+        }
+        const [contracts, total] = await Promise.all([
+            Contract_1.Contract.find(filter).populate('employeeId', 'firstName lastName employeeCode').sort({ createdAt: -1 }).skip(skip).limit(limit),
+            Contract_1.Contract.countDocuments(filter),
+        ]);
+        return { data: contracts, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+    }
+    static async assertStaffTransportField(employeeId, incoming) {
+        const value = Number(incoming?.transportAllowance ?? 0);
+        if (!(Number.isFinite(value) && value > 0))
+            return; // 0/absent — nothing to police
+        const emp = await Employee_1.Employee.findOne({ _id: employeeId }).select('category').lean();
+        if (emp && emp.category === types_1.EmployeeCategory.GUARD)
+            return; // guard contracts own the field
+        throw ApiError_1.ApiError.badRequest(STAFF_TRANSPORT_MESSAGE);
+    }
+    static async create(data, auditCtx) {
+        const existing = await Contract_1.Contract.findOne({ employeeId: data.employeeId, status: 'ACTIVE' });
+        if (existing)
+            throw ApiError_1.ApiError.conflict('Employee already has an active contract');
+        await ContractService.assertStaffTransportField(data.employeeId, data);
+        const contract = await Contract_1.Contract.create(data);
+        // Baseline salary history row — the starting package of this contract.
+        await SalaryHistory_1.SalaryHistory.create({
+            employeeId: data.employeeId,
+            contractId: contract._id,
+            effectiveFrom: data.contractStartDate || new Date(),
+            previous: undefined,
+            current: pickPay(contract),
+            reason: 'Contract created',
+            changedBy: auditCtx?.userId,
+        });
+        await Employee_1.Employee.findByIdAndUpdate(data.employeeId, { status: types_1.EmployeeStatus.CONTRACTED });
+        // With the contract in place the employee may now qualify for ACTIVE (when a
+        // verified guarantor is already on file).
+        await (0, activation_1.activateEmployeeIfEligible)(String(data.employeeId));
+        if (auditCtx) {
+            AuditService_1.AuditService.log({
+                userId: auditCtx.userId,
+                action: 'CONTRACT_CREATE',
+                entity: 'Contract',
+                entityId: contract._id.toString(),
+                newValues: data,
+                ipAddress: auditCtx.ip,
+                userAgent: auditCtx.ua,
+            });
+        }
+        EventBus_1.eventBus.emit('hr.contract.created', { contractId: contract._id, employeeId: data.employeeId });
+        return contract;
+    }
+    static async update(id, data, auditCtx) {
+        const old = await Contract_1.Contract.findById(id);
+        if (!old)
+            throw ApiError_1.ApiError.notFound('Contract not found');
+        await ContractService.assertStaffTransportField(old.employeeId, data);
+        const oldValues = old.toObject();
+        const contract = await Contract_1.Contract.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+        if (!contract)
+            throw ApiError_1.ApiError.notFound('Contract not found');
+        // Pay package changed? Record the OLD package in the salary history so
+        // previous salaries are never lost when a contract is updated.
+        const oldPay = pickPay(oldValues);
+        const newPay = pickPay(contract);
+        const payChanged = PAY_FIELDS.some((f) => oldPay[f] !== newPay[f]);
+        if (payChanged) {
+            await SalaryHistory_1.SalaryHistory.create({
+                employeeId: old.employeeId,
+                contractId: id,
+                effectiveFrom: data.contractStartDate || old.contractStartDate || new Date(),
+                previous: oldPay,
+                current: newPay,
+                reason: 'Contract updated',
+                changedBy: auditCtx?.userId,
+            });
+            EventBus_1.eventBus.emit('hr.contract.salaryChanged', {
+                contractId: id,
+                employeeId: old.employeeId,
+                previousWage: oldPay.wage,
+                newWage: newPay.wage,
+            });
+        }
+        if (data.status === 'ACTIVE' && old.status !== 'ACTIVE') {
+            await (0, activation_1.activateEmployeeIfEligible)(String(old.employeeId));
+        }
+        if (data.status === 'TERMINATED' && old.status !== 'TERMINATED') {
+            const hasOtherActive = await Contract_1.Contract.countDocuments({ employeeId: old.employeeId, status: 'ACTIVE', _id: { $ne: id } });
+            // An employee without an active contract cannot be ACTIVE any more.
+            if (hasOtherActive === 0) {
+                await Employee_1.Employee.findByIdAndUpdate(old.employeeId, { status: types_1.EmployeeStatus.INACTIVE });
+            }
+        }
+        if (auditCtx) {
+            AuditService_1.AuditService.log({
+                userId: auditCtx.userId,
+                action: 'CONTRACT_UPDATE',
+                entity: 'Contract',
+                entityId: id,
+                oldValues: { contractType: oldValues.contractType, wage: oldValues.wage, status: oldValues.status },
+                newValues: data,
+                ipAddress: auditCtx.ip,
+                userAgent: auditCtx.ua,
+            });
+        }
+        EventBus_1.eventBus.emit('hr.contract.updated', { contractId: id });
+        return contract;
+    }
+    static async delete(id, auditCtx) {
+        const contract = await Contract_1.Contract.findById(id);
+        if (!contract)
+            throw ApiError_1.ApiError.notFound('Contract not found');
+        const snapshot = contract.toObject();
+        await Contract_1.Contract.findByIdAndDelete(id);
+        if (snapshot.status === 'ACTIVE') {
+            const hasOtherActive = await Contract_1.Contract.countDocuments({ employeeId: snapshot.employeeId, status: 'ACTIVE' });
+            // No contract left -> the employee cannot stay ACTIVE.
+            if (hasOtherActive === 0) {
+                await Employee_1.Employee.findByIdAndUpdate(snapshot.employeeId, { status: types_1.EmployeeStatus.INACTIVE });
+            }
+        }
+        if (auditCtx) {
+            AuditService_1.AuditService.log({
+                userId: auditCtx.userId,
+                action: 'CONTRACT_DELETE',
+                entity: 'Contract',
+                entityId: id,
+                oldValues: { contractType: snapshot.contractType, employeeId: snapshot.employeeId },
+                ipAddress: auditCtx.ip,
+                userAgent: auditCtx.ua,
+            });
+        }
+        EventBus_1.eventBus.emit('hr.contract.deleted', { contractId: id });
+    }
+}
+exports.ContractService = ContractService;
+//# sourceMappingURL=contract.service.js.map
