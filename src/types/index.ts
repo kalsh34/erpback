@@ -292,6 +292,12 @@ export const PERMISSIONS = {
   // Marketing (Proposal & Proforma Management) — Phase A: reusable service library.
   SERVICE_READ: 'service.read',
   SERVICE_MANAGE: 'service.manage',
+  // Phase C policy: approving/issuing a proforma and approving line discounts
+  // are manager-only actions. They are deliberately NOT part of the `marketing`
+  // module bundle, so a module grant can never confer them — they exist only
+  // as explicit role defaults (see ROLE_PERMISSIONS).
+  PROFORMA_ISSUE: 'proforma.issue',
+  PROFORMA_DISCOUNT: 'proforma.discount',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -506,6 +512,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.GRN_MANAGE,
     PERMISSIONS.BILL_MANAGE,
     PERMISSIONS.SERVICE_READ,
+    // Phase C policy: site admin is an explicitly authorized manager for
+    // proforma approval/issuing and discount approval (see PROFORMA_* comment).
+    PERMISSIONS.PROFORMA_ISSUE,
+    PERMISSIONS.PROFORMA_DISCOUNT,
   ],
   [UserRole.SYSTEM_ADMIN]: [
     PERMISSIONS.USER_CREATE,
@@ -683,6 +693,11 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     PERMISSIONS.PURCHASE_APPROVE,
     PERMISSIONS.CONTACT_READ,
     PERMISSIONS.PRODUCT_READ,
+    // Phase C policy: HEAD is the site's manager-approval role (purchases,
+    // rotations, payroll) — it is the authorized proforma approver/issuer and
+    // discount approver. Deliberately NOT granted via the marketing bundle.
+    PERMISSIONS.PROFORMA_ISSUE,
+    PERMISSIONS.PROFORMA_DISCOUNT,
   ],
   [UserRole.CEO]: [
     PERMISSIONS.USER_READ,
@@ -721,8 +736,13 @@ export const ROLE_MANDATORY_DENIES: Partial<Record<UserRole, Permission[]>> = {
   // Finance must not administer or delete companies.
   [UserRole.FINANCE_OFFICER]: [PERMISSIONS.COMPANY_CREATE, PERMISSIONS.COMPANY_UPDATE],
   // The CEO role is strictly read-only for every business mutation; a whole-module
-  // marketing grant must never restore service-library write access.
-  [UserRole.CEO]: [PERMISSIONS.SERVICE_MANAGE],
+  // marketing grant must never restore service-library write access (nor proforma
+  // approval, issuing, or discount approval).
+  [UserRole.CEO]: [
+    PERMISSIONS.SERVICE_MANAGE,
+    PERMISSIONS.PROFORMA_ISSUE,
+    PERMISSIONS.PROFORMA_DISCOUNT,
+  ],
 };
 
 // --- Payroll Calculation Types ---
