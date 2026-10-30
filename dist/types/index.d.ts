@@ -248,6 +248,10 @@ export declare const PERMISSIONS: {
     readonly PRODUCT_READ: "product.read";
     readonly PRODUCT_MANAGE: "product.manage";
     readonly GRN_MANAGE: "grn.manage";
+    readonly SERVICE_READ: "service.read";
+    readonly SERVICE_MANAGE: "service.manage";
+    readonly PROFORMA_ISSUE: "proforma.issue";
+    readonly PROFORMA_DISCOUNT: "proforma.discount";
 };
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 /**

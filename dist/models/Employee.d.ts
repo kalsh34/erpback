@@ -29,6 +29,10 @@ export interface IEmployee extends Document {
     accountNumber?: string;
     salary?: number;
     transportAllowance?: number;
+    /** Educational level, e.g. "Grade 8", "Grade 12", "Diploma", "Degree". */
+    education?: string;
+    /** Whether the person brought/documents their fingerprint at registration. */
+    fingerprint?: boolean;
     statusHistory?: {
         from: EmployeeStatus;
         to: EmployeeStatus;

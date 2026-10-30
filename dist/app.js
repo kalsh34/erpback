@@ -44,6 +44,8 @@ const index_3 = __importDefault(require("./modules/procurement/index"));
 const index_4 = __importDefault(require("./modules/manufacturing/index"));
 const index_5 = __importDefault(require("./modules/projects/index"));
 const fleet_routes_1 = __importDefault(require("./modules/fleet/fleet.routes"));
+const serviceLibrary_routes_1 = __importDefault(require("./modules/marketing/serviceLibrary.routes"));
+const proforma_routes_1 = __importDefault(require("./modules/marketing/proforma.routes"));
 const app = (0, express_1.default)();
 // CORS_ORIGIN accepts a comma separated list of the frontend origins allowed to
 // call this API, e.g. CORS_ORIGIN=https://my-frontend.onrender.com,http://localhost:3000
@@ -97,6 +99,9 @@ app.use('/api/v2/procurement', index_3.default);
 app.use('/api/v2/manufacturing', index_4.default);
 app.use('/api/v2/projects', index_5.default);
 app.use('/api/v2/fleet', fleet_routes_1.default);
+// Marketing (Proposal & Proforma) — service library (Phase A) + proformas (Phase C).
+app.use('/api/marketing/service-library', serviceLibrary_routes_1.default);
+app.use('/api/marketing/proformas', proforma_routes_1.default);
 app.use((_req, res) => {
     res.status(404).json({ success: false, message: 'Route not found' });
 });

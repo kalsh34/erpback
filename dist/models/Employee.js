@@ -65,6 +65,8 @@ const employeeSchema = new mongoose_1.Schema({
     accountNumber: { type: String, trim: true },
     salary: { type: Number, default: 0 },
     transportAllowance: { type: Number, default: 0 },
+    education: { type: String, trim: true },
+    fingerprint: { type: Boolean, default: undefined },
     statusHistory: [{
             from: { type: String, enum: Object.values(types_1.EmployeeStatus), required: true },
             to: { type: String, enum: Object.values(types_1.EmployeeStatus), required: true },

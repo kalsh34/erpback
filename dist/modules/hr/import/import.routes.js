@@ -247,6 +247,10 @@ router.post('/commit', (0, rbac_1.authorize)(types_1.PERMISSIONS.EMPLOYEE_CREATE
                     };
                     if (/^\d{4}-\d{2}-\d{2}$/.test(String(person.hireDate || '')) === false)
                         delete employeeData.hireDate;
+                    if (person.education)
+                        employeeData.education = person.education;
+                    if (person.fingerprint != null)
+                        employeeData.fingerprint = person.fingerprint;
                     const homeSiteId = await resolveSite(person.siteName);
                     if (homeSiteId)
                         employeeData.homeSiteId = homeSiteId;

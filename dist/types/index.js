@@ -285,6 +285,15 @@ exports.PERMISSIONS = {
     PRODUCT_READ: 'product.read',
     PRODUCT_MANAGE: 'product.manage',
     GRN_MANAGE: 'grn.manage',
+    // Marketing (Proposal & Proforma Management) — Phase A: reusable service library.
+    SERVICE_READ: 'service.read',
+    SERVICE_MANAGE: 'service.manage',
+    // Phase C policy: approving/issuing a proforma and approving line discounts
+    // are manager-only actions. They are deliberately NOT part of the `marketing`
+    // module bundle, so a module grant can never confer them — they exist only
+    // as explicit role defaults (see ROLE_PERMISSIONS).
+    PROFORMA_ISSUE: 'proforma.issue',
+    PROFORMA_DISCOUNT: 'proforma.discount',
 };
 /**
  * MODULE ACCESS REGISTRY — the modules an admin can grant or deny per user.
@@ -401,6 +410,14 @@ exports.MODULE_ACCESS = [
             exports.PERMISSIONS.FLEET_REPORT,
         ],
     },
+    {
+        key: 'marketing',
+        label: 'Marketing & Proposals',
+        permissions: [
+            exports.PERMISSIONS.SERVICE_READ,
+            exports.PERMISSIONS.SERVICE_MANAGE,
+        ],
+    },
 ];
 exports.MODULE_ACCESS_KEYS = exports.MODULE_ACCESS.map((m) => m.key);
 // --- Role -> Permission Mapping ---
@@ -483,6 +500,11 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.PRODUCT_MANAGE,
         exports.PERMISSIONS.GRN_MANAGE,
         exports.PERMISSIONS.BILL_MANAGE,
+        exports.PERMISSIONS.SERVICE_READ,
+        // Phase C policy: site admin is an explicitly authorized manager for
+        // proforma approval/issuing and discount approval (see PROFORMA_* comment).
+        exports.PERMISSIONS.PROFORMA_ISSUE,
+        exports.PERMISSIONS.PROFORMA_DISCOUNT,
     ],
     [UserRole.SYSTEM_ADMIN]: [
         exports.PERMISSIONS.USER_CREATE,
@@ -658,6 +680,11 @@ exports.ROLE_PERMISSIONS = {
         exports.PERMISSIONS.PURCHASE_APPROVE,
         exports.PERMISSIONS.CONTACT_READ,
         exports.PERMISSIONS.PRODUCT_READ,
+        // Phase C policy: HEAD is the site's manager-approval role (purchases,
+        // rotations, payroll) — it is the authorized proforma approver/issuer and
+        // discount approver. Deliberately NOT granted via the marketing bundle.
+        exports.PERMISSIONS.PROFORMA_ISSUE,
+        exports.PERMISSIONS.PROFORMA_DISCOUNT,
     ],
     [UserRole.CEO]: [
         exports.PERMISSIONS.USER_READ,
@@ -694,5 +721,13 @@ exports.ROLE_MANDATORY_DENIES = {
     [UserRole.HR_ADMIN]: [exports.PERMISSIONS.COMPANY_CREATE, exports.PERMISSIONS.COMPANY_UPDATE],
     // Finance must not administer or delete companies.
     [UserRole.FINANCE_OFFICER]: [exports.PERMISSIONS.COMPANY_CREATE, exports.PERMISSIONS.COMPANY_UPDATE],
+    // The CEO role is strictly read-only for every business mutation; a whole-module
+    // marketing grant must never restore service-library write access (nor proforma
+    // approval, issuing, or discount approval).
+    [UserRole.CEO]: [
+        exports.PERMISSIONS.SERVICE_MANAGE,
+        exports.PERMISSIONS.PROFORMA_ISSUE,
+        exports.PERMISSIONS.PROFORMA_DISCOUNT,
+    ],
 };
 //# sourceMappingURL=index.js.map

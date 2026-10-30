@@ -90,8 +90,14 @@ function parseName(fullNameRaw: string): { firstName: string; middleName?: strin
 
 function normalizePhone(val: any): string {
   if (!val) return '';
+  // A cell can hold more than one number ("0970901614/951421990"); keep the first
+  // real one instead of gluing the digits together.
+  for (const run of String(val).match(/\d+/g) || []) {
+    if (run.length === 10 && run.startsWith('0')) return run;
+    if (run.length === 9 && run.startsWith('9')) return `0${run}`;
+    if (run.length === 12 && run.startsWith('251')) return `0${run.slice(3)}`;
+  }
   const digits = String(val).replace(/\D/g, '');
-  if (!digits) return '';
   if (digits.length === 9 && digits.startsWith('9')) {
     return `0${digits}`;
   }
@@ -196,6 +202,9 @@ function normalizeHeaderMap(rawRow: Record<string, any>): Record<string, any> {
       normalized['woreda'] = val;
     } else if (k.includes('ቤ.ቁጥር') || k.includes('የቤ.ቁጥር') || k.includes('house')) {
       normalized['houseNo'] = val;
+    } else if (k.includes('ዋስ ስልክ') || k.includes('guarantor phone') || (k.includes('guarantor') && k.includes('phone'))) {
+      // Must be checked before the generic phone branch: 'የዋስ ስልክ' also contains 'ስልክ'.
+      normalized['guarantorPhone'] = val;
     } else if (k.includes('ስ. ቁጥር') || k.includes('ስልክ') || k.includes('phone') || k === 'tel') {
       normalized['phone'] = val;
     } else if (k.includes('የተቀጠረበት') || k.includes('ቀን') || k.includes('hire') || k.includes('start date')) {
@@ -208,13 +217,39 @@ function normalizeHeaderMap(rawRow: Record<string, any>): Record<string, any> {
       normalized['transport'] = val;
     } else if (k.includes('ዋስ ስም') || k.includes('የዋስ ስም') || k.includes('guarantor name')) {
       normalized['guarantorName'] = val;
-    } else if (k.includes('ዋስ ስልክ') || k.includes('የዋስ ስልክ') || k.includes('guarantor phone')) {
-      normalized['guarantorPhone'] = val;
     } else {
       normalized[key.trim()] = val;
     }
   }
   return normalized;
+}
+
+/**
+ * Rosters are often exported with a title/banner block above the real column
+ * headers (e.g. a merged "የጥበቃ ሠራተኞች መዝገብ" row). Reading those files with the
+ * default header row turns every key into a banner cell and yields zero rows, so
+ * scan the first few rows and treat the one with the most known headers as the
+ * header row.
+ */
+function detectHeaderRow(grid: unknown[][]): number {
+  const HINTS = [
+    'ሙሉ ስም', 'full name', 'fullname', 'ፆታ', 'gender', 'ዕድሜ', 'age',
+    'ስ. ቁጥር', 'ስልክ', 'phone', 'ሳይት', 'site', 'ደመወዝ', 'salary',
+    'ትራንስፖርት', 'transport', 'ዋስ', 'guarantor', 'የት/ደረጃ', 'education',
+  ];
+  let bestRow = 0;
+  let bestScore = 0;
+  const limit = Math.min(grid.length, 10);
+  for (let r = 0; r < limit; r++) {
+    const cells = (grid[r] || []).map((c) => String(c ?? '').trim().toLowerCase());
+    const score = cells.filter((c) => c && HINTS.some((h) => c.includes(h))).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = r;
+    }
+  }
+  // A single hit is more likely a stray title cell than a header row.
+  return bestScore >= 2 ? bestRow : 0;
 }
 
 export class GuardImportService {
@@ -225,7 +260,18 @@ export class GuardImportService {
     }
 
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rawRows: Record<string, any>[] = xlsx.utils.sheet_to_json(firstSheet, { defval: '', raw: false });
+    // Keep blank rows so grid indexes stay aligned with real sheet rows.
+    const grid = xlsx.utils.sheet_to_json(firstSheet, {
+      header: 1,
+      defval: '',
+      raw: false,
+    }) as unknown[][];
+    const headerRow = detectHeaderRow(grid);
+    const rawRows: Record<string, any>[] = xlsx.utils.sheet_to_json(firstSheet, {
+      defval: '',
+      raw: false,
+      range: headerRow,
+    });
 
     const existingEmployees = await Employee.find(
       { category: EmployeeCategory.GUARD },

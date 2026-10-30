@@ -10,6 +10,7 @@ export interface ParsedGuardRow {
     age?: number;
     dateOfBirth?: string;
     education?: string;
+    fingerprint?: boolean;
     address?: string;
     phone?: string;
     hireDate: string;
