@@ -51,6 +51,11 @@ export declare class GuardImportService {
             name: string;
             site: string;
         }[];
+        failed: {
+            name: string;
+            reason: string;
+        }[];
     }>;
+    private static runImport;
 }
 //# sourceMappingURL=guardImport.service.d.ts.map

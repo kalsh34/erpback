@@ -252,6 +252,69 @@ function detectHeaderRow(grid: unknown[][]): number {
   return bestScore >= 2 ? bestRow : 0;
 }
 
+let importQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Runs one roster import at a time inside this process. Two overlapping
+ * submissions (a double-clicked button, a second tab, a retry fired while the
+ * first request is still working) otherwise both compute the same next
+ * employee code, and the loser dies on the unique index with the unhelpful
+ * "A record with this identifier already exists" message.
+ */
+function withImportLock<T>(run: () => Promise<T>): Promise<T> {
+  const next = importQueue.then(run, run);
+  importQueue = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
+/** Creates a site, disambiguating the generated code if it is already taken. */
+async function createSite(siteName: string, location?: string) {
+  const base = generateSiteCode(siteName);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const siteCode = attempt === 0 ? base : `${base}-${attempt + 1}`;
+    try {
+      return await Site.create({
+        siteName,
+        siteCode,
+        location: location || siteName,
+        siteType: SiteType.COMMERCIAL,
+        status: SiteStatus.ACTIVE,
+        radiusMeters: 100,
+        agreedManpower: 1,
+        actualManpower: 1,
+      });
+    } catch (err) {
+      if ((err as { code?: number }).code !== 11000) throw err;
+    }
+  }
+  throw new Error(`Could not allocate a unique site code for "${siteName}"`);
+}
+
+/** Creates an employee, retrying when another request claimed the same code. */
+async function createEmployeeWithCode(data: Record<string, any>) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const employeeCode = await getNextEmployeeCode();
+    try {
+      return await Employee.create({ ...data, employeeCode });
+    } catch (err) {
+      if ((err as { code?: number }).code !== 11000) throw err;
+    }
+  }
+  throw new Error('Could not allocate a unique employee code after 5 attempts');
+}
+
+/** Turns a driver error into something a human can act on. */
+function describeImportError(err: unknown): string {
+  if ((err as { code?: number })?.code === 11000) {
+    const key = Object.keys((err as { keyPattern?: object }).keyPattern || {}).join(', ');
+    return key ? `Duplicate ${key} — a record with this value already exists` : 'Duplicate record — this row already exists';
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 export class GuardImportService {
   static async previewSheet(buffer: Buffer): Promise<ImportPreviewResponse> {
     const workbook = xlsx.read(buffer, { type: 'buffer' });
@@ -437,9 +500,19 @@ export class GuardImportService {
     rowsToImport: ParsedGuardRow[],
     auditCtx?: { userId: string; ip?: string; ua?: string }
   ) {
+    // Serialise runs so a second submission waits for this one and then sees the
+    // rows it created as duplicates, instead of racing for the same code.
+    return withImportLock(() => GuardImportService.runImport(rowsToImport, auditCtx));
+  }
+
+  private static async runImport(
+    rowsToImport: ParsedGuardRow[],
+    auditCtx?: { userId: string; ip?: string; ua?: string }
+  ) {
     let importedCount = 0;
     let skippedCount = 0;
     const createdList: { employeeCode: string; name: string; site: string }[] = [];
+    const failedList: { name: string; reason: string }[] = [];
 
     for (const item of rowsToImport) {
       if (item.status === 'DUPLICATE' || item.status === 'INVALID') {
@@ -459,122 +532,130 @@ export class GuardImportService {
         continue;
       }
 
-      // 1. Resolve or create Site
-      let site = await Site.findOne({
-        siteName: { $regex: new RegExp(`^${item.siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-      });
+      const displayName = `${item.firstName} ${item.lastName}`.trim();
+      // A row is all-or-nothing: track what it created so a failure is rolled back
+      // instead of leaving a guard with no profile or contract behind.
+      const createdByThisRow: { model: any; id: any }[] = [];
 
-      if (!site) {
-        const code = generateSiteCode(item.siteName);
-        site = await Site.create({
-          siteName: item.siteName,
-          siteCode: code,
-          location: item.address || item.siteName,
-          siteType: SiteType.COMMERCIAL,
-          status: SiteStatus.ACTIVE,
-          radiusMeters: 100,
-          agreedManpower: 1,
-          actualManpower: 1,
+      try {
+        // 1. Resolve or create Site
+        let site = await Site.findOne({
+          siteName: { $regex: new RegExp(`^${item.siteName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         });
-      }
 
-      // 2. Generate employee code
-      const employeeCode = await getNextEmployeeCode();
-      const hireDate = item.hireDate ? new Date(item.hireDate) : new Date();
+        if (!site) {
+          site = await createSite(item.siteName, item.address);
+          createdByThisRow.push({ model: Site, id: site._id });
+        }
 
-      // 3. Create Employee
-      const employee = await Employee.create({
-        employeeCode,
-        firstName: item.firstName,
-        middleName: item.middleName,
-        lastName: item.lastName,
-        category: EmployeeCategory.GUARD,
-        status: EmployeeStatus.ACTIVE,
-        gender: item.gender,
-        phone: item.phone,
-        address: item.address,
-        education: item.education,
-        fingerprint: item.fingerprint,
-        dateOfBirth: item.dateOfBirth ? new Date(item.dateOfBirth) : undefined,
-        hireDate,
-        homeSiteId: site._id,
-        salary: item.salary,
-        transportAllowance: item.transportAllowance,
-        guardInfo: {
-          employmentType: EmploymentType.CONTRACT,
-        },
-      });
+        const hireDate = item.hireDate ? new Date(item.hireDate) : new Date();
 
-      // 4. Create GuardProfile
-      const hourlyRate = item.salary > 0 ? Math.round((item.salary / 192) * 100) / 100 : 0;
-      await GuardProfile.create({
-        employeeId: employee._id,
-        position: item.position,
-        employmentType: 'CONTRACT',
-        rate: hourlyRate,
-        transportAllowance: item.transportAllowance,
-      });
-
-      // 5. Create PrimarySiteAssignment
-      await PrimarySiteAssignment.create({
-        guardId: employee._id,
-        siteId: site._id,
-        role: item.isLeader ? 'SUPERVISOR' : 'GUARD',
-        isPrimary: true,
-        standardMonthlyHours: 192,
-        hourlyRate,
-        transportAllowance: item.transportAllowance,
-        effectiveFrom: hireDate,
-        isCurrent: true,
-      });
-
-      // 6. Create Contract
-      await Contract.create({
-        employeeId: employee._id,
-        contractStartDate: hireDate,
-        contractType: 'Full-Time',
-        wage: item.salary,
-        transportAllowance: item.transportAllowance,
-        pensionEnrolled: true,
-        status: 'ACTIVE',
-        notes: item.notes,
-      });
-
-      // 7. Create Guarantor
-      if (item.guarantorName) {
-        await Guarantor.create({
-          employeeId: employee._id,
-          guarantorType: GuarantorType.PERSON,
-          fullName: item.guarantorName,
-          phone: item.guarantorPhone || '0000000000',
-          verificationStatus: GuarantorVerificationStatus.VERIFIED,
-          notes: 'Imported via Vital ERP Sheet Import UI',
-        });
-      }
-
-      if (auditCtx) {
-        AuditService.log({
-          userId: auditCtx.userId,
-          action: 'GUARD_IMPORT_EXCEL',
-          entity: 'Employee',
-          entityId: employee._id.toString(),
-          newValues: {
-            employeeCode,
-            name: `${item.firstName} ${item.lastName}`,
-            site: site.siteName,
+        // 2. Create Employee — the code is allocated (and retried) inside.
+        const employee = await createEmployeeWithCode({
+          firstName: item.firstName,
+          middleName: item.middleName,
+          lastName: item.lastName,
+          category: EmployeeCategory.GUARD,
+          status: EmployeeStatus.ACTIVE,
+          gender: item.gender,
+          phone: item.phone,
+          address: item.address,
+          education: item.education,
+          fingerprint: item.fingerprint,
+          dateOfBirth: item.dateOfBirth ? new Date(item.dateOfBirth) : undefined,
+          hireDate,
+          homeSiteId: site._id,
+          salary: item.salary,
+          transportAllowance: item.transportAllowance,
+          guardInfo: {
+            employmentType: EmploymentType.CONTRACT,
           },
-          ipAddress: auditCtx.ip,
-          userAgent: auditCtx.ua,
         });
-      }
+        const employeeCode = employee.employeeCode;
+        createdByThisRow.push({ model: Employee, id: employee._id });
 
-      eventBus.emit('hr.guard.registered', { employeeId: employee._id, employeeCode });
-      createdList.push({
-        employeeCode,
-        name: `${item.firstName} ${item.lastName}`,
-        site: site.siteName,
-      });
-      importedCount++;
+        // 3. Create GuardProfile
+        const hourlyRate = item.salary > 0 ? Math.round((item.salary / 192) * 100) / 100 : 0;
+        const profile = await GuardProfile.create({
+          employeeId: employee._id,
+          position: item.position,
+          employmentType: 'CONTRACT',
+          rate: hourlyRate,
+          transportAllowance: item.transportAllowance,
+        });
+        createdByThisRow.push({ model: GuardProfile, id: profile._id });
+
+        // 4. Create PrimarySiteAssignment
+        const assignment = await PrimarySiteAssignment.create({
+          guardId: employee._id,
+          siteId: site._id,
+          role: item.isLeader ? 'SUPERVISOR' : 'GUARD',
+          isPrimary: true,
+          standardMonthlyHours: 192,
+          hourlyRate,
+          transportAllowance: item.transportAllowance,
+          effectiveFrom: hireDate,
+          isCurrent: true,
+        });
+        createdByThisRow.push({ model: PrimarySiteAssignment, id: assignment._id });
+
+        // 5. Create Contract
+        const contract = await Contract.create({
+          employeeId: employee._id,
+          contractStartDate: hireDate,
+          contractType: 'Full-Time',
+          wage: item.salary,
+          transportAllowance: item.transportAllowance,
+          pensionEnrolled: true,
+          status: 'ACTIVE',
+          notes: item.notes,
+        });
+        createdByThisRow.push({ model: Contract, id: contract._id });
+
+        // 6. Create Guarantor
+        if (item.guarantorName) {
+          const guarantor = await Guarantor.create({
+            employeeId: employee._id,
+            guarantorType: GuarantorType.PERSON,
+            fullName: item.guarantorName,
+            phone: item.guarantorPhone || '0000000000',
+            verificationStatus: GuarantorVerificationStatus.VERIFIED,
+            notes: 'Imported via Vital ERP Sheet Import UI',
+          });
+          createdByThisRow.push({ model: Guarantor, id: guarantor._id });
+        }
+
+        if (auditCtx) {
+          AuditService.log({
+            userId: auditCtx.userId,
+            action: 'GUARD_IMPORT_EXCEL',
+            entity: 'Employee',
+            entityId: employee._id.toString(),
+            newValues: {
+              employeeCode,
+              name: `${item.firstName} ${item.lastName}`,
+              site: site.siteName,
+            },
+            ipAddress: auditCtx.ip,
+            userAgent: auditCtx.ua,
+          });
+        }
+
+        eventBus.emit('hr.guard.registered', { employeeId: employee._id, employeeCode });
+        createdList.push({
+          employeeCode,
+          name: `${item.firstName} ${item.lastName}`,
+          site: site.siteName,
+        });
+        importedCount++;
+      } catch (err) {
+        // Undo whatever this row managed to create, then keep going: one bad row
+        // must not abort the whole batch with a single opaque message.
+        for (const { model, id } of createdByThisRow.reverse()) {
+          await model.deleteOne({ _id: id }).catch(() => undefined);
+        }
+        failedList.push({ name: displayName, reason: describeImportError(err) });
+      }
     }
 
     return {
@@ -582,6 +663,7 @@ export class GuardImportService {
       importedCount,
       skippedCount,
       createdEmployees: createdList,
+      failed: failedList,
     };
   }
 }
