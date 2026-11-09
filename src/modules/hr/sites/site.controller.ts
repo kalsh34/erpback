@@ -60,15 +60,22 @@ export class SiteController {
     } catch (error) { next(error); }
   }
 
-  /** Hard delete — refused with 409 once the site has any operational history. */
+  /** Hard delete — force deletes the site and every record that points at it. */
   static async deletePermanent(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      await SiteService.deletePermanent(req.params.id, {
+      const result = await SiteService.deletePermanent(req.params.id, {
         userId: req.user?.userId || '',
         ip: req.ip,
         ua: req.get('user-agent'),
       });
-      res.json({ success: true, message: 'Site permanently deleted' });
+      const summary = result.removed.length
+        ? ` Removed ${result.removed.map((r) => `${r.count} ${r.label}`).join(', ')}.`
+        : '';
+      res.json({
+        success: true,
+        message: `Site permanently deleted.${summary}`,
+        data: result,
+      });
     } catch (error) { next(error); }
   }
 }
