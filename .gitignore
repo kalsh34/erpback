@@ -30,6 +30,9 @@ node_modules/
 # Backups
 backup/
 
+# Local portable MongoDB used for development
+.mongo/
+
 # Environment secrets
 .env
 .env.*

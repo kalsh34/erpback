@@ -153,10 +153,10 @@ class GuardShiftService {
         }
         const [shifts, patrols] = await Promise.all([
             GuardShift_1.GuardShift.find(shiftQuery).sort({ clockInAt: -1 }).limit(500)
-                .populate('employeeId', 'firstName lastName employeeCode')
+                .populate('employeeId', 'firstName middleName lastName employeeCode')
                 .populate('siteId', 'siteName siteCode'),
             GuardPatrolScan_1.GuardPatrolScan.find(scanQuery).sort({ scannedAt: -1 }).limit(1000)
-                .populate('employeeId', 'firstName lastName employeeCode')
+                .populate('employeeId', 'firstName middleName lastName employeeCode')
                 .populate('siteId', 'siteName siteCode'),
         ]);
         return { from, to, shifts, patrols };

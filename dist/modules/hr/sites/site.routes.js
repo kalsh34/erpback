@@ -19,6 +19,7 @@ router.get('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), site_contr
 router.get('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), site_controller_1.SiteController.getById);
 router.post('/', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_CREATE), site_controller_1.SiteController.create);
 router.put('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_UPDATE), site_controller_1.SiteController.update);
+router.delete('/:id/permanent', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_UPDATE), site_controller_1.SiteController.deletePermanent);
 router.delete('/:id', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_UPDATE), site_controller_1.SiteController.delete);
 router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), async (req, res, next) => {
     try {
@@ -33,22 +34,22 @@ router.get('/:id/detail', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ), 
             : { siteId, isCurrent: true };
         const [activeAssignments, primaryAssignments, recentNotes, rotationAssignments, rotations, priceHistoryRows] = await Promise.all([
             ShiftAssignment_1.ShiftAssignment.find({ siteId, status: isInactive ? { $in: ['ACTIVE', 'INACTIVE'] } : 'ACTIVE' })
-                .populate('guardId', 'firstName lastName employeeCode status')
+                .populate('guardId', 'firstName middleName lastName employeeCode status')
                 .populate('shiftTemplateId', 'name startTime endTime color'),
             PrimarySiteAssignment_1.PrimarySiteAssignment.find(primaryFilter)
-                .populate('guardId', 'firstName lastName employeeCode status')
+                .populate('guardId', 'firstName middleName lastName employeeCode status')
                 .sort({ effectiveFrom: -1 }),
             SiteNote_1.SiteNote.find({ siteId })
-                .populate('recordedById', 'firstName lastName')
+                .populate('recordedById', 'firstName middleName lastName')
                 .sort({ date: -1 })
                 .limit(20),
             RotationAssignment_1.RotationAssignment.find({ siteId })
-                .populate('guardId', 'firstName lastName employeeCode')
+                .populate('guardId', 'firstName middleName lastName employeeCode')
                 .sort({ date: -1 })
                 .limit(90),
             Rotation_1.Rotation.find({ siteId }).select('name title status startDate endDate').sort({ createdAt: -1 }).limit(5),
             // Full price timeline: every previous price the site has had.
-            SitePriceHistory_1.SitePriceHistory.find({ siteId }).sort({ createdAt: -1 }).limit(50).populate('changedBy', 'firstName lastName').lean(),
+            SitePriceHistory_1.SitePriceHistory.find({ siteId }).sort({ createdAt: -1 }).limit(50).populate('changedBy', 'firstName middleName lastName').lean(),
         ]);
         // Split primary assignments for UI
         const currentAssignments = isInactive ? [] : primaryAssignments.filter((a) => a.isCurrent);

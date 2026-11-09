@@ -41,7 +41,9 @@ import procurementStub from './modules/procurement/index';
 import manufacturingStub from './modules/manufacturing/index';
 import projectsStub from './modules/projects/index';
 import fleetRoutes from './modules/fleet/fleet.routes';
-import serviceLibraryRoutes from './modules/marketing/serviceLibrary.routes';
+import proformaCompanyRoutes from './modules/marketing/company.routes';
+import proformaSiteRoutes from './modules/marketing/site.routes';
+import serviceRoleRoutes from './modules/marketing/serviceRole.routes';
 import proformaRoutes from './modules/marketing/proforma.routes';
 
 const app = express();
@@ -105,8 +107,11 @@ app.use('/api/v2/manufacturing', manufacturingStub);
 app.use('/api/v2/projects', projectsStub);
 app.use('/api/v2/fleet', fleetRoutes);
 
-// Marketing (Proposal & Proforma) — service library (Phase A) + proformas (Phase C).
-app.use('/api/marketing/service-library', serviceLibraryRoutes);
+// Marketing — Proforma module: registered client companies, their sites, the
+// service / guard role catalog and the proforma documents themselves.
+app.use('/api/marketing/companies', proformaCompanyRoutes);
+app.use('/api/marketing/sites', proformaSiteRoutes);
+app.use('/api/marketing/service-roles', serviceRoleRoutes);
 app.use('/api/marketing/proformas', proformaRoutes);
 
 app.use((_req, res) => {

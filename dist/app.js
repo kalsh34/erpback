@@ -44,7 +44,9 @@ const index_3 = __importDefault(require("./modules/procurement/index"));
 const index_4 = __importDefault(require("./modules/manufacturing/index"));
 const index_5 = __importDefault(require("./modules/projects/index"));
 const fleet_routes_1 = __importDefault(require("./modules/fleet/fleet.routes"));
-const serviceLibrary_routes_1 = __importDefault(require("./modules/marketing/serviceLibrary.routes"));
+const company_routes_2 = __importDefault(require("./modules/marketing/company.routes"));
+const site_routes_2 = __importDefault(require("./modules/marketing/site.routes"));
+const serviceRole_routes_1 = __importDefault(require("./modules/marketing/serviceRole.routes"));
 const proforma_routes_1 = __importDefault(require("./modules/marketing/proforma.routes"));
 const app = (0, express_1.default)();
 // CORS_ORIGIN accepts a comma separated list of the frontend origins allowed to
@@ -99,8 +101,11 @@ app.use('/api/v2/procurement', index_3.default);
 app.use('/api/v2/manufacturing', index_4.default);
 app.use('/api/v2/projects', index_5.default);
 app.use('/api/v2/fleet', fleet_routes_1.default);
-// Marketing (Proposal & Proforma) — service library (Phase A) + proformas (Phase C).
-app.use('/api/marketing/service-library', serviceLibrary_routes_1.default);
+// Marketing — Proforma module: registered client companies, their sites, the
+// service / guard role catalog and the proforma documents themselves.
+app.use('/api/marketing/companies', company_routes_2.default);
+app.use('/api/marketing/sites', site_routes_2.default);
+app.use('/api/marketing/service-roles', serviceRole_routes_1.default);
 app.use('/api/marketing/proformas', proforma_routes_1.default);
 app.use((_req, res) => {
     res.status(404).json({ success: false, message: 'Route not found' });

@@ -218,7 +218,7 @@ class RotationService {
             .sort((a, b) => a.order - b.order);
         const ids = entries.map((g) => g.guardId);
         const docs = await Employee_1.Employee.find({ _id: { $in: ids } })
-            .select('firstName lastName employeeCode status category');
+            .select('firstName middleName lastName employeeCode status category');
         const byId = new Map(docs.map((d) => [d._id.toString(), d]));
         const out = [];
         entries.forEach((g, idx) => {
@@ -464,8 +464,8 @@ class RotationService {
     static async getById(id) {
         const rot = await Rotation_1.Rotation.findById(id)
             .populate('siteId', 'siteName siteCode')
-            .populate('guardPool.guardId', 'firstName lastName employeeCode status')
-            .populate('floaterPool.guardId', 'firstName lastName employeeCode status');
+            .populate('guardPool.guardId', 'firstName middleName lastName employeeCode status')
+            .populate('floaterPool.guardId', 'firstName middleName lastName employeeCode status');
         if (!rot)
             throw ApiError_1.ApiError.notFound('Rotation not found');
         return rot;
@@ -985,7 +985,7 @@ class RotationService {
                 delete filter.date;
         }
         return RotationAssignment_1.RotationAssignment.find(filter)
-            .populate('guardId', 'firstName lastName employeeCode')
+            .populate('guardId', 'firstName middleName lastName employeeCode')
             .sort({ date: 1, shiftType: 1 });
     }
     static async activate(id, _userId, _auditCtx) {

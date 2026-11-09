@@ -19,6 +19,7 @@ router.get('/', authorize(PERMISSIONS.SITE_READ), SiteController.getAll);
 router.get('/:id', authorize(PERMISSIONS.SITE_READ), SiteController.getById);
 router.post('/', authorize(PERMISSIONS.SITE_CREATE), SiteController.create);
 router.put('/:id', authorize(PERMISSIONS.SITE_UPDATE), SiteController.update);
+router.delete('/:id/permanent', authorize(PERMISSIONS.SITE_UPDATE), SiteController.deletePermanent);
 router.delete('/:id', authorize(PERMISSIONS.SITE_UPDATE), SiteController.delete);
 
 router.get('/:id/detail', authorize(PERMISSIONS.SITE_READ), async (req: Request, res: Response, next: NextFunction) => {
@@ -35,22 +36,22 @@ router.get('/:id/detail', authorize(PERMISSIONS.SITE_READ), async (req: Request,
 
     const [activeAssignments, primaryAssignments, recentNotes, rotationAssignments, rotations, priceHistoryRows] = await Promise.all([
       ShiftAssignment.find({ siteId, status: isInactive ? { $in: ['ACTIVE', 'INACTIVE'] } : 'ACTIVE' })
-        .populate('guardId', 'firstName lastName employeeCode status')
+        .populate('guardId', 'firstName middleName lastName employeeCode status')
         .populate('shiftTemplateId', 'name startTime endTime color'),
       PrimarySiteAssignment.find(primaryFilter)
-        .populate('guardId', 'firstName lastName employeeCode status')
+        .populate('guardId', 'firstName middleName lastName employeeCode status')
         .sort({ effectiveFrom: -1 }),
       SiteNote.find({ siteId })
-        .populate('recordedById', 'firstName lastName')
+        .populate('recordedById', 'firstName middleName lastName')
         .sort({ date: -1 })
         .limit(20),
       RotationAssignment.find({ siteId })
-        .populate('guardId', 'firstName lastName employeeCode')
+        .populate('guardId', 'firstName middleName lastName employeeCode')
         .sort({ date: -1 })
         .limit(90),
       Rotation.find({ siteId }).select('name title status startDate endDate').sort({ createdAt: -1 }).limit(5),
       // Full price timeline: every previous price the site has had.
-      SitePriceHistory.find({ siteId }).sort({ createdAt: -1 }).limit(50).populate('changedBy', 'firstName lastName').lean(),
+      SitePriceHistory.find({ siteId }).sort({ createdAt: -1 }).limit(50).populate('changedBy', 'firstName middleName lastName').lean(),
     ]);
 
     // Split primary assignments for UI

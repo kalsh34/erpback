@@ -49,5 +49,19 @@ export declare class SiteService {
         ip?: string;
         ua?: string;
     }): Promise<void>;
+    /**
+     * Permanent removal — only for a site that was created by mistake.
+     *
+     * A site is deletable only while NOTHING references it. The moment it has a
+     * guard assignment, attendance, monthly hours, site compensation, payroll
+     * record, rotation, note, price change, shift or QR scan, the delete is
+     * refused with 409 and the caller is told to deactivate instead — so payroll
+     * and attendance history is never orphaned.
+     */
+    static deletePermanent(id: string, auditCtx?: {
+        userId: string;
+        ip?: string;
+        ua?: string;
+    }): Promise<void>;
 }
 //# sourceMappingURL=site.service.d.ts.map

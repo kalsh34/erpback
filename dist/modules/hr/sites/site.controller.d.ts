@@ -9,6 +9,8 @@ export declare class SiteController {
     static create(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static update(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
     static delete(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
+    /** Hard delete — refused with 409 once the site has any operational history. */
+    static deletePermanent(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void>;
 }
 export {};
 //# sourceMappingURL=site.controller.d.ts.map

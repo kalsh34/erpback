@@ -10,6 +10,16 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const SitePriceHistory_1 = require("../../../models/SitePriceHistory");
 const PrimarySiteAssignment_1 = require("../../../models/PrimarySiteAssignment");
 const ShiftAssignment_1 = require("../../../models/ShiftAssignment");
+const ShiftTemplate_1 = require("../../../models/ShiftTemplate");
+const GuardAttendanceRecord_1 = require("../../../models/GuardAttendanceRecord");
+const GuardMonthlyHours_1 = require("../../../models/GuardMonthlyHours");
+const GuardPatrolScan_1 = require("../../../models/GuardPatrolScan");
+const GuardPayrollRecord_1 = require("../../../models/GuardPayrollRecord");
+const GuardShift_1 = require("../../../models/GuardShift");
+const GuardSiteCompensation_1 = require("../../../models/GuardSiteCompensation");
+const Rotation_1 = require("../../../models/Rotation");
+const RotationAssignment_1 = require("../../../models/RotationAssignment");
+const SiteNote_1 = require("../../../models/SiteNote");
 const ApiError_1 = require("../../../common/ApiError");
 const AuditService_1 = require("../../../core/audit/AuditService");
 const EventBus_1 = require("../../../core/events/EventBus");
@@ -203,6 +213,78 @@ class SiteService {
             deactivatedAt: now,
             relievedAssignments: relieved.modifiedCount,
         });
+    }
+    /**
+     * Permanent removal — only for a site that was created by mistake.
+     *
+     * A site is deletable only while NOTHING references it. The moment it has a
+     * guard assignment, attendance, monthly hours, site compensation, payroll
+     * record, rotation, note, price change, shift or QR scan, the delete is
+     * refused with 409 and the caller is told to deactivate instead — so payroll
+     * and attendance history is never orphaned.
+     */
+    static async deletePermanent(id, auditCtx) {
+        const site = await Site_1.Site.findById(id);
+        if (!site)
+            throw ApiError_1.ApiError.notFound('Site not found');
+        const [assignments, shiftAssignments, shiftTemplates, attendance, monthlyHours, compensations, payrollRecords, notes, priceHistory, rotations, rotationAssignments, shifts, scans,] = await Promise.all([
+            PrimarySiteAssignment_1.PrimarySiteAssignment.countDocuments({ siteId: id }),
+            ShiftAssignment_1.ShiftAssignment.countDocuments({ siteId: id }),
+            ShiftTemplate_1.ShiftTemplate.countDocuments({ siteId: id }),
+            GuardAttendanceRecord_1.GuardAttendanceRecord.countDocuments({ siteId: id }),
+            GuardMonthlyHours_1.GuardMonthlyHours.countDocuments({ siteId: id }),
+            GuardSiteCompensation_1.GuardSiteCompensation.countDocuments({ siteId: id }),
+            GuardPayrollRecord_1.GuardPayrollRecord.countDocuments({ $or: [{ 'primarySite.siteId': id }, { 'additionalSites.siteId': id }] }),
+            SiteNote_1.SiteNote.countDocuments({ siteId: id }),
+            SitePriceHistory_1.SitePriceHistory.countDocuments({ siteId: id }),
+            Rotation_1.Rotation.countDocuments({ siteId: id }),
+            RotationAssignment_1.RotationAssignment.countDocuments({ siteId: id }),
+            GuardShift_1.GuardShift.countDocuments({ siteId: id }),
+            GuardPatrolScan_1.GuardPatrolScan.countDocuments({ siteId: id }),
+        ]);
+        const blockers = [];
+        if (assignments)
+            blockers.push(`${assignments} guard assignment${assignments === 1 ? '' : 's'}`);
+        if (shiftAssignments)
+            blockers.push(`${shiftAssignments} shift assignment${shiftAssignments === 1 ? '' : 's'}`);
+        if (shiftTemplates)
+            blockers.push(`${shiftTemplates} shift template${shiftTemplates === 1 ? '' : 's'}`);
+        if (attendance)
+            blockers.push(`${attendance} attendance record${attendance === 1 ? '' : 's'}`);
+        if (monthlyHours)
+            blockers.push(`${monthlyHours} monthly hour${monthlyHours === 1 ? '' : 's'} sheet${monthlyHours === 1 ? '' : 's'}`);
+        if (compensations)
+            blockers.push(`${compensations} compensation rate${compensations === 1 ? '' : 's'}`);
+        if (payrollRecords)
+            blockers.push(`${payrollRecords} payroll record${payrollRecords === 1 ? '' : 's'}`);
+        if (notes)
+            blockers.push(`${notes} site note${notes === 1 ? '' : 's'}`);
+        if (priceHistory)
+            blockers.push(`${priceHistory} price change${priceHistory === 1 ? '' : 's'}`);
+        if (rotations)
+            blockers.push(`${rotations} rotation${rotations === 1 ? '' : 's'}`);
+        if (rotationAssignments)
+            blockers.push(`${rotationAssignments} rotation assignment${rotationAssignments === 1 ? '' : 's'}`);
+        if (shifts)
+            blockers.push(`${shifts} guard shift${shifts === 1 ? '' : 's'}`);
+        if (scans)
+            blockers.push(`${scans} patrol scan${scans === 1 ? '' : 's'}`);
+        if (blockers.length) {
+            throw ApiError_1.ApiError.conflict(`"${site.siteName}" already has operational history (${blockers.join(', ')}), so it cannot be deleted. Deactivate it instead — deactivation keeps the history intact.`);
+        }
+        await Site_1.Site.deleteOne({ _id: id });
+        if (auditCtx) {
+            AuditService_1.AuditService.log({
+                userId: auditCtx.userId,
+                action: 'SITE_DELETE',
+                entity: 'Site',
+                entityId: id,
+                oldValues: { siteName: site.siteName, siteCode: site.siteCode, status: site.status, location: site.location },
+                ipAddress: auditCtx.ip,
+                userAgent: auditCtx.ua,
+            });
+        }
+        EventBus_1.eventBus.emit('hr.site.deleted', { siteId: id, siteCode: site.siteCode });
     }
 }
 exports.SiteService = SiteService;

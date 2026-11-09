@@ -1,26 +1,8 @@
 import { Types } from 'mongoose';
-import { IProforma } from '../../models/Proforma';
-import { Permission } from '../../types';
-export interface ProformaContext {
-    userId?: string;
-    ip?: string;
-    ua?: string;
-    /** Effective per-user permissions from authenticate(); empty when absent.
-     *  Used for conditional authorization below route gates — discount changes
-     *  additionally require PROFORMA_DISCOUNT (Phase C policy). */
-    permissions?: Permission[];
-}
-type RawInput = Record<string, any>;
-export interface NormalizedClient {
-    companyId: Types.ObjectId | null;
-    name: string;
-    contactPerson: string;
-    tin: string;
-    phone: string;
-    email: string;
-    address: string;
-    recipient: string;
-}
+import { IProforma, IProformaItem } from '../../models/Proforma';
+import type { MarketingCtx } from './company.service';
+/** Auto-generated shift note (Step 3 of the issuing page), editable afterwards. */
+export declare function buildShiftNote(items: IProformaItem[]): string;
 export declare class ProformaService {
     static getAll(options: {
         page?: number;
@@ -28,8 +10,8 @@ export declare class ProformaService {
         search?: string;
         status?: string;
         companyId?: string;
-        sort?: string;
-        dir?: string;
+        from?: string;
+        to?: string;
     }): Promise<{
         data: (import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
             _id: Types.ObjectId;
@@ -48,57 +30,42 @@ export declare class ProformaService {
     }> & {
         __v: number;
     }>;
-    static create(input: RawInput, ctx: ProformaContext): Promise<import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
-        _id: Types.ObjectId;
-    }> & {
-        __v: number;
-    }>;
     /**
-     * Draft-only editing.
-     *  - client / vatRate / notes: merged field-wise over the current draft.
-     *  - lines: if supplied, re-resolve every snapshot from the CURRENT library
-     *    (a draft quote is still being composed); if absent, the existing line
-     *    documents — with their already-frozen snapshots — are kept verbatim.
-     * Money recomputed both ways; client totals are never trusted.
+     * Validate + price the submitted lines. Headcount and line totals are always
+     * recomputed here (rule 3): any client-supplied totalHeadcount/lineTotal is
+     * ignored, and the rate may only differ from the catalog default when the
+     * role allows overrides.
      */
-    static update(id: string, input: RawInput, ctx: ProformaContext): Promise<import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
+    private static resolveItems;
+    /** Rules 1 + site ownership: only an ACTIVE company and its ACTIVE site. */
+    private static resolveRecipient;
+    static create(input: Record<string, any>, ctx: MarketingCtx): Promise<import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
         _id: Types.ObjectId;
     }> & {
         __v: number;
     }>;
-    /** DRAFT → ISSUED. Issuing a revision additionally supersedes its parent. */
-    static issue(id: string, ctx: ProformaContext): Promise<{
-        proforma: import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
-            _id: Types.ObjectId;
-        }> & {
-            __v: number;
-        };
-        superseded: IProforma | null;
-    }>;
-    /** DRAFT → VOID. Issued documents never transition to VOID (amend instead). */
-    static void_(id: string, ctx: ProformaContext): Promise<import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
+    /** Rule 4: once issued the document is frozen — only DRAFTs can be edited. */
+    static update(id: string, input: Record<string, any>, ctx: MarketingCtx): Promise<import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
         _id: Types.ObjectId;
     }> & {
         __v: number;
     }>;
-    /**
-     * Amendments never rewrite an issued quotation: clone its documented values
-     * (including the frozen snapshots) into a fresh DRAFT revision. Editing the
-     * draft and issuing it supersedes this parent. A parent that is already
-     * superseded — or that already has a live amendment — cannot be amended.
-     */
-    static amend(id: string, ctx: ProformaContext): Promise<import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
+    static issue(id: string, ctx: MarketingCtx): Promise<import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
+        _id: Types.ObjectId;
+    }> & {
+        __v: number;
+    }>;
+    /** Lifecycle move (accept / expire / convert / cancel) per the transition map. */
+    static setStatus(id: string, nextStatusRaw: unknown, ctx: MarketingCtx): Promise<import("mongoose").Document<unknown, {}, IProforma, {}, {}> & IProforma & Required<{
         _id: Types.ObjectId;
     }> & {
         __v: number;
     }>;
     /**
-     * PROFORMA NUMBERING — atomic allocation from a per-year counter document
-     * (findOneAndUpdate/$inc upsert, same pattern as guard employee codes), so
-     * concurrent creation cannot produce duplicate 'PRO-<YYYY>-####' numbers.
+     * Atomic per-year allocation: 'PF/VGT/<YEAR>/<NNNN>'. Numbers are never
+     * reused, even when a draft is cancelled (rule 7).
      */
     private static nextNumber;
     private static audit;
 }
-export {};
 //# sourceMappingURL=proforma.service.d.ts.map

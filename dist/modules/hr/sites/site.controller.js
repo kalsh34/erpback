@@ -66,6 +66,20 @@ class SiteController {
             next(error);
         }
     }
+    /** Hard delete — refused with 409 once the site has any operational history. */
+    static async deletePermanent(req, res, next) {
+        try {
+            await site_service_1.SiteService.deletePermanent(req.params.id, {
+                userId: req.user?.userId || '',
+                ip: req.ip,
+                ua: req.get('user-agent'),
+            });
+            res.json({ success: true, message: 'Site permanently deleted' });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
 }
 exports.SiteController = SiteController;
 //# sourceMappingURL=site.controller.js.map

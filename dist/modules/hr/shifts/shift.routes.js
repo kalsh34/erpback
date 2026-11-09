@@ -103,7 +103,7 @@ router.get('/assignments', (0, rbac_1.authorize)(types_1.PERMISSIONS.SITE_READ),
             filter.$or = [{ endDate: { $gte: d } }, { endDate: { $exists: false } }, { endDate: null }];
         }
         const assignments = await ShiftAssignment_1.ShiftAssignment.find(filter)
-            .populate('guardId', 'firstName lastName employeeCode')
+            .populate('guardId', 'firstName middleName lastName employeeCode')
             .populate('siteId', 'siteName siteCode')
             .populate('shiftTemplateId', 'name startTime endTime color daysOfWeek')
             .sort({ startDate: -1 });

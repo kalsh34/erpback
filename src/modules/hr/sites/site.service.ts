@@ -4,6 +4,16 @@ import mongoose from 'mongoose';
 import { SitePriceHistory } from '../../../models/SitePriceHistory';
 import { PrimarySiteAssignment } from '../../../models/PrimarySiteAssignment';
 import { ShiftAssignment } from '../../../models/ShiftAssignment';
+import { ShiftTemplate } from '../../../models/ShiftTemplate';
+import { GuardAttendanceRecord } from '../../../models/GuardAttendanceRecord';
+import { GuardMonthlyHours } from '../../../models/GuardMonthlyHours';
+import { GuardPatrolScan } from '../../../models/GuardPatrolScan';
+import { GuardPayrollRecord } from '../../../models/GuardPayrollRecord';
+import { GuardShift } from '../../../models/GuardShift';
+import { GuardSiteCompensation } from '../../../models/GuardSiteCompensation';
+import { Rotation } from '../../../models/Rotation';
+import { RotationAssignment } from '../../../models/RotationAssignment';
+import { SiteNote } from '../../../models/SiteNote';
 import { ApiError } from '../../../common/ApiError';
 import { AuditService } from '../../../core/audit/AuditService';
 import { eventBus } from '../../../core/events/EventBus';
@@ -211,5 +221,75 @@ export class SiteService {
       deactivatedAt: now,
       relievedAssignments: relieved.modifiedCount,
     });
+  }
+
+  /**
+   * Permanent removal — only for a site that was created by mistake.
+   *
+   * A site is deletable only while NOTHING references it. The moment it has a
+   * guard assignment, attendance, monthly hours, site compensation, payroll
+   * record, rotation, note, price change, shift or QR scan, the delete is
+   * refused with 409 and the caller is told to deactivate instead — so payroll
+   * and attendance history is never orphaned.
+   */
+  static async deletePermanent(id: string, auditCtx?: { userId: string; ip?: string; ua?: string }): Promise<void> {
+    const site = await Site.findById(id);
+    if (!site) throw ApiError.notFound('Site not found');
+
+    const [
+      assignments, shiftAssignments, shiftTemplates, attendance, monthlyHours,
+      compensations, payrollRecords, notes, priceHistory, rotations,
+      rotationAssignments, shifts, scans,
+    ] = await Promise.all([
+      PrimarySiteAssignment.countDocuments({ siteId: id }),
+      ShiftAssignment.countDocuments({ siteId: id }),
+      ShiftTemplate.countDocuments({ siteId: id }),
+      GuardAttendanceRecord.countDocuments({ siteId: id }),
+      GuardMonthlyHours.countDocuments({ siteId: id }),
+      GuardSiteCompensation.countDocuments({ siteId: id }),
+      GuardPayrollRecord.countDocuments({ $or: [{ 'primarySite.siteId': id }, { 'additionalSites.siteId': id }] }),
+      SiteNote.countDocuments({ siteId: id }),
+      SitePriceHistory.countDocuments({ siteId: id }),
+      Rotation.countDocuments({ siteId: id }),
+      RotationAssignment.countDocuments({ siteId: id }),
+      GuardShift.countDocuments({ siteId: id }),
+      GuardPatrolScan.countDocuments({ siteId: id }),
+    ]);
+
+    const blockers: string[] = [];
+    if (assignments) blockers.push(`${assignments} guard assignment${assignments === 1 ? '' : 's'}`);
+    if (shiftAssignments) blockers.push(`${shiftAssignments} shift assignment${shiftAssignments === 1 ? '' : 's'}`);
+    if (shiftTemplates) blockers.push(`${shiftTemplates} shift template${shiftTemplates === 1 ? '' : 's'}`);
+    if (attendance) blockers.push(`${attendance} attendance record${attendance === 1 ? '' : 's'}`);
+    if (monthlyHours) blockers.push(`${monthlyHours} monthly hour${monthlyHours === 1 ? '' : 's'} sheet${monthlyHours === 1 ? '' : 's'}`);
+    if (compensations) blockers.push(`${compensations} compensation rate${compensations === 1 ? '' : 's'}`);
+    if (payrollRecords) blockers.push(`${payrollRecords} payroll record${payrollRecords === 1 ? '' : 's'}`);
+    if (notes) blockers.push(`${notes} site note${notes === 1 ? '' : 's'}`);
+    if (priceHistory) blockers.push(`${priceHistory} price change${priceHistory === 1 ? '' : 's'}`);
+    if (rotations) blockers.push(`${rotations} rotation${rotations === 1 ? '' : 's'}`);
+    if (rotationAssignments) blockers.push(`${rotationAssignments} rotation assignment${rotationAssignments === 1 ? '' : 's'}`);
+    if (shifts) blockers.push(`${shifts} guard shift${shifts === 1 ? '' : 's'}`);
+    if (scans) blockers.push(`${scans} patrol scan${scans === 1 ? '' : 's'}`);
+
+    if (blockers.length) {
+      throw ApiError.conflict(
+        `"${site.siteName}" already has operational history (${blockers.join(', ')}), so it cannot be deleted. Deactivate it instead — deactivation keeps the history intact.`,
+      );
+    }
+
+    await Site.deleteOne({ _id: id });
+
+    if (auditCtx) {
+      AuditService.log({
+        userId: auditCtx.userId,
+        action: 'SITE_DELETE',
+        entity: 'Site',
+        entityId: id,
+        oldValues: { siteName: site.siteName, siteCode: site.siteCode, status: site.status, location: site.location },
+        ipAddress: auditCtx.ip,
+        userAgent: auditCtx.ua,
+      });
+    }
+    eventBus.emit('hr.site.deleted', { siteId: id, siteCode: site.siteCode });
   }
 }

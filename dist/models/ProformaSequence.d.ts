@@ -2,14 +2,13 @@ import mongoose, { Document } from 'mongoose';
 /**
  * PROFORMA NUMBER SEQUENCE — the sole authority for proforma numbering.
  *
- * One document per calendar year holds the running sequence; numbers are
- * allocated with an atomic findOneAndUpdate({ $inc }) so concurrent proforma
- * creations can never receive the same number (upsert + setDefaultsOnInsert
- * handle the first allocation of a year safely under concurrency). This is the
- * same pattern guard employee codes use in guard.service.ts.
+ * One counter document per calendar year, allocated with an atomic
+ * findOneAndUpdate({ $inc }) so concurrent creations can never receive the same
+ * number. Numbers follow 'PF/VGT/<YEAR>/<NNNN>' and are never reused, not even
+ * after a draft is cancelled (rule 7).
  */
 export interface IProformaSequence extends Document {
-    /** Allocation key, e.g. 'PROFORMA-2026' (one counter per year). */
+    /** Allocation key, e.g. 'PROFORMA-VGT-2026'. */
     key: string;
     /** Last allocated sequence value (1-based). */
     seq: number;

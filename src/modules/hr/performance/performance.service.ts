@@ -11,7 +11,7 @@ export class PerformanceService {
     if (period) filter.period = period;
     const [records, total] = await Promise.all([
       Performance.find(filter)
-        .populate('employeeId', 'firstName lastName employeeCode department')
+        .populate('employeeId', 'firstName middleName lastName employeeCode department')
         .sort({ score: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
@@ -58,7 +58,7 @@ export class PerformanceService {
 
   static async getTopPerformers() {
     return Performance.find()
-      .populate('employeeId', 'firstName lastName employeeCode department')
+      .populate('employeeId', 'firstName middleName lastName employeeCode department')
       .sort({ score: -1 })
       .limit(5);
   }
@@ -72,7 +72,7 @@ export class PerformanceService {
         { reviewDueDate: { $lt: now } },
       ],
     })
-      .populate('employeeId', 'firstName lastName employeeCode department')
+      .populate('employeeId', 'firstName middleName lastName employeeCode department')
       .sort({ reviewDueDate: 1 });
   }
 

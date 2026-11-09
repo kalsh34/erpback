@@ -1,272 +1,84 @@
 import { Types } from 'mongoose';
-import { Proforma, IProforma, IProformaLine, IServiceSnapshot, ProformaStatus, LIVE_STATUSES, PROFORMA_DEFAULT_VAT_RATE, round2, mulExact } from '../../models/Proforma';
+import {
+  Proforma,
+  IProforma,
+  IProformaItem,
+  ProformaStatus,
+  PROFORMA_TRANSITIONS,
+  PROFORMA_VAT_RATE,
+  PROFORMA_DEFAULT_VALIDITY_DAYS,
+  computeItemValues,
+  computeProformaTotals,
+  addDays,
+} from '../../models/Proforma';
 import { ProformaSequence } from '../../models/ProformaSequence';
-import { ServiceLibraryItem } from '../../models/ServiceLibraryItem';
-import { AuditLog } from '../../models/AuditLog';
+import { ProformaCompany } from '../../models/ProformaCompany';
+import { ProformaSite } from '../../models/ProformaSite';
+import { RoleCategory, ServiceRole, describeShiftPattern } from '../../models/ServiceRole';
+import { CompanyStatus } from '../../types';
 import { ApiError } from '../../common/ApiError';
-import { Permission, PERMISSIONS } from '../../types';
+import { AuditLog } from '../../models/AuditLog';
+import type { MarketingCtx } from './company.service';
 
-export interface ProformaContext {
-  userId?: string;
-  ip?: string;
-  ua?: string;
-  /** Effective per-user permissions from authenticate(); empty when absent.
-   *  Used for conditional authorization below route gates — discount changes
-   *  additionally require PROFORMA_DISCOUNT (Phase C policy). */
-  permissions?: Permission[];
-}
+const MAX_ITEMS = 50;
 
-/**
- * DISCOUNT AUTHORIZATION — applying or modifying a line discount requires the
- * dedicated PROFORMA_DISCOUNT permission. It is deliberately NOT part of the
- * `marketing` module bundle, so a marketing module grant confers draft
- * creation/editing but never discount authority.
- */
-function canApproveDiscounts(ctx: ProformaContext): boolean {
-  return (ctx.permissions ?? []).includes(PERMISSIONS.PROFORMA_DISCOUNT);
-}
-
-const MAX_LINES = 200;
-const CLIENT_TEXT_MAX = 500;
-
-type RawInput = Record<string, any>;
-
-function isBlank(v: unknown): boolean {
-  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
-}
-
-function finiteNumber(value: unknown, label: string): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) throw ApiError.badRequest(`${label} must be a finite number`);
-  return n;
-}
-
-function boundedText(value: unknown, label: string, max = CLIENT_TEXT_MAX): string {
-  const s = isBlank(value) ? '' : String(value).trim();
+function text(value: unknown, label: string, max = 300): string {
+  if (value === undefined || value === null) return '';
+  const s = String(value).trim();
   if (s.length > max) throw ApiError.badRequest(`${label} must be at most ${max} characters`);
   return s;
 }
 
-export interface NormalizedClient {
-  companyId: Types.ObjectId | null;
-  name: string;
-  contactPerson: string;
-  tin: string;
-  phone: string;
-  email: string;
-  address: string;
-  recipient: string;
+function requiredId(value: unknown, label: string): string {
+  const s = text(value, label, 64);
+  if (!s) throw ApiError.badRequest(`${label} is required`);
+  if (!Types.ObjectId.isValid(s)) throw ApiError.badRequest(`${label} must be a valid id`);
+  return s;
 }
 
-/** Validate + normalize the customer/recipient block. */
-function normalizeClient(input: RawInput): NormalizedClient {
-  const clientBlock = (input.client && typeof input.client === 'object' ? input.client : {}) as RawInput;
-  const top: RawInput = input;
+/** Local-midnight calendar date (avoids UTC off-by-one on issue/validity dates). */
+function toCalendarDate(value: unknown, label: string): Date {
+  if (value === undefined || value === null || value === '') {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) throw ApiError.badRequest(`${label} must be a valid date`);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
 
-  const name = boundedText(clientBlock.name ?? top.clientName, 'client.name', 300);
-  if (!name) throw ApiError.badRequest('client.name is required (who the proforma is addressed to)');
+function normalizeValidityDays(value: unknown): number {
+  if (value === undefined || value === null || value === '') return PROFORMA_DEFAULT_VALIDITY_DAYS;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 365) {
+    throw ApiError.badRequest('validityDays must be a whole number between 1 and 365');
+  }
+  return n;
+}
 
-  let companyId: Types.ObjectId | null = null;
-  const companyRef = clientBlock.companyId ?? top.companyId;
-  if (!isBlank(companyRef)) {
-    if (!Types.ObjectId.isValid(String(companyRef))) {
-      throw ApiError.badRequest('client.companyId must be a valid company id');
+/** Read-only totals recomputation safety: always derive from the items. */
+function totalsOf(items: IProformaItem[]) {
+  return computeProformaTotals(items, PROFORMA_VAT_RATE);
+}
+
+/** Auto-generated shift note (Step 3 of the issuing page), editable afterwards. */
+export function buildShiftNote(items: IProformaItem[]): string {
+  const isManpower = (it: IProformaItem) => !it.category || it.category === RoleCategory.MANPOWER;
+  const rows = items.map((it) => {
+    if (!isManpower(it)) {
+      // Technology / specialised services are supplied as units, not posts.
+      return `${it.roleName} — ${Number(it.totalHeadcount.toFixed(2))} unit${it.totalHeadcount === 1 ? '' : 's'} per month.`;
     }
-    companyId = new Types.ObjectId(String(companyRef));
-  }
-
-  return {
-    companyId,
-    name,
-    contactPerson: boundedText(clientBlock.contactPerson ?? top.contactPerson, 'client.contactPerson'),
-    tin: boundedText(clientBlock.tin ?? top.tin, 'client.tin', 64),
-    phone: boundedText(clientBlock.phone ?? top.phone, 'client.phone', 64),
-    email: boundedText(clientBlock.email ?? top.email, 'client.email', 320),
-    address: boundedText(clientBlock.address ?? top.address, 'client.address'),
-    recipient: boundedText(clientBlock.recipient ?? top.recipient, 'client.recipient'),
-  };
-}
-
-/**
- * OPTIONAL VALIDITY DATE — there is NO default expiry (Phase C policy). An
- * absent/blank value stores no expiry at all; a supplied value must parse to
- * a real date or the request is rejected.
- */
-function normalizeValidUntil(input: RawInput): Date | null {
-  if (isBlank(input.validUntil)) return null;
-  const d = new Date(String(input.validUntil));
-  if (Number.isNaN(d.getTime())) {
-    throw ApiError.badRequest('validUntil must be a valid date (e.g. "2027-03-01") or omitted for no expiry');
-  }
-  return d;
-}
-
-/**
- * DISCOUNT AUTHORIZATION on line submissions. Without PROFORMA_DISCOUNT a
- * caller may not introduce a nonzero discount, may not change an approved
- * one, and may not remove one — including by dropping the discounted line or
- * reordering terms. Submitted lines are matched to existing ones by
- * serviceItemId + quantity + unitPrice (an exact-term greedy match that
- * tolerates reordering); any applied/approved discount that differs or goes
- * unaccounted is a 403 — never a silent strip or a mutated document. An edit
- * that keeps every approved discount byte-for-byte (e.g. a notes-only change
- * or lines-without-discount check) passes and needs no escalation.
- */
-function enforceDiscountAuthorization(
-  submitted: IProformaLine[],
-  existing: IProformaLine[] | undefined,
-  ctx: ProformaContext
-): void {
-  if (canApproveDiscounts(ctx)) return;
-  const remaining = (existing ?? []).map((l) => ({
-    item: String(l.serviceItemId),
-    qty: l.quantity,
-    price: l.unitPrice,
-    discount: l.discountAmount ?? 0,
-  }));
-  const used = new Set<number>();
-  const prevDiscountFor = (line: IProformaLine): number => {
-    const key = String(line.serviceItemId);
-    for (let j = 0; j < remaining.length; j++) {
-      if (used.has(j)) continue;
-      const r = remaining[j];
-      if (r.item !== key || r.qty !== line.quantity || r.price !== line.unitPrice) continue;
-      used.add(j);
-      return r.discount;
-    }
-    return 0;
-  };
-  for (const line of submitted) {
-    const prev = prevDiscountFor(line);
-    const next = line.discountAmount ?? 0;
-    if (prev !== next) {
-      throw ApiError.forbidden(
-        'Applying, changing or removing a line discount requires the proforma.discount permission (manager only)'
-      );
-    }
-  }
-  // Removal by omission: an existing discounted line vanishes from the
-  // submitted set entirely.
-  if (remaining.some((r, j) => !used.has(j) && r.discount > 0)) {
-    throw ApiError.forbidden(
-      'Removing a line discount by dropping the line requires the proforma.discount permission (manager only)'
-    );
-  }
-}
-
-/** VAT rate: fraction 0–1. Omitted → PROPOSED default (15%), 0 = no VAT. */
-function normalizeVatRate(input: RawInput): number {
-  if (isBlank(input.vatRate)) return PROFORMA_DEFAULT_VAT_RATE;
-  const vat = finiteNumber(input.vatRate, 'vatRate');
-  if (vat < 0 || vat > 1) {
-    throw ApiError.badRequest('vatRate must be a fraction between 0 and 1 (e.g. 0.15 for 15%)');
-  }
-  return vat;
-}
-
-/** Immutable snapshot of a library entry (PlainObject or ServiceLibraryItem). */
-function snapshotFromLibrary(src: any): IServiceSnapshot {
-  return {
-    code: src.code,
-    name: src.name,
-    description: src.description ?? '',
-    category: src.category,
-    unit: src.unit,
-    pricingModel: src.pricingModel,
-    structuredDetails: (src.structuredDetails ?? []).map((d: any) => ({
-      key: d.key, label: d.label, value: d.value,
-    })),
-    maleGuardsPerDay: src.maleGuardsPerDay ?? null,
-    femaleGuardsPerDay: src.femaleGuardsPerDay ?? null,
-    maleGuardsPerMonth: src.maleGuardsPerMonth ?? null,
-    femaleGuardsPerMonth: src.femaleGuardsPerMonth ?? null,
-    monthlySalaryBeforeVatMale: src.monthlySalaryBeforeVatMale ?? null,
-    monthlySalaryBeforeVatFemale: src.monthlySalaryBeforeVatFemale ?? null,
-    shiftNote: src.shiftNote ?? '',
-    equipmentItems: (src.equipmentItems ?? []).map((e: any) => ({
-      name: e.name,
-      quantity: e.quantity,
-      unit: e.unit,
-      ...(e.notes ? { notes: e.notes } : {}),
-    })),
-    installationNote: src.installationNote ?? '',
-    libraryActiveAtQuotation: !!src.isActive,
-  };
-}
-
-/**
- * Validate quote lines and (re)resolve their snapshots from the CURRENT library
- * state. Money is recomputed server-side: unitPrice/discount are ETB,
- * VAT-EXCLUSIVE; client-supplied totals are never trusted.
- */
-function validateLines(rawLines: unknown, library: Map<string, any>): IProformaLine[] {
-  if (!Array.isArray(rawLines) || rawLines.length === 0) {
-    throw ApiError.badRequest('A proforma must quote at least one service line (lines is a required array)');
-  }
-  if (rawLines.length > MAX_LINES) {
-    throw ApiError.badRequest(`A proforma may quote at most ${MAX_LINES} lines`);
-  }
-
-  const lines: IProformaLine[] = [];
-  for (const [i, rawRow] of rawLines.entries()) {
-    const row = rawRow || {};
-    if (isBlank(row.serviceItemId)) throw ApiError.badRequest(`lines[${i}].serviceItemId is required`);
-    const idStr = String(row.serviceItemId);
-    if (!Types.ObjectId.isValid(idStr)) {
-      throw ApiError.badRequest(`lines[${i}].serviceItemId is not a valid id`);
-    }
-    const lib = library.get(idStr);
-    if (!lib) throw ApiError.badRequest(`lines[${i}] references unknown service library entry ${idStr}`);
-
-    const quantity = isBlank(row.quantity) ? 0 : finiteNumber(row.quantity, `lines[${i}].quantity`);
-    if (quantity < 0) throw ApiError.badRequest(`lines[${i}].quantity must be non-negative`);
-
-    const unitPrice = isBlank(row.unitPrice) ? 0 : finiteNumber(row.unitPrice, `lines[${i}].unitPrice`);
-    if (unitPrice < 0) throw ApiError.badRequest(`lines[${i}].unitPrice must be non-negative`);
-
-    const discountAmount = isBlank(row.discountAmount) ? 0 : finiteNumber(row.discountAmount, `lines[${i}].discountAmount`);
-    if (discountAmount < 0) throw ApiError.badRequest(`lines[${i}].discountAmount must be non-negative`);
-    const gross = quantity * unitPrice;
-    if (gross - discountAmount < 0) {
-      throw ApiError.badRequest(`lines[${i}].discountAmount cannot exceed the line amount (quantity × unitPrice)`);
-    }
-
-    const unit = (isBlank(row.unit) ? lib.unit : String(row.unit)).toUpperCase().trim().slice(0, 24) || 'UNIT';
-
-    lines.push({
-      serviceItemId: new Types.ObjectId(idStr),
-      snapshot: snapshotFromLibrary(lib),
-      quantity,
-      unit,
-      unitPrice,
-      discountAmount,
-      lineTotal: round2(gross - discountAmount),
-    } as IProformaLine);
-  }
-  return lines;
-}
-
-/** Compute the money block from validated lines + vatRate (VAT-exclusive → inclusive). */
-function computeMoney(lines: IProformaLine[], vatRate: number) {
-  const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
-  const vatAmount = round2(mulExact(subtotal, vatRate));
-  const grandTotal = round2(subtotal + vatAmount);
-  return { subtotal, vatAmount, grandTotal };
-}
-
-/** Load the library entries referenced by raw line rows; throw 400 listing misses. */
-async function loadLibraryOrThrow(rawLines: unknown): Promise<Map<string, any>> {
-  const idList = (Array.isArray(rawLines) ? rawLines : [])
-    .map((r: any) => (r?.serviceItemId != null ? String(r.serviceItemId) : ''))
-    .filter((id: string) => id);
-  const validIds = [...new Set(idList.filter((id) => Types.ObjectId.isValid(id)))];
-  const docs = await ServiceLibraryItem.find({ _id: { $in: validIds } }).lean();
-  const map = new Map<string, any>();
-  for (const d of docs as any[]) map.set(String(d._id), d);
-  for (const id of validIds) {
-    if (!map.has(id)) throw ApiError.badRequest(`Line references unknown service library entry ${id}`);
-  }
-  return map;
+    const pattern = describeShiftPattern(it.shiftPattern);
+    const rest = it.restDaysRule ? ` ${it.restDaysRule}` : '';
+    return `${it.roleName} — ${it.postsPerDay} post${it.postsPerDay === 1 ? '' : 's'} per day; ${pattern}.${rest}`;
+  });
+  const headcount = items.reduce((s, i) => s + (isManpower(i) ? i.totalHeadcount : 0), 0);
+  return [
+    ...rows,
+    `Total headcount: ${Number(headcount.toFixed(2))} guard(s)/staff per month (posts per day × role multiplier).`,
+    'Rates quoted are monthly and exclusive of VAT where VAT applies.',
+  ].join('\n');
 }
 
 export class ProformaService {
@@ -276,300 +88,296 @@ export class ProformaService {
     search?: string;
     status?: string;
     companyId?: string;
-    sort?: string;
-    dir?: string;
+    from?: string;
+    to?: string;
   }) {
     const page = options.page && options.page > 0 ? options.page : 1;
     const limit = options.limit ? Math.min(options.limit, 100) : 20;
     const skip = (page - 1) * limit;
 
-    const query: Record<string, any> = {};
-    const statusFilter = options.status?.toUpperCase();
-    if (statusFilter === 'LIVE') query.status = { $in: LIVE_STATUSES };
-    else if (statusFilter && statusFilter !== 'ALL') {
-      if (!Object.values(ProformaStatus).includes(statusFilter as ProformaStatus)) {
-        throw ApiError.badRequest(`status must be one of: ${Object.values(ProformaStatus).join(', ')}, LIVE, ALL`);
+    const filter: Record<string, any> = {};
+    if (options.status && options.status !== 'ALL') {
+      if (!Object.values(ProformaStatus).includes(options.status as ProformaStatus)) {
+        throw ApiError.badRequest(`status must be one of: ${Object.values(ProformaStatus).join(', ')}, ALL`);
       }
-      query.status = statusFilter;
+      filter.status = options.status;
     }
-    if (options.companyId && Types.ObjectId.isValid(options.companyId)) {
-      query['client.companyId'] = new Types.ObjectId(options.companyId);
+    if (options.companyId) {
+      if (!Types.ObjectId.isValid(options.companyId)) throw ApiError.badRequest('companyId must be a valid company id');
+      filter.companyId = new Types.ObjectId(options.companyId);
+    }
+    if (options.from || options.to) {
+      filter.issueDate = {};
+      if (options.from) {
+        const from = new Date(options.from);
+        if (Number.isNaN(from.getTime())) throw ApiError.badRequest('from must be a valid date');
+        filter.issueDate.$gte = from;
+      }
+      if (options.to) {
+        const to = new Date(options.to);
+        if (Number.isNaN(to.getTime())) throw ApiError.badRequest('to must be a valid date');
+        filter.issueDate.$lte = to;
+      }
     }
     if (options.search) {
       const rx = new RegExp(options.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-      query.$or = [
-        { number: rx },
-        { 'client.name': rx },
-        { 'client.tin': rx },
-        { 'lines.snapshot.name': rx },
-      ];
+      filter.$or = [{ number: rx }, { 'items.roleName': rx }, { notes: rx }];
     }
 
-    const sortField = ['number', 'status', 'grandTotal', 'updatedAt', 'issuedAt'].includes(options.sort || '')
-      ? options.sort!
-      : 'number';
-    const dir = options.dir === 'asc' ? 1 : -1;
-
-    const [data, total] = await Promise.all([
-      Proforma.find(query).sort({ [sortField]: dir }).skip(skip).limit(limit),
-      Proforma.countDocuments(query),
+    const [docs, total] = await Promise.all([
+      Proforma.find(filter)
+        .populate('companyId', 'name nameAm tin city primaryPhone primaryEmail status')
+        .populate('siteId', 'siteName city address status')
+        .sort({ issueDate: -1, number: -1 })
+        .skip(skip)
+        .limit(limit),
+      Proforma.countDocuments(filter),
     ]);
 
-    return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 } };
+    return { data: docs, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 } };
   }
 
   static async getById(id: string) {
     if (!Types.ObjectId.isValid(id)) throw ApiError.badRequest('Invalid proforma id');
-    const proforma = await Proforma.findById(id);
+    const proforma = await Proforma.findById(id)
+      .populate('companyId', 'name nameAm tin registrationNumber companyType industry address city region country primaryPhone secondaryPhone primaryEmail website status contacts')
+      .populate('siteId', 'siteName address city region specialRequirements status');
     if (!proforma) throw ApiError.notFound('Proforma not found');
     return proforma;
   }
 
-  // ── draft lifecycle ─────────────────────────────────────────────────
+  /**
+   * Validate + price the submitted lines. Headcount and line totals are always
+   * recomputed here (rule 3): any client-supplied totalHeadcount/lineTotal is
+   * ignored, and the rate may only differ from the catalog default when the
+   * role allows overrides.
+   */
+  private static async resolveItems(rawItems: unknown): Promise<IProformaItem[]> {
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      throw ApiError.badRequest('A proforma must quote at least one service line (items is required)');
+    }
+    if (rawItems.length > MAX_ITEMS) {
+      throw ApiError.badRequest(`A proforma may quote at most ${MAX_ITEMS} lines`);
+    }
 
-  static async create(input: RawInput, ctx: ProformaContext) {
-    const library = await loadLibraryOrThrow(input.lines);
-    const lines = validateLines(input.lines, library);
-    const vatRate = normalizeVatRate(input);
-    const client = normalizeClient(input);
-    const notes = boundedText(input.notes, 'notes', 4000);
-    // Phase C policy: only explicitly authorized managers may apply discounts.
-    enforceDiscountAuthorization(lines, undefined, ctx);
-    const validUntil = normalizeValidUntil(input);
-    const number = await this.nextNumber();
+    const ids = rawItems.map((row: any, i: number) => requiredId(row?.roleId, `items[${i}].roleId`));
+    const roles = await ServiceRole.find({ _id: { $in: ids } });
+    const byId = new Map(roles.map((r) => [String(r._id), r]));
 
-    const created = await Proforma.create({
-      number,
+    return rawItems.map((row: any, i: number) => {
+      const role = byId.get(String(row.roleId));
+      if (!role) throw ApiError.badRequest(`items[${i}] references an unknown service role`);
+      if (role.status !== CompanyStatus.ACTIVE) {
+        throw ApiError.badRequest(`items[${i}] references an inactive service role (${role.roleCode})`);
+      }
+
+      const postsPerDay = Number(row.postsPerDay);
+      if (!Number.isInteger(postsPerDay) || postsPerDay < 1 || postsPerDay > 1000) {
+        throw ApiError.badRequest(`items[${i}].postsPerDay must be a whole number between 1 and 1000`);
+      }
+      if (!(role.multiplier > 0)) {
+        throw ApiError.badRequest(`Service role ${role.roleCode} has no valid multiplier`);
+      }
+
+      let unitRate = role.defaultMonthlyRate;
+      if (row.unitRate !== undefined && row.unitRate !== null && row.unitRate !== '') {
+        const requested = Number(row.unitRate);
+        if (!Number.isFinite(requested) || requested < 0) {
+          throw ApiError.badRequest(`items[${i}].unitRate must be a non-negative number`);
+        }
+        if (requested !== role.defaultMonthlyRate) {
+          if (!role.allowRateOverride) {
+            throw ApiError.badRequest(
+              `items[${i}]: the rate for ${role.roleCode} is fixed at ${role.defaultMonthlyRate} (overrides are disabled on this role)`
+            );
+          }
+          unitRate = requested;
+        }
+      }
+
+      const { totalHeadcount, lineTotal } = computeItemValues(postsPerDay, role.multiplier, unitRate);
+
+      return {
+        roleId: role._id,
+        roleCode: role.roleCode,
+        roleName: role.roleName,
+        gender: role.gender,
+        category: role.category,
+        postsPerDay,
+        multiplier: role.multiplier,
+        totalHeadcount,
+        unitRate,
+        lineTotal,
+        vatApplicable: role.vatApplicable,
+        shiftPattern: role.shiftPattern,
+        restDaysRule: role.restDaysRule ?? '',
+      } as IProformaItem;
+    });
+  }
+
+  /** Rules 1 + site ownership: only an ACTIVE company and its ACTIVE site. */
+  private static async resolveRecipient(companyIdRaw: unknown, siteIdRaw: unknown) {
+    const companyId = requiredId(companyIdRaw, 'companyId');
+    const siteId = requiredId(siteIdRaw, 'siteId');
+
+    const company = await ProformaCompany.findById(companyId);
+    if (!company) throw ApiError.badRequest('The selected company is not registered');
+    if (company.status !== CompanyStatus.ACTIVE) {
+      throw ApiError.badRequest('A proforma can only be created for an active company');
+    }
+
+    const site = await ProformaSite.findById(siteId);
+    if (!site) throw ApiError.badRequest('The selected site does not exist');
+    if (String(site.companyId) !== String(company._id)) {
+      throw ApiError.badRequest('The selected site does not belong to the selected company');
+    }
+    if (site.status !== CompanyStatus.ACTIVE) {
+      throw ApiError.badRequest('The selected site is inactive');
+    }
+    return { company, site };
+  }
+
+  static async create(input: Record<string, any>, ctx: MarketingCtx) {
+    const { company, site } = await ProformaService.resolveRecipient(input.companyId, input.siteId);
+    const items = await ProformaService.resolveItems(input.items);
+    const validityDays = normalizeValidityDays(input.validityDays);
+    const issueDate = toCalendarDate(input.issueDate, 'issueDate');
+    const shiftNote = text(input.shiftNote, 'Shift note', 4000) || buildShiftNote(items);
+    const notes = text(input.notes, 'Notes', 4000);
+    const internalNotes = text(input.internalNotes, 'Internal notes', 4000);
+    const totals = totalsOf(items);
+
+    const proforma = await Proforma.create({
+      number: await ProformaService.nextNumber(),
+      companyId: company._id,
+      siteId: site._id,
+      issueDate,
+      validityDays,
+      validityDate: addDays(issueDate, validityDays),
       status: ProformaStatus.DRAFT,
-      revisionNumber: 1,
-      client,
-      lines,
-      vatRate,
-      validUntil,
-      ...computeMoney(lines, vatRate),
+      items,
+      ...totals,
+      shiftNote,
       notes,
+      internalNotes,
+      deliveryEmailPdf: input.deliveryEmailPdf === true || input.deliveryEmailPdf === 'true',
+      deliveryHardCopy: input.deliveryHardCopy === true || input.deliveryHardCopy === 'true',
       createdBy: (ctx.userId ?? null) as any,
       updatedBy: (ctx.userId ?? null) as any,
     });
 
-    await this.audit(ctx, 'PROFORMA_CREATE', created);
-    if (lines.some((l) => (l.discountAmount ?? 0) > 0)) {
-      await this.audit(ctx, 'PROFORMA_DISCOUNT', created, null, { approvedBy: ctx.userId });
-    }
-    return created;
+    await ProformaService.audit(ctx, 'PROFORMA_CREATE', proforma, { number: proforma.number });
+    return proforma;
   }
 
-  /**
-   * Draft-only editing.
-   *  - client / vatRate / notes: merged field-wise over the current draft.
-   *  - lines: if supplied, re-resolve every snapshot from the CURRENT library
-   *    (a draft quote is still being composed); if absent, the existing line
-   *    documents — with their already-frozen snapshots — are kept verbatim.
-   * Money recomputed both ways; client totals are never trusted.
-   */
-  static async update(id: string, input: RawInput, ctx: ProformaContext) {
-    const current = await Proforma.findById(id);
-    if (!current) throw ApiError.notFound('Proforma not found');
-    if (current.status !== ProformaStatus.DRAFT) {
-      throw ApiError.forbidden(
-        `Only DRAFT proformas can be edited (current status: ${current.status}). To change an issued quote, POST /:id/amend for a revision.`
+  /** Rule 4: once issued the document is frozen — only DRAFTs can be edited. */
+  static async update(id: string, input: Record<string, any>, ctx: MarketingCtx) {
+    const proforma = await Proforma.findById(id);
+    if (!proforma) throw ApiError.notFound('Proforma not found');
+    if (proforma.status !== ProformaStatus.DRAFT) {
+      throw ApiError.forbidden(`Only DRAFT proformas can be edited (current status: ${proforma.status})`);
+    }
+    const oldValues = proforma.toObject();
+
+    if (input.companyId !== undefined || input.siteId !== undefined) {
+      const { company, site } = await ProformaService.resolveRecipient(
+        input.companyId ?? proforma.companyId,
+        input.siteId ?? proforma.siteId
       );
+      proforma.companyId = company._id;
+      proforma.siteId = site._id;
     }
-
-    const oldValues = current.toObject();
-
-    let lines: IProformaLine[];
-    if (input.lines !== undefined) {
-      const library = await loadLibraryOrThrow(input.lines);
-      lines = validateLines(input.lines, library);
-      // Phase C policy: discount changes (add/change/remove) on a submitted
-      // lines array are manager-only and are rejected BEFORE any mutation.
-      enforceDiscountAuthorization(lines, (current.lines as any) as IProformaLine[], ctx);
-    } else {
-      lines = (current.lines as any) as IProformaLine[];
+    if (input.items !== undefined) {
+      proforma.items = (await ProformaService.resolveItems(input.items)) as any;
+      Object.assign(proforma, totalsOf(proforma.items as any));
+      if (input.shiftNote === undefined) proforma.shiftNote = buildShiftNote(proforma.items as any);
     }
-
-    current.client = normalizeClient({
-      ...input,
-      // field-wise merge over the CURRENT client block: absent fields keep values
-      client: {
-        name: current.client.name,
-        contactPerson: current.client.contactPerson,
-        tin: current.client.tin,
-        phone: current.client.phone,
-        email: current.client.email,
-        address: current.client.address,
-        recipient: current.client.recipient,
-        ...(input.client ?? {}),
-      },
-    }) as any;
-    if (input.vatRate !== undefined) current.vatRate = normalizeVatRate(input);
-    if (input.notes !== undefined) current.notes = boundedText(input.notes, 'notes', 4000);
-    // Validity date is optional and NULLABLE: absent → keep as-is; explicit
-    // null/'' → clear (no expiry is stored unless a date was supplied).
-    if (input.validUntil !== undefined) current.validUntil = normalizeValidUntil(input);
-    current.lines = lines as any;
-    Object.assign(current, computeMoney(lines, current.vatRate));
-    current.updatedBy = (ctx.userId ?? null) as any;
-    await current.save();
-    await this.audit(ctx, 'PROFORMA_UPDATE', current, oldValues);
-    // Distinct, auditable discount-approval trail: logged only when an
-    // authorized user actually changed the discount amount on a lines edit.
-    if (input.lines !== undefined && canApproveDiscounts(ctx)) {
-      const oldDiscount = ((oldValues as any).lines ?? []).reduce(
-        (s: number, l: any) => s + (l.discountAmount ?? 0), 0);
-      const newDiscount = lines.reduce((s, l) => s + (l.discountAmount ?? 0), 0);
-      if (newDiscount !== oldDiscount) {
-        await this.audit(ctx, 'PROFORMA_DISCOUNT', current,
-          { discountTotal: round2(oldDiscount) },
-          { discountTotal: round2(newDiscount), approvedBy: ctx.userId });
-      }
+    if (input.validityDays !== undefined) {
+      proforma.validityDays = normalizeValidityDays(input.validityDays);
+      proforma.validityDate = addDays(proforma.issueDate, proforma.validityDays);
     }
-    return current;
+    if (input.issueDate !== undefined) {
+      proforma.issueDate = toCalendarDate(input.issueDate, 'issueDate');
+      proforma.validityDate = addDays(proforma.issueDate, proforma.validityDays);
+    }
+    if (input.shiftNote !== undefined) proforma.shiftNote = text(input.shiftNote, 'Shift note', 4000);
+    if (input.notes !== undefined) proforma.notes = text(input.notes, 'Notes', 4000);
+    if (input.internalNotes !== undefined) proforma.internalNotes = text(input.internalNotes, 'Internal notes', 4000);
+    if (input.deliveryEmailPdf !== undefined) {
+      proforma.deliveryEmailPdf = input.deliveryEmailPdf === true || input.deliveryEmailPdf === 'true';
+    }
+    if (input.deliveryHardCopy !== undefined) {
+      proforma.deliveryHardCopy = input.deliveryHardCopy === true || input.deliveryHardCopy === 'true';
+    }
+    proforma.updatedBy = (ctx.userId ?? null) as any;
+    await proforma.save();
+
+    await ProformaService.audit(ctx, 'PROFORMA_UPDATE', proforma, oldValues);
+    return proforma;
   }
 
-  // ── issue / void / amend ────────────────────────────────────────────
-
-  /** DRAFT → ISSUED. Issuing a revision additionally supersedes its parent. */
-  static async issue(id: string, ctx: ProformaContext) {
+  static async issue(id: string, ctx: MarketingCtx) {
     const proforma = await Proforma.findById(id);
     if (!proforma) throw ApiError.notFound('Proforma not found');
     if (proforma.status !== ProformaStatus.DRAFT) {
       throw ApiError.badRequest(`Only a DRAFT proforma can be issued (current status: ${proforma.status})`);
     }
+    // Re-check the commercial preconditions at issue time: companies/sites/roles
+    // may have been deactivated while the draft was being prepared.
+    await ProformaService.resolveRecipient(proforma.companyId, proforma.siteId);
 
-    let supersededParent: IProforma | null = null;
-    if (proforma.revisesId) {
-      const parent = await Proforma.findById(proforma.revisesId);
-      if (!parent) throw ApiError.conflict('The amended proforma no longer exists');
-      if (parent.status !== ProformaStatus.ISSUED) {
-        throw ApiError.conflict(`The amended proforma is ${parent.status}; it must be ISSUED to be superseded`);
-      }
-      parent.status = ProformaStatus.SUPERSEDED;
-      parent.supersededById = proforma._id as any;
-      parent.liveRevisionId = null;
-      supersededParent = parent;
-    }
-
-    const oldStatus = proforma.status;
     proforma.status = ProformaStatus.ISSUED;
     proforma.issuedAt = new Date();
     proforma.issuedBy = (ctx.userId ?? null) as any;
-    try {
-      await proforma.save();
-    } catch (err: any) {
-      if (err?.code === 11000) throw ApiError.conflict('A live amendment of the parent already exists — refresh and retry');
-      throw err;
-    }
+    await proforma.save();
 
-    if (supersededParent) {
-      await supersededParent.save();
-      await this.audit(ctx, 'PROFORMA_SUPERSEDED', supersededParent, { status: 'ISSUED' }, { supersededBy: proforma.number });
-      await this.audit(ctx, 'PROFORMA_ISSUE', proforma, { status: oldStatus }, { supersedes: supersededParent.number });
-    } else {
-      await this.audit(ctx, 'PROFORMA_ISSUE', proforma, { status: oldStatus });
-    }
-    return { proforma, superseded: supersededParent };
+    await ProformaService.audit(ctx, 'PROFORMA_ISSUE', proforma, { status: ProformaStatus.DRAFT });
+    return proforma;
   }
 
-  /** DRAFT → VOID. Issued documents never transition to VOID (amend instead). */
-  static async void_(id: string, ctx: ProformaContext) {
+  /** Lifecycle move (accept / expire / convert / cancel) per the transition map. */
+  static async setStatus(id: string, nextStatusRaw: unknown, ctx: MarketingCtx) {
+    const next = String(nextStatusRaw ?? '').toUpperCase() as ProformaStatus;
+    if (!Object.values(ProformaStatus).includes(next)) {
+      throw ApiError.badRequest(`status must be one of: ${Object.values(ProformaStatus).join(', ')}`);
+    }
     const proforma = await Proforma.findById(id);
     if (!proforma) throw ApiError.notFound('Proforma not found');
-    if (proforma.status !== ProformaStatus.DRAFT) {
-      throw ApiError.badRequest(`Only a DRAFT proforma can be voided (current status: ${proforma.status})`);
+
+    const allowed = PROFORMA_TRANSITIONS[proforma.status] ?? [];
+    if (!allowed.includes(next)) {
+      throw ApiError.badRequest(
+        `A ${proforma.status} proforma cannot move to ${next} (allowed: ${allowed.join(', ') || 'none'})`
+      );
     }
-    const oldValues = { status: proforma.status };
-    proforma.status = ProformaStatus.VOID;
-    proforma.voidedAt = new Date();
-    proforma.voidedBy = (ctx.userId ?? null) as any;
-    // Voiding an amendment revision releases its parent for a fresh amendment.
-    let clearedParent: IProforma | null = null;
-    if (proforma.revisesId) {
-      const parent = await Proforma.findOne({ _id: proforma.revisesId, liveRevisionId: proforma._id });
-      if (parent) { parent.liveRevisionId = null; clearedParent = parent; }
-    }
+    const oldStatus = proforma.status;
+    proforma.status = next;
+    if (next === ProformaStatus.CANCELLED) proforma.cancelledAt = new Date();
     await proforma.save();
-    if (clearedParent) await clearedParent.save();
-    await this.audit(ctx, 'PROFORMA_VOID', proforma, oldValues);
+
+    await ProformaService.audit(ctx, `PROFORMA_${next}`, proforma, { status: oldStatus });
     return proforma;
   }
 
   /**
-   * Amendments never rewrite an issued quotation: clone its documented values
-   * (including the frozen snapshots) into a fresh DRAFT revision. Editing the
-   * draft and issuing it supersedes this parent. A parent that is already
-   * superseded — or that already has a live amendment — cannot be amended.
-   */
-  static async amend(id: string, ctx: ProformaContext) {
-    const parent = await Proforma.findById(id);
-    if (!parent) throw ApiError.notFound('Proforma not found');
-    if (parent.supersededById) {
-      throw ApiError.conflict('This proforma is already superseded — amend the current revision instead');
-    }
-    if (parent.status !== ProformaStatus.ISSUED) {
-      throw ApiError.badRequest(`Only an ISSUED proforma can be amended (current status: ${parent.status})`);
-    }
-    if (parent.liveRevisionId) {
-      throw ApiError.conflict('A live amendment already exists for this proforma — void or issue it first');
-    }
-
-    const number = await this.nextNumber();
-    const clone = parent.toObject();
-    const draft = await Proforma.create({
-      number,
-      status: ProformaStatus.DRAFT,
-      revisionNumber: parent.revisionNumber + 1,
-      revisesId: parent._id,
-      validUntil: parent.validUntil ?? null,
-      client: clone.client,
-      lines: clone.lines,
-      vatRate: parent.vatRate,
-      subtotal: parent.subtotal,
-      vatAmount: parent.vatAmount,
-      grandTotal: parent.grandTotal,
-      notes: parent.notes,
-      createdBy: (ctx.userId ?? null) as any,
-      updatedBy: (ctx.userId ?? null) as any,
-    });
-
-    // ATOMIC single-live-amendment claim: the parent can be claimed by exactly
-    // one draft. A failed claim (another request claimed it first) removes the
-    // just-created draft and reports the conflict — no exotic partial indexes.
-    const claim = await Proforma.updateOne(
-      { _id: parent._id, status: ProformaStatus.ISSUED, liveRevisionId: null, supersededById: null },
-      { $set: { liveRevisionId: draft._id } as any }
-    );
-    if (claim.modifiedCount !== 1) {
-      await Proforma.deleteOne({ _id: draft._id, revisesId: parent._id, status: ProformaStatus.DRAFT });
-      throw ApiError.conflict('A live amendment already exists for this proforma (claimed concurrently)');
-    }
-
-    await this.audit(ctx, 'PROFORMA_AMEND', draft, null, { amends: parent.number });
-    return draft;
-  }
-
-  /**
-   * PROFORMA NUMBERING — atomic allocation from a per-year counter document
-   * (findOneAndUpdate/$inc upsert, same pattern as guard employee codes), so
-   * concurrent creation cannot produce duplicate 'PRO-<YYYY>-####' numbers.
+   * Atomic per-year allocation: 'PF/VGT/<YEAR>/<NNNN>'. Numbers are never
+   * reused, even when a draft is cancelled (rule 7).
    */
   private static async nextNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const counter = await ProformaSequence.findOneAndUpdate(
-      { key: `PROFORMA-${year}` },
+      { key: `PROFORMA-VGT-${year}` },
       { $inc: { seq: 1 } },
-      { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true }
+      { new: true, upsert: true, setDefaultsOnInsert: true }
     );
-    return `PRO-${year}-${String(counter!.seq).padStart(4, '0')}`;
+    return `PF/VGT/${year}/${String(counter!.seq).padStart(4, '0')}`;
   }
 
   private static async audit(
-    ctx: ProformaContext,
+    ctx: MarketingCtx,
     action: string,
-    doc: IProforma | null,
-    oldValues?: unknown,
-    extraNew: Record<string, unknown> = {}
+    doc: IProforma,
+    oldValues?: unknown
   ) {
     if (!ctx.userId || !doc) return;
     await AuditLog.create({
@@ -578,7 +386,7 @@ export class ProformaService {
       entity: 'Proforma',
       entityId: doc._id,
       oldValues: oldValues ?? undefined,
-      newValues: { ...(doc.toObject() as Record<string, unknown>), ...extraNew },
+      newValues: doc.toObject(),
       ipAddress: ctx.ip,
       userAgent: ctx.ua,
     });

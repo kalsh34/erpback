@@ -5,7 +5,6 @@ export declare class ProformaController {
     static create(req: Request, res: Response, next: NextFunction): Promise<void>;
     static update(req: Request, res: Response, next: NextFunction): Promise<void>;
     static issue(req: Request, res: Response, next: NextFunction): Promise<void>;
-    static void(req: Request, res: Response, next: NextFunction): Promise<void>;
-    static amend(req: Request, res: Response, next: NextFunction): Promise<void>;
+    static setStatus(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 //# sourceMappingURL=proforma.controller.d.ts.map

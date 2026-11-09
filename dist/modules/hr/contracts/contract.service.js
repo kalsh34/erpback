@@ -36,7 +36,7 @@ class ContractService {
     }
     /** Full salary-change history for one employee (newest first). */
     static async getSalaryHistory(employeeId) {
-        return SalaryHistory_1.SalaryHistory.find({ employeeId }).sort({ effectiveFrom: -1, createdAt: -1 }).populate('changedBy', 'firstName lastName');
+        return SalaryHistory_1.SalaryHistory.find({ employeeId }).sort({ effectiveFrom: -1, createdAt: -1 }).populate('changedBy', 'firstName middleName lastName');
     }
     static async getAll(query) {
         const { page = 1, limit = 20, status, search } = query;
@@ -50,7 +50,7 @@ class ContractService {
             ];
         }
         const [contracts, total] = await Promise.all([
-            Contract_1.Contract.find(filter).populate('employeeId', 'firstName lastName employeeCode').sort({ createdAt: -1 }).skip(skip).limit(limit),
+            Contract_1.Contract.find(filter).populate('employeeId', 'firstName middleName lastName employeeCode').sort({ createdAt: -1 }).skip(skip).limit(limit),
             Contract_1.Contract.countDocuments(filter),
         ]);
         return { data: contracts, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
