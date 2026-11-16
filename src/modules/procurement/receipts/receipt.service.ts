@@ -108,9 +108,13 @@ export class ReceiptService {
       const receivedQty = item.receivedQuantity || 0;
       if (receivedQty <= 0) continue;
 
-      const poLine = po.lines.find((l) => l.productId.toString() === item.productId.toString());
+      // Callers may send either a raw ObjectId or a populated product document
+      // (PO detail responses populate lines.productId), so normalise both sides.
+      const idOf = (value: any) => (value && value._id ? value._id.toString() : value ? value.toString() : '');
+      const itemProductId = idOf(item.productId);
+      const poLine = po.lines.find((l) => idOf(l.productId) === itemProductId);
       if (!poLine) {
-        throw ApiError.badRequest(`Product ${item.productId} is not part of Purchase Order ${po.poNumber}`);
+        throw ApiError.badRequest(`Product ${itemProductId} is not part of Purchase Order ${po.poNumber}`);
       }
 
       const previouslyReceived = poLine.receivedQuantity || 0;

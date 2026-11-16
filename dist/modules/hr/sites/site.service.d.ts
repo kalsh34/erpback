@@ -50,18 +50,29 @@ export declare class SiteService {
         ua?: string;
     }): Promise<void>;
     /**
-     * Permanent removal — only for a site that was created by mistake.
+     * Permanent removal (force delete) — the site is deleted even when guards are
+     * assigned to it or it already has operational history.
      *
-     * A site is deletable only while NOTHING references it. The moment it has a
-     * guard assignment, attendance, monthly hours, site compensation, payroll
-     * record, rotation, note, price change, shift or QR scan, the delete is
-     * refused with 409 and the caller is told to deactivate instead — so payroll
-     * and attendance history is never orphaned.
+     * Everything that references the site — guard assignments, shift assignments,
+     * shift templates, attendance, monthly hours, site compensation, rotations,
+     * rotation assignments, notes, price history, guard shifts and QR scans — is
+     * removed in the same pass, and employees whose home site it was are reset, so
+     * no row is left pointing at a site that no longer exists. Guard payroll
+     * records are deliberately kept: they store their own site name/code snapshot,
+     * so guard pay history survives the deletion. Use deactivate instead when the
+     * history must stay visible in the site module itself.
      */
     static deletePermanent(id: string, auditCtx?: {
         userId: string;
         ip?: string;
         ua?: string;
-    }): Promise<void>;
+    }): Promise<{
+        siteName: string;
+        removed: {
+            label: string;
+            count: number;
+        }[];
+        keptPayrollRecords: number;
+    }>;
 }
 //# sourceMappingURL=site.service.d.ts.map
