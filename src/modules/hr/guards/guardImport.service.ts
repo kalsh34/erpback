@@ -38,6 +38,7 @@ export interface ParsedGuardRow {
 }
 
 export interface ImportPreviewResponse {
+  sheetName?: string;
   summary: {
     totalRows: number;
     readyCount: number;
@@ -185,8 +186,15 @@ function normalizeHeaderMap(rawRow: Record<string, any>): Record<string, any> {
   const normalized: Record<string, any> = {};
   for (const [key, val] of Object.entries(rawRow)) {
     const k = key.trim().toLowerCase();
-    // Name
-    if (k.includes('ሙሉ ስም') || k.includes('fullname') || k.includes('full name') || k === 'name') {
+    // Name. 'የዋስ ስም' (guarantor name) also contains 'ስም', so it is excluded here and
+    // matched further down by the guarantor branch.
+    if (
+      k.includes('ሙሉ ስም') ||
+      k.includes('fullname') ||
+      k.includes('full name') ||
+      k === 'name' ||
+      (k.includes('ስም') && !k.includes('ዋስ'))
+    ) {
       normalized['fullName'] = val;
     } else if (k.includes('ፆታ') || k === 'gender' || k === 'sex') {
       normalized['gender'] = val;
@@ -231,15 +239,17 @@ function normalizeHeaderMap(rawRow: Record<string, any>): Record<string, any> {
  * scan the first few rows and treat the one with the most known headers as the
  * header row.
  */
+const ROSTER_HEADER_HINTS = [
+  'ሙሉ ስም', 'full name', 'fullname', 'ፆታ', 'gender', 'ዕድሜ', 'age',
+  'ስ. ቁጥር', 'ስልክ', 'phone', 'ሳይት', 'site', 'ደመወዝ', 'salary',
+  'ትራንስፖርት', 'transport', 'ዋስ', 'guarantor', 'የት/ደረጃ', 'education',
+];
+
 function detectHeaderRow(grid: unknown[][]): number {
-  const HINTS = [
-    'ሙሉ ስም', 'full name', 'fullname', 'ፆታ', 'gender', 'ዕድሜ', 'age',
-    'ስ. ቁጥር', 'ስልክ', 'phone', 'ሳይት', 'site', 'ደመወዝ', 'salary',
-    'ትራንስፖርት', 'transport', 'ዋስ', 'guarantor', 'የት/ደረጃ', 'education',
-  ];
+  const HINTS = ROSTER_HEADER_HINTS;
   let bestRow = 0;
   let bestScore = 0;
-  const limit = Math.min(grid.length, 10);
+  const limit = Math.min(grid.length, 30);
   for (let r = 0; r < limit; r++) {
     const cells = (grid[r] || []).map((c) => String(c ?? '').trim().toLowerCase());
     const score = cells.filter((c) => c && HINTS.some((h) => c.includes(h))).length;
@@ -250,6 +260,40 @@ function detectHeaderRow(grid: unknown[][]): number {
   }
   // A single hit is more likely a stray title cell than a header row.
   return bestScore >= 2 ? bestRow : 0;
+}
+
+function sheetGrid(sheet: xlsx.WorkSheet): unknown[][] {
+  return xlsx.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: '',
+    raw: false,
+  }) as unknown[][];
+}
+
+/**
+ * Picks the roster sheet. Real workbooks often start with a cover/summary sheet,
+ * or carry several extra title rows, and reading only the first sheet silently
+ * produced an empty preview ("the import does nothing").
+ */
+function pickRosterSheet(workbook: xlsx.WorkBook) {
+  let best: { sheetName: string; grid: unknown[][]; headerRow: number; score: number } | null = null;
+
+  for (const sheetName of workbook.SheetNames) {
+    const grid = sheetGrid(workbook.Sheets[sheetName]);
+    if (!grid.length) continue;
+    const headerRow = detectHeaderRow(grid);
+    const headerCells = (grid[headerRow] || []).map((c) => String(c ?? '').trim().toLowerCase());
+    const hintHits = headerCells.filter((c) => c && ROSTER_HEADER_HINTS.some((h) => c.includes(h))).length;
+    const hasNameColumn = headerCells.some(
+      (c) => c.includes('ሙሉ ስም') || (c.includes('ስም') && !c.includes('ዋስ')) || c.includes('name')
+    );
+    const dataRows = grid.slice(headerRow + 1).filter((r) => String((r || [])[0] ?? '').trim() !== '').length;
+    const score = (hasNameColumn ? 100 : 0) + hintHits * 10 + Math.min(dataRows, 50);
+    if (!best || score > best.score) best = { sheetName, grid, headerRow, score };
+  }
+
+  if (!best) throw new Error('No sheets found in workbook');
+  return best;
 }
 
 let importQueue: Promise<unknown> = Promise.resolve();
@@ -317,20 +361,21 @@ function describeImportError(err: unknown): string {
 
 export class GuardImportService {
   static async previewSheet(buffer: Buffer): Promise<ImportPreviewResponse> {
-    const workbook = xlsx.read(buffer, { type: 'buffer' });
+    let workbook: xlsx.WorkBook;
+    try {
+      workbook = xlsx.read(buffer, { type: 'buffer' });
+    } catch {
+      throw new Error('This file could not be read as a spreadsheet. Save it as .xlsx, .xls or .csv and try again.');
+    }
     if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
       throw new Error('No sheets found in workbook');
     }
 
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+    const roster = pickRosterSheet(workbook);
     // Keep blank rows so grid indexes stay aligned with real sheet rows.
-    const grid = xlsx.utils.sheet_to_json(firstSheet, {
-      header: 1,
-      defval: '',
-      raw: false,
-    }) as unknown[][];
-    const headerRow = detectHeaderRow(grid);
-    const rawRows: Record<string, any>[] = xlsx.utils.sheet_to_json(firstSheet, {
+    const grid = roster.grid;
+    const headerRow = roster.headerRow;
+    const rawRows: Record<string, any>[] = xlsx.utils.sheet_to_json(workbook.Sheets[roster.sheetName], {
       defval: '',
       raw: false,
       range: headerRow,
@@ -483,7 +528,20 @@ export class GuardImportService {
       });
     }
 
+    if (rows.length === 0) {
+      const headerCells = (grid[headerRow] || [])
+        .map((c) => String(c ?? '').trim())
+        .filter(Boolean)
+        .slice(0, 8);
+      throw new Error(
+        `No guard rows found in sheet "${roster.sheetName}".` +
+          (headerCells.length ? ` Header row read as: ${headerCells.join(' | ')}.` : ' The sheet looks empty.') +
+          ' Make sure the roster has a ሙሉ ስም (Full Name) column header.'
+      );
+    }
+
     return {
+      sheetName: roster.sheetName,
       summary: {
         totalRows: rows.length,
         readyCount,
